@@ -1,30 +1,20 @@
-"""pg_s3heap.py S3BASEURL HEAP
-
-A program to do an inconsistent backup of a PostgreSQL heap to S3,
+"""A program to do an inconsistent backup of a PostgreSQL heap to S3,
 hopefully quickly.  This is done without putting the heap into one
 file (via tar or cpio) because in addition to multi-stream S3 PUT, it
 is also important to be able to parallelize GET, and one convenient
 way to do that is send the Postgres heap as-is, as a bunch of files,
 none of which are thought to substantially exceed 1GB.
 
-The S3BASEURL is of the following form:
-
-    s3://bucket/directory/.../
-
-The bucket must have been previously in existence prior to this
-program having been run; this program will error if that is not the
-case.
-
 General approach:
 
 * Prerequisite: There exists an archive_command that is capturing
-  WALs. Forever.  If WAL segments need cleaning, then it should be
+  WALs.  Forever.  If WAL segments need cleaning, then it should be
   possible to do so asyncronously.  This command does not grab a
   consistent snapshot of the heap.
 
 * Call pg_start_backup on the live system
 
-* Copy the heap to S3 (lzo compressed)
+* Copy the heap to S3 (lzo compression applied in passing)
 
 * Call pg_stop_backup on the live system
 
@@ -36,9 +26,9 @@ Anti-goals:
 
 """
 
+import argparse
 import csv
 import datetime
-import getopt
 import multiprocessing
 import os
 import subprocess
@@ -46,7 +36,7 @@ import sys
 import tempfile
 import textwrap
 
-PSQL_BIN = 'psql90'
+PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 
@@ -164,7 +154,7 @@ class PgBackupStatements(object):
         rows = list(psh.csv_out(error_handler=handler))
         return dict(zip(*rows))
 
-def do_put(s3_url, path):
+def do_put(s3_url, path, s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -186,41 +176,48 @@ def do_put(s3_url, path):
         # sure any Python-buffered output is visible to other
         # processes, but *NOT* force a write to disk.
         tf.flush()
-        subprocess.check_call(['s3cmd', 'put', tf.name, s3_url])
+        subprocess.check_call([S3CMD_BIN, 'put', tf.name, s3_url])
 
     return None
 
 
-class S3CmdPool(object):
+class S3Backup(object):
     """
-    A bounded pooler of s3cmd uploads to get better throughput.
+    A performs s3cmd uploads to copy a PostgreSQL cluster to S3.
 
-    Note that this is also lzo compressed: thus, the number of pooled
-    processes involves doing a full sequential scan of the
+    Note that this is also lzo compresses the files: thus, the number
+    of pooled processes involves doing a full sequential scan of the
     uncompressed Postgres heap file that is pipelined into lzo. Once
     lzo is completely finished (necessary to have access to the file
     size) the file is sent to S3.
 
-    A valid optimization to confirm the viability of is to decouple
-    the compression and upload steps to make sure that the most
-    efficient possible use of pipelining of network and disk resources
-    occurs.  Right now it possible to bounce back and forth between
-    bottlenecking on reading from the database block device and
-    subsequently the S3 sending steps should the processes be at the
-    same stage of the upload pipeline: this can have a very negative
-    impact on being able to make full use of system resources.
+    TODO: Investigate an optimization to decouple the compression and
+    upload steps to make sure that the most efficient possible use of
+    pipelining of network and disk resources occurs.  Right now it
+    possible to bounce back and forth between bottlenecking on reading
+    from the database block device and subsequently the S3 sending
+    steps should the processes be at the same stage of the upload
+    pipeline: this can have a very negative impact on being able to
+    make full use of system resources.
 
-    Furthermore, increasing this number too much is likely to cause
-    excess disk activity when the output lzo files do not fit
-    comfortably into the page cache, causing unnecessary I/O.
+    Furthermore, it desirable to overflowing the page cache: having
+    separate tunables for number of simultanious compression jobs
+    (which occupy /tmp space and page cache) and number of uploads
+    (which affect upload throughput) would help.
 
     """
 
-    def __init__(self, pool_size=6):
+    def __init__(self,
+                 aws_access_key_id, aws_secret_access_key,
+                 s3_url_prefix, pg_cluster_dir,
+                 pool_size=6):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_access_key_id
+        self.s3_url_prefix = s3_url_prefix
+        self.pg_cluster_dir = pg_cluster_dir
         self.pool = multiprocessing.Pool(processes=pool_size)
 
-
-    def upload_file(self, s3_url, path):
+    def upload_file(self, s3_url, path, s3cmd_config_path):
         """
         Asychronously uploads the path to the provided s3 url
 
@@ -240,61 +237,91 @@ class S3CmdPool(object):
 
         """
 
-
         return self.pool.apply_async(do_put, [s3_url, path])
 
+    def s3_upload_pg_cluster_dir(self):
+        """
+        Upload to s3_url_prefix from pg_cluster_dir
 
-def s3_upload(s3_url_prefix, heap_dir):
-    # Get a manifest of files first.
-    matches = []
-    for root, dirnames, filenames in os.walk(heap_dir):
-        # Don't care about WAL, only heap. Also skip the textual log
-        # directory.
-        if 'pg_log' in dirnames:
-            dirnames.remove('pg_log')
-        if 'pg_xlog' in dirnames:
-            dirnames.remove('pg_xlog')
+        pg_cluster_dir will always be uploaded with the last common
+        ancestor directory containing the entire upload. For example:
 
-        for filename in filenames:
-            matches.append(os.path.join(root, filename))
+        >>> s3_upload('s3://foo/bar', '/var/baz/glurch/')
 
-    s3pool = S3CmdPool()
+        Will upload under the s3 url 's3://foo/bar/glurch/...' where '...'
+        is the series of files that comprise the PostgreSQL file cluster.
 
-    canonicalized_prefix = s3_url_prefix.rstrip('/')
+        This function ignores the directory pg_xlog, which contains WAL
+        files and are not generally part of a base backup.
 
-    # absolute upload paths are used for telling lzop what to compress
-    absolute_upload_paths = [os.path.abspath(match) for match in matches]
+        """
 
-    # computed to subtract out extra extraneous absolute path
-    # information when storing on S3
-    common_ancestor_name = os.path.basename(
-        os.path.commonprefix(absolute_upload_paths))
+        # Get a manifest of files first.
+        matches = []
 
-    for absolute_upload_path in absolute_upload_paths:
-        s3pool.upload_file('{prefix}/{local}'
-                           .format(prefix=canonicalized_prefix,
-                                   local=canonicalized_local),
-                           canonicalized_local)
+        def raise_walk_error(e):
+            raise e
 
-    for upload in uploads:
-        print upload.get()
+        walker = os.walk(self.pg_cluster_dir, onerror=raise_walk_error)
+        for root, dirnames, filenames in walker:
+            # Don't care about WAL, only heap. Also skip the textual log
+            # directory.
+            if 'pg_xlog' in dirnames:
+                dirnames.remove('pg_xlog')
+
+            for filename in filenames:
+                matches.append(os.path.join(root, filename))
+
+        canonical_s3_prefix = self.s3_url_prefix.rstrip('/')
+
+        # absolute upload paths are used for telling lzop what to compress
+        absolute_upload_paths = [os.path.abspath(match) for match in matches]
+
+        # computed to subtract out extra extraneous absolute path
+        # information when storing on S3
+        common_local_prefix = os.path.commonprefix(absolute_upload_paths)
+
+        common_ancestor_name = os.path.basename(
+            common_local_prefix.rstrip(os.sep))
+
+        with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
+            s3cmd_config.write(textwrap.dedent("""\
+            [default]
+            access_key = {aws_access_key_id}
+            secret_key = {aws_secret_access_key}
+            """).format(aws_access_key_id=self.aws_access_key_id,
+                        aws_secret_access_key=self.aws_secret_access_key))
+            s3cmd_config.flush()
+
+            for absolute_upload_path in absolute_upload_paths:
+                remote_suffix = (common_ancestor_name + '/' +
+                                 absolute_upload_path[len(common_local_prefix):])
+
+                self.upload_file(canonical_s3_prefix + '/' + remote_suffix,
+                                 absolute_upload_path, tf.name)
 
 
-def database_backup(src, dest):
-    """
-    The main work function
+    def database_s3_backup(self):
+        """
+        Wraps s3_upload_pg_cluster_dir with start/stop backup actions
 
-    Takes two database cluster directories, src and dest, and tries to
-    do all the work to do an in-place hot-backup, relying on
-    wal_keep_segments to hold a sufficient number of WAL records to
-    get a good backup.
-    """
+        """
 
-    try:
-        run_start_backup()
-        s3_upload()
-    finally:
-        run_stop_backup()
+        upload_good = False
+        backup_stop_good = False
+        try:
+            start_backup_info = PgBackupStatements.run_start_backup()
+            self.s3_upload_pg_cluster_dir()
+            upload_good = True
+        finally:
+            stop_backup_info = PgBackupStatements.run_stop_backup()
+            backup_stop_good = True
+
+        if not (upload_good and backup_stop_good):
+            # NB: Other exceptions should be raised before this that
+            # have more informative results, it is intended that this
+            # exception never will get raised.
+            raise Exception('Could not complete backup process')
 
 
 def external_program_check():
@@ -344,34 +371,42 @@ def external_program_check():
     return None
 
 
-class Usage(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-
-
 def main(argv=None):
     if argv is None:
         argv = sys.argv
-    try:
-        try:
-            opts, args = getopt.getopt(argv[1:], "h", ["help"])
 
-            for optval, optarg in opts:
-                if optval in ('-h', '--help'):
-                    print >>sys.stderr, __doc__
-                    sys.exit(0)
-        except getopt.error, msg:
-             raise Usage(msg)
-        if len(args) != 2:
-            raise Usage('Incorrect number of arguments.')
-        else:
-            external_program_check()
-            database_backup(args[0], args[1])
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__)
 
-    except Usage, err:
-        print >>sys.stderr, err.msg
-        print >>sys.stderr, "for help use --help"
-        return 2
+    parser.add_argument('key_id',
+                        metavar='AWS_ACCESS_KEY_ID',
+                        help='public AWS access key')
+    parser.add_argument('s3baseurl',
+                        metavar='S3BASEURL',
+                        help="base URL in s3 to upload to, "
+                        "such as 's3://bucket/directory/'")
+    parser.add_argument('pg_cluster_directory',
+                        metavar='PGCLUSTERDIR',
+                        help="Postgres cluster path, "
+                        "such as '/var/lib/database'")
+    parser.add_argument('--pool-size', '-p',
+                        type=int,
+                        help='Upload pooling size')
+
+    args = parser.parse_args()
+
+    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    if secret_key is None:
+        print >>sys.stderr, ('Must define AWS_SECRET_ACCESS_KEY to upload '
+                             'anything') 
+
+    external_program_check()
+    backup = S3Backup(parser.key_id, parser.s3baseurl,
+                      parser.pg_cluster_directory)
+    
+
+    
 
 if __name__ == "__main__":
     sys.exit(main())
