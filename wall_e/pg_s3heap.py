@@ -164,7 +164,7 @@ def do_put(s3_url, path, s3cmd_config_path):
     """
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         compression_p = subprocess.Popen(
-            ['lzop', '--stdout', path], stdout=tf)
+            [LZOP_BIN, '--stdout', path], stdout=tf)
         compression_p.wait()
 
         if compression_p.returncode != 0:
