@@ -176,7 +176,9 @@ def do_put(s3_url, path, s3cmd_config_path):
         # sure any Python-buffered output is visible to other
         # processes, but *NOT* force a write to disk.
         tf.flush()
-        subprocess.check_call([S3CMD_BIN, 'put', tf.name, s3_url])
+
+        subprocess.check_call([S3CMD_BIN, '-c', s3cmd_config_path,
+                               'put', tf.name, s3_url])
 
     return None
 
@@ -212,7 +214,7 @@ class S3Backup(object):
                  s3_url_prefix, pg_cluster_dir,
                  pool_size=6):
         self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_access_key = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
         self.s3_url_prefix = s3_url_prefix
         self.pg_cluster_dir = pg_cluster_dir
         self.pool = multiprocessing.Pool(processes=pool_size)
@@ -236,8 +238,7 @@ class S3Backup(object):
         in-memory in practice.
 
         """
-
-        return self.pool.apply_async(do_put, [s3_url, path])
+        return self.pool.apply_async(do_put, [s3_url, path, s3cmd_config_path])
 
     def s3_upload_pg_cluster_dir(self):
         """
@@ -291,14 +292,19 @@ class S3Backup(object):
             secret_key = {aws_secret_access_key}
             """).format(aws_access_key_id=self.aws_access_key_id,
                         aws_secret_access_key=self.aws_secret_access_key))
+
             s3cmd_config.flush()
 
+            uploads = []
             for absolute_upload_path in absolute_upload_paths:
-                remote_suffix = (common_ancestor_name + '/' +
-                                 absolute_upload_path[len(common_local_prefix):])
+                remote_suffix = absolute_upload_path[len(common_local_prefix):]
+                uploads.append(self.upload_file('/'.join(
+                            [canonical_s3_prefix,  common_ancestor_name,  remote_suffix]),
+                        absolute_upload_path, s3cmd_config.name))
 
-                self.upload_file(canonical_s3_prefix + '/' + remote_suffix,
-                                 absolute_upload_path, tf.name)
+            for upload in uploads:
+                upload.wait()
+                print upload.get()
 
 
     def database_s3_backup(self):
@@ -349,14 +355,15 @@ def external_program_check():
         # Bogus error message that is re-caught and re-raised
         raise Exception('It is also possible that psql is not installed')
 
-    for program in [PSQL_BIN, LZOP_BIN, S3CMD_BIN]:
-        try:
-            if program is PSQL_BIN:
-                PsqlHelp('SELECT 1').csv_out(error_handler=psql_err_handler)
-            else:
-                subprocess.check_call([program])
-        except Exception, e:
-            could_not_run.append(program)
+    with open('/dev/null', 'w') as nullf:
+        for program in [PSQL_BIN, LZOP_BIN, S3CMD_BIN]:
+            try:
+                if program is PSQL_BIN:
+                    PsqlHelp('SELECT 1').csv_out(error_handler=psql_err_handler)
+                else:
+                    subprocess.call([program], stdout=nullf, stderr=nullf)
+            except IOException, e:
+                could_not_run.append(program)
 
     if could_not_run:
         error_msgs.append(textwrap.fill(
@@ -399,11 +406,13 @@ def main(argv=None):
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
         print >>sys.stderr, ('Must define AWS_SECRET_ACCESS_KEY to upload '
-                             'anything') 
+                             'anything')
+        sys.exit(1)
 
     external_program_check()
-    backup = S3Backup(parser.key_id, parser.s3baseurl,
-                      parser.pg_cluster_directory)
+
+    backup = S3Backup(args.key_id, secret_key, args.s3baseurl,
+                      args.pg_cluster_directory).database_s3_backup()
     
 
     
