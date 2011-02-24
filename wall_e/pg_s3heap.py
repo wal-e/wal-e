@@ -20,7 +20,7 @@ General approach:
 
 Anti-goals:
 
- * Take care of WAL segments in any way 
+ * Take care of WAL segments in any way
 
  * Perform any testing of the backup
 
@@ -265,7 +265,6 @@ class S3Backup(object):
                 uploads.append(self.upload_file(
                         canonical_s3_prefix + '/' + remote_suffix,
                         absolute_upload_path, s3cmd_config.name))
-
 
             self.pool.close()
 
