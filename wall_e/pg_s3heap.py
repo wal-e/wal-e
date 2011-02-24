@@ -266,10 +266,22 @@ class S3Backup(object):
                             [canonical_s3_prefix,  remote_suffix]),
                         absolute_upload_path, s3cmd_config.name))
 
-            for upload in uploads:
-                upload.wait()
-                print upload.get()
 
+            self.pool.close()
+
+            got_sigint = False
+            while uploads and not got_sigint:
+                try:
+                    if uploads:
+                        # XXX: Need timeout to work around Python bug:
+                        #
+                        # http://bugs.python.org/issue8296
+                        uploads.pop().get(1e100)
+                        continue
+
+                    self.pool.join()
+                except KeyboardInterrupt:
+                    got_sigint = True
 
     def database_s3_backup(self):
         """
