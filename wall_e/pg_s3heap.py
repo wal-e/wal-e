@@ -366,15 +366,28 @@ def main(argv=None):
                         'environment variable. If both are defined, '
                         'the one defined in the programs arguments takes '
                         'precedence.')
-    parser.add_argument('S3BASEURL',
-                        help="base URL in s3 to upload to, "
-                        "such as 's3://bucket/directory/'")
-    parser.add_argument('PG_CLUSTER_DIRECTORY',
-                        help="Postgres cluster path, "
-                        "such as '/var/lib/database'")
-    parser.add_argument('--pool-size', '-p',
-                        type=int,
-                        help='Upload pooling size')
+
+    subparsers = parser.add_subparsers(title='subcommands')
+
+    backup_push_parser = subparsers.add_parser(
+        'backup_push', help='pushing a fresh hot backup to S3')
+
+    backup_push_parser.add_argument('S3BASEURL',
+                                    help="base URL in s3 to upload to, "
+                                    "such as 's3://bucket/directory/'")
+    backup_push_parser.add_argument('PG_CLUSTER_DIRECTORY',
+                                    help="Postgres cluster path, "
+                                    "such as '/var/lib/database'")
+    backup_push_parser.add_argument('--pool-size', '-p',
+                                    type=int,
+                                    help='Upload pooling size')
+
+    backup_fetch_parser = subparsers.add_parser(
+        'backup_fetch', help='fetch a hot backup from S3')
+    wal_push_parser = subparsers.add_parser(
+        'wal_push', help='push a WAL file to S3')
+    wal_fetch_parser = subparsers.add_parser(
+        'wal_fetch', help='fetch a WAL file from S3')
 
     args = parser.parse_args()
 
