@@ -319,7 +319,7 @@ def external_program_check():
         # Bogus error message that is re-caught and re-raised
         raise Exception('It is also possible that psql is not installed')
 
-    with open('/dev/null', 'w') as nullf:
+    with open(os.devnull, 'w') as nullf:
         for program in [PSQL_BIN, LZOP_BIN, S3CMD_BIN]:
             try:
                 if program is PSQL_BIN:
