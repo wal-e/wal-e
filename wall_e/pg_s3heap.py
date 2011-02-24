@@ -40,67 +40,37 @@ PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 
-class PsqlHelp(object):
+
+def psql_csv_run(sql_command, error_handler=None):
     """
-    This class encapsulates some low level mangling of psql subprocesses
+    Runs psql and returns a CSVReader object from the query
 
-    It basically exists to prevent subprocess.Popens (and similar)
-    with bloated repeated mechanics from popping up elsewhere.
+    This CSVReader includes header names as the first record in all
+    situations.  The output is fully buffered into Python.
 
     """
+    csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
+                 .format(query=sql_command))
 
-    def __init__(self, sql_command):
-        self._sqlcmd = sql_command
+    psql_proc = subprocess.Popen([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
+                                 stdout=subprocess.PIPE)
+    stdout, stderr = psql_proc.communicate()
 
-    @staticmethod
-    def _psql_argv(sql_command):
-        """
-        Run psql with a given sql_command
+    if psql_proc.returncode != 0:
+        if error_handler is not None:
+            error_handler(psql_proc)
+        else:
+            assert error_handler is None
+            raise Exception('Could not csv-execute "{query}" successfully'
+                            .format(query=self._sqlcmd))
 
-        This function generates an argv list suitable for subprocess.Popen
-        and family; it is used to factor out common code.
-        """
-        return [PSQL_BIN, '-d', 'postgres', '-c', sql_command]
+    # Previous code must raise any desired exceptions for non-zero
+    # exit codes
+    assert psql_proc.returncode == 0
 
-    def _csvify_query(self):
-        """
-        Wraps the query with a COPY statement intended to provide CSV
-
-        This also adds the header to the csv, as so one can identify the
-        column names that have been output.
-        """
-        return ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
-                .format(query=self._sqlcmd))
-
-    def csv_out(self, error_handler=None):
-        """
-        Runs psql and returns a CSVReader object from the query
-
-        This CSVReader includes header names as the first record in all
-        situations.  The output is fully buffered into Python.
-
-        """
-        psql_start_backup_proc = subprocess.Popen(
-            self._psql_argv(self._csvify_query()),
-                      stdout=subprocess.PIPE)
-        stdout, stderr = psql_start_backup_proc.communicate()
-
-        if psql_start_backup_proc.returncode != 0:
-            if error_handler is not None:
-                error_handler(psql_start_backup_proc)
-            else:
-                assert error_handler is None
-                raise Exception('Could not csv-execute "{query}" successfully'
-                                .format(query=self._sqlcmd))
-
-        # Previous code must raise any desired exceptions for non-zero
-        # exit codes
-        assert psql_start_backup_proc.returncode == 0
-
-        # Fake enough iterator interface to get a CSV Reader object
-        # that works.
-        return csv.reader(iter(stdout.strip().split('\n')))
-
+    # Fake enough iterator interface to get a CSV Reader object
+    # that works.
+    return csv.reader(iter(stdout.strip().split('\n')))
 
 class PgBackupStatements(object):
     """
@@ -109,9 +79,16 @@ class PgBackupStatements(object):
     Relies on PsqlHelp for underlying mechanism.
 
     """
-    
+
     @staticmethod
-    def run_start_backup():
+    def _dict_transform(csv_reader):
+        rows = list(csv_reader)
+        assert len(rows) == 2, 'Expect header row and data row'
+        assert len(rows[1]) == 2, 'Expect (wal_file_name, offset) tuple'
+        return dict(zip(*rows))
+
+    @classmethod
+    def run_start_backup(cls):
         """
         Connects to a server and attempts to start a hot backup
 
@@ -119,25 +96,20 @@ class PgBackupStatements(object):
         recording.
 
         """
-        label = 'freeze_start_' + datetime.datetime.now().isoformat() 
-
-        psh = PsqlHelp("SELECT file_name, file_offset "
-                       "FROM pg_xlogfile_name_offset("
-                       "pg_start_backup('{0}'))".format(label))
-
         def handler(popen):
             assert popen.returncode != 0
             raise Exception('Could not start hot backup')
 
-        rows = list(psh.csv_out(error_handler=handler))
+        label = 'freeze_start_' + datetime.datetime.now().isoformat()
 
-        assert len(rows) == 2, 'Expect two records from in run_start_backup'
-        assert len(rows[1]) == 2, 'Expect (wal_file_name, offset) tuple'
+        return cls._dict_transform(psql_csv_run(
+                "SELECT file_name, file_offset "
+                "FROM pg_xlogfile_name_offset("
+                "pg_start_backup('{0}'))".format(label),
+                error_handler=handler))
 
-        return dict(zip(*rows))
-
-    @staticmethod
-    def run_stop_backup():
+    @classmethod
+    def run_stop_backup(cls):
         """
         Stop a hot backup, if it was running, or error
 
@@ -145,14 +117,17 @@ class PgBackupStatements(object):
         gain consistency on the captured heap.
 
         """
-        psh = PsqlHelp('SELECT file_name, file_offset '
-                       'FROM pg_xlogfile_name_offset(pg_stop_backup())')
         def handler(popen):
             assert popen.returncode != 0
-            raise Exception('Could not stop a hot backup; was there one running?')
+            raise Exception('Could not stop hot backup')
 
-        rows = list(psh.csv_out(error_handler=handler))
-        return dict(zip(*rows))
+        label = 'freeze_start_' + datetime.datetime.now().isoformat()
+
+        return cls._dict_transform(psql_csv_run(
+                "SELECT file_name, file_offset "
+                "FROM pg_xlogfile_name_offset("
+                "pg_stop_backup())", error_handler=handler))
+
 
 def do_put(s3_url, path, s3cmd_config_path):
     """
@@ -244,14 +219,6 @@ class S3Backup(object):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
-        pg_cluster_dir will always be uploaded with the last common
-        ancestor directory containing the entire upload. For example:
-
-        >>> s3_upload('s3://foo/bar', '/var/baz/glurch/')
-
-        Will upload under the s3 url 's3://foo/bar/glurch/...' where '...'
-        is the series of files that comprise the PostgreSQL file cluster.
-
         This function ignores the directory pg_xlog, which contains WAL
         files and are not generally part of a base backup.
 
@@ -282,9 +249,6 @@ class S3Backup(object):
         # information when storing on S3
         common_local_prefix = os.path.commonprefix(absolute_upload_paths)
 
-        common_ancestor_name = os.path.basename(
-            common_local_prefix.rstrip(os.sep))
-
         with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
             s3cmd_config.write(textwrap.dedent("""\
             [default]
@@ -299,7 +263,7 @@ class S3Backup(object):
             for absolute_upload_path in absolute_upload_paths:
                 remote_suffix = absolute_upload_path[len(common_local_prefix):]
                 uploads.append(self.upload_file('/'.join(
-                            [canonical_s3_prefix,  common_ancestor_name,  remote_suffix]),
+                            [canonical_s3_prefix,  remote_suffix]),
                         absolute_upload_path, s3cmd_config.name))
 
             for upload in uploads:
@@ -359,10 +323,10 @@ def external_program_check():
         for program in [PSQL_BIN, LZOP_BIN, S3CMD_BIN]:
             try:
                 if program is PSQL_BIN:
-                    PsqlHelp('SELECT 1').csv_out(error_handler=psql_err_handler)
+                    psql_csv_run('SELECT 1', error_handler=psql_err_handler)
                 else:
                     subprocess.call([program], stdout=nullf, stderr=nullf)
-            except IOException, e:
+            except IOError, e:
                 could_not_run.append(program)
 
     if could_not_run:
@@ -386,15 +350,15 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
 
-    parser.add_argument('key_id',
-                        metavar='AWS_ACCESS_KEY_ID',
-                        help='public AWS access key')
-    parser.add_argument('s3baseurl',
-                        metavar='S3BASEURL',
+    parser.add_argument('-k', '--aws-access-key-id',
+                        help='public AWS access key. Can also be defined in an '
+                        'environment variable. If both are defined, '
+                        'the one defined in the programs arguments takes '
+                        'precedence.')
+    parser.add_argument('S3BASEURL',
                         help="base URL in s3 to upload to, "
                         "such as 's3://bucket/directory/'")
-    parser.add_argument('pg_cluster_directory',
-                        metavar='PGCLUSTERDIR',
+    parser.add_argument('PG_CLUSTER_DIRECTORY',
                         help="Postgres cluster path, "
                         "such as '/var/lib/database'")
     parser.add_argument('--pool-size', '-p',
@@ -409,13 +373,21 @@ def main(argv=None):
                              'anything')
         sys.exit(1)
 
+    if args.aws_access_key_id is None:
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        if aws_access_key_id is None:
+            print >>sys.stderr, ('Must define an AWS_ACCESS_KEY_ID, '
+                                 'using environment variable or '
+                                 '--aws_access_key_id')
+
+    else:
+        aws_access_key_id = args.aws_access_key_id
+
     external_program_check()
 
-    backup = S3Backup(args.key_id, secret_key, args.s3baseurl,
-                      args.pg_cluster_directory).database_s3_backup()
-    
-
-    
+    backup = (S3Backup(aws_access_key_id, secret_key, args.S3BASEURL,
+                       args.PG_CLUSTER_DIRECTORY, pool_size=args.pool_size)
+              .database_s3_backup())
 
 if __name__ == "__main__":
     sys.exit(main())
