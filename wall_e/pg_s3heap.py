@@ -243,11 +243,11 @@ class S3Backup(object):
         canonical_s3_prefix = self.s3_url_prefix.rstrip('/')
 
         # absolute upload paths are used for telling lzop what to compress
-        absolute_upload_paths = [os.path.abspath(match) for match in matches]
+        local_abspaths = [os.path.abspath(match) for match in matches]
 
         # computed to subtract out extra extraneous absolute path
         # information when storing on S3
-        common_local_prefix = os.path.commonprefix(absolute_upload_paths)
+        common_local_prefix = os.path.commonprefix(local_abspaths)
 
         with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
             s3cmd_config.write(textwrap.dedent("""\
@@ -260,11 +260,14 @@ class S3Backup(object):
             s3cmd_config.flush()
 
             uploads = []
-            for absolute_upload_path in absolute_upload_paths:
-                remote_suffix = absolute_upload_path[len(common_local_prefix):]
+            for local_abspath in local_abspaths:
+                remote_suffix = local_abspath[len(common_local_prefix):]
+                remote_absolute_path = '{0}/{1}.lzo'.format(
+                    canonical_s3_prefix, remote_suffix)
+
                 uploads.append(self.upload_file(
-                        canonical_s3_prefix + '/' + remote_suffix,
-                        absolute_upload_path, s3cmd_config.name))
+                        remote_absolute_path, local_abspath,
+                        s3cmd_config.name))
 
             self.pool.close()
 
