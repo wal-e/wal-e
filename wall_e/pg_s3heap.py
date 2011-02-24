@@ -262,8 +262,8 @@ class S3Backup(object):
             uploads = []
             for absolute_upload_path in absolute_upload_paths:
                 remote_suffix = absolute_upload_path[len(common_local_prefix):]
-                uploads.append(self.upload_file('/'.join(
-                            [canonical_s3_prefix,  remote_suffix]),
+                uploads.append(self.upload_file(
+                        canonical_s3_prefix + '/' + remote_suffix,
                         absolute_upload_path, s3cmd_config.name))
 
 
