@@ -1,28 +1,7 @@
-"""A program to do an inconsistent backup of a PostgreSQL heap to S3,
-hopefully quickly.  This is done without putting the heap into one
-file (via tar or cpio) because in addition to multi-stream S3 PUT, it
-is also important to be able to parallelize GET, and one convenient
-way to do that is send the Postgres heap as-is, as a bunch of files,
-none of which are thought to substantially exceed 1GB.
-
-General approach:
-
-* Prerequisite: There exists an archive_command that is capturing
-  WALs.  Forever.  If WAL segments need cleaning, then it should be
-  possible to do so asyncronously.  This command does not grab a
-  consistent snapshot of the heap.
-
-* Call pg_start_backup on the live system
-
-* Copy the heap to S3 (lzo compression applied in passing)
-
-* Call pg_stop_backup on the live system
-
-Anti-goals:
-
- * Take care of WAL segments in any way
-
- * Perform any testing of the backup
+"""WAL-E is a program to assist in performing PostgreSQL continuous
+archiving on S3: it handles the major four operations of
+arching/receiving WAL segments and archiving/receiving base hot
+backups of the PostgreSQL file cluster.
 
 """
 
