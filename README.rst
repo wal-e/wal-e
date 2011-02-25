@@ -43,8 +43,8 @@ Pushing a base backup to S3::
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     backup_push /var/lib/my/database
 
-Compression Temporary Files
----------------------------
+Compression and Temporary Files
+-------------------------------
 
 All assets pushed to S3 are run through the program "lzop" which
 compresses the object using the very fast lzo compression algorithm.
