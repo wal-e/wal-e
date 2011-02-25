@@ -250,40 +250,36 @@ class S3Backup(object):
         common_local_prefix = os.path.commonprefix(local_abspaths)
 
         with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
-            s3cmd_config.write(textwrap.dedent("""\
-            [default]
-            access_key = {aws_access_key_id}
-            secret_key = {aws_secret_access_key}
-            """).format(aws_access_key_id=self.aws_access_key_id,
-                        aws_secret_access_key=self.aws_secret_access_key))
+            try:
+                s3cmd_config.write(textwrap.dedent("""\
+                [default]
+                access_key = {aws_access_key_id}
+                secret_key = {aws_secret_access_key}
+                """).format(aws_access_key_id=self.aws_access_key_id,
+                            aws_secret_access_key=self.aws_secret_access_key))
 
-            s3cmd_config.flush()
+                s3cmd_config.flush()
 
-            uploads = []
-            for local_abspath in local_abspaths:
-                remote_suffix = local_abspath[len(common_local_prefix):]
-                remote_absolute_path = '{0}/{1}.lzo'.format(
-                    canonical_s3_prefix, remote_suffix)
+                uploads = []
+                for local_abspath in local_abspaths:
+                    remote_suffix = local_abspath[len(common_local_prefix):]
+                    remote_absolute_path = '{0}/{1}.lzo'.format(
+                        canonical_s3_prefix, remote_suffix)
 
-                uploads.append(self.upload_file(
-                        remote_absolute_path, local_abspath,
-                        s3cmd_config.name))
+                    uploads.append(self.upload_file(
+                            remote_absolute_path, local_abspath,
+                            s3cmd_config.name))
 
-            self.pool.close()
+                self.pool.close()
 
-            got_sigint = False
-            while uploads and not got_sigint:
-                try:
-                    if uploads:
-                        # XXX: Need timeout to work around Python bug:
-                        #
-                        # http://bugs.python.org/issue8296
-                        uploads.pop().get(1e100)
-                        continue
+            finally:
+                while uploads:
+                    # XXX: Need timeout to work around Python bug:
+                    #
+                    # http://bugs.python.org/issue8296
+                    uploads.pop().get(1e100)
 
-                    self.pool.join()
-                except KeyboardInterrupt:
-                    got_sigint = True
+                self.pool.join()
 
     def database_s3_backup(self):
         """
