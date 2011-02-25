@@ -366,14 +366,16 @@ def main(argv=None):
                         'the one defined in the programs arguments takes '
                         'precedence.')
 
+    parser.add_argument('--s3-prefix',
+                        help='S3 prefix to run all commands against.  '
+                        'Can also be defined via environment variable '
+                        'WALE_S3_PREFIX')
+
     subparsers = parser.add_subparsers(title='subcommands')
 
     backup_push_parser = subparsers.add_parser(
         'backup_push', help='pushing a fresh hot backup to S3')
 
-    backup_push_parser.add_argument('S3BASEURL',
-                                    help="base URL in s3 to upload to, "
-                                    "such as 's3://bucket/directory/'")
     backup_push_parser.add_argument('PG_CLUSTER_DIRECTORY',
                                     help="Postgres cluster path, "
                                     "such as '/var/lib/database'")
@@ -396,6 +398,13 @@ def main(argv=None):
                              'anything')
         sys.exit(1)
 
+    s3_prefix = args.s3_prefix or os.getenv('WALE_S3_PREFIX')
+
+    if s3_prefix is None:
+        print >>sys.stderr, ('Must pass --s3-prefix or define environment '
+                             'variable WALE_S3_PREFIX')
+        sys.exit(1)
+
     if args.aws_access_key_id is None:
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
         if aws_access_key_id is None:
@@ -408,7 +417,7 @@ def main(argv=None):
 
     external_program_check()
 
-    backup = (S3Backup(aws_access_key_id, secret_key, args.S3BASEURL,
+    backup = (S3Backup(aws_access_key_id, secret_key, s3_prefix,
                        args.PG_CLUSTER_DIRECTORY, pool_size=args.pool_size)
               .database_s3_backup())
 
