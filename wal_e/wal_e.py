@@ -250,8 +250,11 @@ class S3Backup(object):
                             s3cmd_config.name))
 
                 self.pool.close()
-
             finally:
+                # Necessary in case finally block gets hit before
+                # .close()
+                self.pool.close()
+
                 while uploads:
                     # XXX: Need timeout to work around Python bug:
                     #
