@@ -132,8 +132,31 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
         # processes, but *NOT* force a write to disk.
         tf.flush()
 
-        subprocess.check_call([S3CMD_BIN, '-c', s3cmd_config_path,
-                               'put', tf.name, s3_url + '.lzo'])
+        s3cmd_proc = None
+
+        s3cmd_argv = [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
+                      s3_url + '.lzo']
+        got_sigint = False
+
+        try:
+            s3cmd_proc = subprocess.Popen(s3cmd_argv)
+        except KeyboardInterrupt, e:
+            got_sigint = True
+            if s3cmd_proc is not None:
+                s3cmd_proc.send_signal(signal.SIGINT)
+                s3cmd_proc.wait()
+                raise e
+        finally:
+            if not got_sigint:
+                s3cmd_proc.wait()
+                if s3cmd_proc.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        s3cmd_proc.returncode, s3cmd_argv)
+            else:
+                # Do nothing if this finally is the result of a
+                # SIGINT; the KeyboardInterrupt will continue to be
+                # propagated.
+                assert got_sigint
 
     return None
 
