@@ -339,9 +339,12 @@ class S3Backup(object):
                                    sentinel.name,
                                    uploaded_to + '_backup_stop_sentinel.txt'])
             except KeyboardInterrupt, e:
-                # Specially allow termination when there is SIGINT.
+                # Specially re-raise exception on SIGINT to allow
+                # propagation.
                 raise e
             except:
+                # Failing to upload the sentinel is not strictly
+                # lethal, so ignore any (other) exception.
                 pass
         else:
             # NB: Other exceptions should be raised before this that
