@@ -20,7 +20,7 @@ import time
 
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = '0'
+FILE_STRUCTURE_VERSION = '001'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
@@ -119,9 +119,10 @@ class PgBackupStatements(object):
         label = 'freeze_start_' + datetime.datetime.now().isoformat()
 
         return cls._dict_transform(psql_csv_run(
-                "SELECT file_name, file_offset "
+                "SELECT file_name, "
+                "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
-                "pg_start_backup('{0}'))".format(label),
+                "  pg_start_backup('{0}'))".format(label),
                 error_handler=handler))
 
     @classmethod
@@ -140,9 +141,10 @@ class PgBackupStatements(object):
         label = 'freeze_start_' + datetime.datetime.now().isoformat()
 
         return cls._dict_transform(psql_csv_run(
-                "SELECT file_name, file_offset "
+                "SELECT file_name, "
+                "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
-                "pg_stop_backup())", error_handler=handler))
+                "  pg_stop_backup())", error_handler=handler))
 
 
 def run_s3cmd(cmd):
