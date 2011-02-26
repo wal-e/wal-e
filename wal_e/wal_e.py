@@ -169,7 +169,9 @@ class S3Backup(object):
                  pool_size=6):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
-        self.s3_url_prefix = s3_url_prefix
+
+        # Canonicalize the s3 prefix by stripping any trailing slash
+        self.s3_url_prefix = s3_url_prefix.rstrip('/')
         self.pg_cluster_dir = pg_cluster_dir
         self.pool = multiprocessing.Pool(processes=pool_size)
 
@@ -219,9 +221,9 @@ class S3Backup(object):
             for filename in filenames:
                 matches.append(os.path.join(root, filename))
 
-        canonical_s3_prefix = (self.s3_url_prefix.rstrip('/') +
-                               '/basebackups/base_{file_name}_{file_offset}'
-                               .format(**start_backup_info))
+        canonical_s3_prefix = ('{0}/basebackups/base_{file_name}_{file_offset}'
+                               .format(self.s3_prefix,
+                                       **start_backup_info))
 
         # absolute upload paths are used for telling lzop what to compress
         local_abspaths = [os.path.abspath(match) for match in matches]
