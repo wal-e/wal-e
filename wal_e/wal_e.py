@@ -16,10 +16,12 @@ import sys
 import tempfile
 import textwrap
 
+# Provides guidence in object names as to the version of the file
+# structure.
+FILE_STRUCTURE_VERSION = '0'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
-
 
 def psql_csv_run(sql_command, error_handler=None):
     """
@@ -246,8 +248,9 @@ class S3Backup(object):
             for filename in filenames:
                 matches.append(os.path.join(root, filename))
 
-        canonical_s3_prefix = ('{0}/basebackups/base_{file_name}_{file_offset}'
-                               .format(self.s3_prefix,
+        canonical_s3_prefix = ('{0}/basebackups/'
+                               'base_{file_name}_{file_offset}_{1}'
+                               .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
                                        **start_backup_info))
 
         # absolute upload paths are used for telling lzop what to compress
@@ -358,7 +361,9 @@ class S3Backup(object):
 
         with self.s3cmd_temp_config as s3cmd_config:
             do_lzop_s3_put(
-                '{0}/wal/{1}'.format(self.s3_prefix, wal_file_name),
+                '{0}/wal_{1}/{2}'.format(self.s3_prefix,
+                                         FILE_STRUCTURE_VERSION,
+                                         wal_file_name),
                 wal_path, s3cmd_config.name)
 
 
