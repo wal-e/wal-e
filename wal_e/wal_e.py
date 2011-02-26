@@ -228,9 +228,11 @@ class S3Backup(object):
         # A multiprocessing pool to do the uploads with
         pool = multiprocessing.Pool(processes=pool_size)
 
+        # a list to accumulate async upload jobs
+        uploads = []
+
         with self.s3cmd_temp_config as s3cmd_config:
             try:
-                uploads = []
                 for local_abspath in local_abspaths:
                     remote_suffix = local_abspath[len(common_local_prefix):]
                     remote_absolute_path = '{0}/{1}.lzo'.format(
