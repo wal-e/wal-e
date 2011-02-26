@@ -77,3 +77,5 @@ TODO
   recovery process more expensive (has to do more seeking to do
   recovery).  The question is: is the increased speed of fetching a
   WAL segment dominated by recovery time, or vice-versa?
+* Ask pgsql-hackers about a pg_cancel_backup() function
+* Sane error messages, such as on Ctrl-C or during errors.

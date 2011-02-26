@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 
 # Provides guidence in object names as to the version of the file
 # structure.
@@ -346,6 +347,17 @@ class S3Backup(object):
                                                          *args, **kwargs)
             upload_good = True
         finally:
+            # XXX: Gross timing hack to get message to appear at the
+            # bottom of a terminal.  Better solution: don't spew
+            # multiprocessing stack traces everywhere.  This message
+            # itself is because of a hypothetical function missing
+            # from PostgreSQL: pg_cancel_backup()
+            time.sleep(1)
+
+            if not upload_good:
+                print >>sys.stderr, ('Blocking on sending WAL segments, even '
+                                     'though backup was not completed.  '
+                                     'See README: TODO about pg_cancel_backup')
             stop_backup_info = PgBackupStatements.run_stop_backup()
             backup_stop_good = True
 
