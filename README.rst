@@ -38,7 +38,7 @@ Examples
 
 Pushing a base backup to S3::
 
-  $ AWS_SECRET_KEY=... python wal_e.py			\
+  $ AWS_SECRET_ACCESS_KEY=... python wal_e.py		\
     -k AWS_ACCESS_KEY_ID				\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     backup_push /var/lib/my/database
