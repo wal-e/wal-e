@@ -109,6 +109,28 @@ class PgBackupStatements(object):
                 "pg_stop_backup())", error_handler=handler))
 
 
+def run_s3cmd(cmd):
+    got_sigint = False
+    s3cmd_proc = None
+
+    try:
+        s3cmd_proc = subprocess.Popen(cmd)
+    except KeyboardInterrupt, e:
+        got_sigint = True
+        if s3cmd_proc is not None:
+            s3cmd_proc.send_signal(signal.SIGINT)
+            s3cmd_proc.wait()
+            raise e
+    finally:
+        if s3cmd_proc and not got_sigint:
+            s3cmd_proc.wait()
+            if s3cmd_proc.returncode != 0:
+                raise subprocess.CalledProcessError(
+                    s3cmd_proc.returncode, args)
+            else:
+                return s3cmd_proc.returncode
+
+
 def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
@@ -132,33 +154,8 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
         # processes, but *NOT* force a write to disk.
         tf.flush()
 
-        s3cmd_proc = None
-
-        s3cmd_argv = [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
-                      s3_url + '.lzo']
-        got_sigint = False
-
-        try:
-            s3cmd_proc = subprocess.Popen(s3cmd_argv)
-        except KeyboardInterrupt, e:
-            got_sigint = True
-            if s3cmd_proc is not None:
-                s3cmd_proc.send_signal(signal.SIGINT)
-                s3cmd_proc.wait()
-                raise e
-        finally:
-            if not got_sigint:
-                s3cmd_proc.wait()
-                if s3cmd_proc.returncode != 0:
-                    raise subprocess.CalledProcessError(
-                        s3cmd_proc.returncode, s3cmd_argv)
-            else:
-                # Do nothing if this finally is the result of a
-                # SIGINT; the KeyboardInterrupt will continue to be
-                # propagated.
-                assert got_sigint
-
-    return None
+        run_s3cmd([S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
+                   s3_url + '.lzo'])
 
 
 class S3Backup(object):
@@ -191,6 +188,17 @@ class S3Backup(object):
             s3cmd_config.seek(0)
 
             yield s3cmd_config
+
+    def backup_list(self):
+        """
+        Prints out a list of the basebackups directory
+
+        This is raw s3cmd output, intended for processing via *NIX
+        text wrangling or casual inspection.
+        """
+        with self.s3cmd_temp_config as s3cmd_config:
+            run_s3cmd([S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
+                       self.s3_prefix + '/basebackups/'])
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
                                   pool_size=6):
@@ -420,13 +428,15 @@ def main(argv=None):
                                        dest='subcommand')
 
     backup_fetch_parser = subparsers.add_parser(
-        'backup_fetch', help='fetch a hot backup from S3')
+        'backup-fetch', help='fetch a hot backup from S3')
+    backup_list_parser = subparsers.add_parser(
+        'backup-list', help='list backups in S3')
     backup_push_parser = subparsers.add_parser(
-        'backup_push', help='pushing a fresh hot backup to S3')
+        'backup-push', help='pushing a fresh hot backup to S3')
     wal_fetch_parser = subparsers.add_parser(
-        'wal_fetch', help='fetch a WAL file from S3')
+        'wal-fetch', help='fetch a WAL file from S3')
     wal_push_parser = subparsers.add_parser(
-        'wal_push', help='push a WAL file to S3')
+        'wal-push', help='push a WAL file to S3')
 
     # backup_push operator section
     backup_push_parser.add_argument('PG_CLUSTER_DIRECTORY',
@@ -470,11 +480,13 @@ def main(argv=None):
     backup_cxt = S3Backup(aws_access_key_id, secret_key, s3_prefix)
 
     subcommand = args.subcommand
-    if subcommand == 'backup_push':
+    if subcommand == 'backup-push':
         backup_cxt.database_s3_backup(args.PG_CLUSTER_DIRECTORY,
                                       pool_size=args.pool_size)
-    elif subcommand == 'wal_push':
+    elif subcommand == 'wal-push':
         backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+    elif subcommand == 'backup-list':
+        backup_cxt.backup_list()
     else:
         print >>sys.stderr, ('Subcommand {0} not implemented!'
                              .format(subcommand))

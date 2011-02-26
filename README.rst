@@ -5,10 +5,10 @@ WAL-E is a program designed perform continuous archiving of PostgreSQL
 WAL files and manage the use of pg_start_backup and pg_stop_backup.
 It has four critical operators:
 
-* backup_fetch
-* backup_push
-* wal_fetch
-* wal_push
+* backup-fetch
+* backup-push
+* wal-fetch
+* wal-push
 
 Of these, the "push" operators send things to S3, and "fetch"
 operators get things from S3.  "wal" operators send/get write ahead
