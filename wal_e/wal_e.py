@@ -281,6 +281,8 @@ class S3Backup(object):
 
                 pool.join()
 
+        return canonical_s3_prefix
+
     def database_s3_backup(self, *args, **kwargs):
         """
         Uploads a PostgreSQL file cluster to S3
@@ -297,13 +299,35 @@ class S3Backup(object):
         backup_stop_good = False
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
-            self._s3_upload_pg_cluster_dir(start_backup_info, *args, **kwargs)
+            uploaded_to = self._s3_upload_pg_cluster_dir(start_backup_info,
+                                                         *args, **kwargs)
             upload_good = True
         finally:
             stop_backup_info = PgBackupStatements.run_stop_backup()
             backup_stop_good = True
 
-        if not (upload_good and backup_stop_good):
+        if upload_good and backup_stop_good:
+            # Make a best-effort attempt to write a sentinel file to
+            # the cluster backup directory that indicates that the
+            # base backup upload has definitely run its course (it may
+            # have, even without this file, though) and also
+            # communicates what WAL segments are needed to get to
+            # consistency.
+            try:
+                with self.s3cmd_temp_config as s3cmd_config:
+                    with tempfile.NamedTemporaryFile(mode='w') as sentinel:
+                        sentinel.write('{file_name}:{file_offset}\n'
+                                       .format(**stop_backup_info))
+                        sentinel.flush()
+                        do_lzop_s3_put(
+                            uploaded_to + '_backup_stop_sentinel.txt',
+                            sentinel.name, s3cmd_config.name)
+            except KeyboardInterrupt, e:
+                # Specially allow termination when there is SIGINT.
+                raise e
+            except:
+                pass
+        else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
             # exception never will get raised.
