@@ -194,7 +194,7 @@ class S3Backup(object):
         """
         return self.pool.apply_async(do_put, [s3_url, path, s3cmd_config_path])
 
-    def s3_upload_pg_cluster_dir(self):
+    def _s3_upload_pg_cluster_dir(self, start_backup_info):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
@@ -219,7 +219,9 @@ class S3Backup(object):
             for filename in filenames:
                 matches.append(os.path.join(root, filename))
 
-        canonical_s3_prefix = self.s3_url_prefix.rstrip('/')
+        canonical_s3_prefix = (self.s3_url_prefix.rstrip('/') +
+                               '/basebackups/base_{file_name}_{file_offset}'
+                               .format(**start_backup_info))
 
         # absolute upload paths are used for telling lzop what to compress
         local_abspaths = [os.path.abspath(match) for match in matches]
@@ -267,13 +269,16 @@ class S3Backup(object):
         """
         Wraps s3_upload_pg_cluster_dir with start/stop backup actions
 
+        In particular there is a 'finally' block to stop the backup in
+        most situations.
+
         """
 
         upload_good = False
         backup_stop_good = False
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
-            self.s3_upload_pg_cluster_dir()
+            self._s3_upload_pg_cluster_dir(start_backup_info)
             upload_good = True
         finally:
             stop_backup_info = PgBackupStatements.run_stop_backup()
