@@ -165,13 +165,13 @@ class S3Backup(object):
 
     def __init__(self,
                  aws_access_key_id, aws_secret_access_key,
-                 s3_url_prefix, pg_cluster_dir,
+                 s3_prefix, pg_cluster_dir,
                  pool_size=6):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
 
         # Canonicalize the s3 prefix by stripping any trailing slash
-        self.s3_url_prefix = s3_url_prefix.rstrip('/')
+        self.s3_prefix = s3_prefix.rstrip('/')
         self.pg_cluster_dir = pg_cluster_dir
         self.pool = multiprocessing.Pool(processes=pool_size)
 
