@@ -11,6 +11,7 @@ import csv
 import datetime
 import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,38 @@ PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 
+
+def subprocess_setup(f=None):
+    # Python installs a SIGPIPE handler by default. This is usually
+    # not what non-Python subprocesses expect.
+    #
+    # Calls an optional "f" first in case other code wants a
+    # preexec_fn, then restores SIGPIPE to what most Unix processes
+    # expect.
+
+    def wrapper(*args, **kwargs):
+        if f is not None:
+            f(*args, **kwargs)
+
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+    return wrapper
+
+
+def popen_sp(*args, **kwargs):
+    """
+    Same as subprocess.Popen, but restores SIGPIPE
+
+    This bug/missing feature is documented in
+    http://bugs.python.org/issue1652, but did not make it to standard
+    library.  Could also be resolved by using the python-subprocess32
+    backport.
+    """
+
+    kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
+    return subprocess.Popen(*args, **kwargs)
+
+
 def psql_csv_run(sql_command, error_handler=None):
     """
     Runs psql and returns a CSVReader object from the query
@@ -34,8 +67,8 @@ def psql_csv_run(sql_command, error_handler=None):
     csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
                  .format(query=sql_command))
 
-    psql_proc = subprocess.Popen([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
-                                 stdout=subprocess.PIPE)
+    psql_proc = popen_sp([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
+                         stdout=subprocess.PIPE)
     stdout, stderr = psql_proc.communicate()
 
     if psql_proc.returncode != 0:
@@ -116,7 +149,7 @@ def run_s3cmd(cmd):
     s3cmd_proc = None
 
     try:
-        s3cmd_proc = subprocess.Popen(cmd)
+        s3cmd_proc = popen_sp(cmd)
     except KeyboardInterrupt, e:
         got_sigint = True
         if s3cmd_proc is not None:
@@ -142,8 +175,7 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
 
     """
     with tempfile.NamedTemporaryFile(mode='w') as tf:
-        compression_p = subprocess.Popen(
-            [LZOP_BIN, '--stdout', path], stdout=tf)
+        compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf)
         compression_p.wait()
 
         if compression_p.returncode != 0:
