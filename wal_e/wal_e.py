@@ -282,6 +282,20 @@ class S3Backup(object):
             # exception never will get raised.
             raise Exception('Could not complete backup process')
 
+    def wal_s3_archive(self, wal_path):
+        """
+        Uploads a WAL file to S3
+
+        This code is intended to typically be called from Postgres's
+        archive_command feature.
+
+        """
+        wal_file_name = os.path.basename(wal_path)
+
+        with self.s3cmd_temp_config as s3cmd_config:
+            do_put('{0}/wal/{1}'.format(self.s3_prefix, wal_file_name),
+                   wal_path, s3cmd_config.name)
+
 
 def external_program_check():
     """
@@ -350,7 +364,8 @@ def main(argv=None):
                         'Can also be defined via environment variable '
                         'WALE_S3_PREFIX')
 
-    subparsers = parser.add_subparsers(title='subcommands')
+    subparsers = parser.add_subparsers(title='subcommands',
+                                       dest='subcommand')
 
     backup_fetch_parser = subparsers.add_parser(
         'backup_fetch', help='fetch a hot backup from S3')
@@ -368,6 +383,10 @@ def main(argv=None):
     backup_push_parser.add_argument('--pool-size', '-p',
                                     type=int,
                                     help='Upload pooling size')
+
+    # wal_push operator section
+    wal_push_parser.add_argument('WAL_SEGMENT',
+                                 help='Path to a WAL segment to upload')
 
     args = parser.parse_args()
 
@@ -396,9 +415,18 @@ def main(argv=None):
 
     external_program_check()
 
-    backup = (S3Backup(aws_access_key_id, secret_key, s3_prefix)
-              .database_s3_backup(args.PG_CLUSTER_DIRECTORY,
-                                  pool_size=args.pool_size))
+    backup_cxt = S3Backup(aws_access_key_id, secret_key, s3_prefix)
+
+    subcommand = args.subcommand
+    if subcommand == 'backup_push':
+        backup_cxt.database_s3_backup(args.PG_CLUSTER_DIRECTORY,
+                                      pool_size=args.pool_size)
+    elif subcommand == 'wal_push':
+        backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+    else:
+        print >>sys.stderr, ('Subcommand {0} not implemented!'
+                             .format(subcommand))
+        sys.exit(127)
 
 if __name__ == "__main__":
     sys.exit(main())
