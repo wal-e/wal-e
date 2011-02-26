@@ -109,7 +109,7 @@ class PgBackupStatements(object):
                 "pg_stop_backup())", error_handler=handler))
 
 
-def do_put(s3_url, path, s3cmd_config_path):
+def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -239,8 +239,9 @@ class S3Backup(object):
                         canonical_s3_prefix, remote_suffix)
 
                     uploads.append(pool.apply_async(
-                            do_put, [remote_absolute_path, local_abspath,
-                                     s3cmd_config.name]))
+                            do_lzop_s3_put,
+                            [remote_absolute_path, local_abspath,
+                             s3cmd_config.name]))
 
                 pool.close()
             finally:
@@ -295,8 +296,9 @@ class S3Backup(object):
         wal_file_name = os.path.basename(wal_path)
 
         with self.s3cmd_temp_config as s3cmd_config:
-            do_put('{0}/wal/{1}.lzo'.format(self.s3_prefix, wal_file_name),
-                   wal_path, s3cmd_config.name)
+            do_lzop_s3_put(
+                '{0}/wal/{1}.lzo'.format(self.s3_prefix, wal_file_name),
+                wal_path, s3cmd_config.name)
 
 
 def external_program_check():
