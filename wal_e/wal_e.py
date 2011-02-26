@@ -327,9 +327,14 @@ class S3Backup(object):
                         sentinel.write('{file_name}:{file_offset}\n'
                                        .format(**stop_backup_info))
                         sentinel.flush()
-                        do_lzop_s3_put(
-                            uploaded_to + '_backup_stop_sentinel.txt',
-                            sentinel.name, s3cmd_config.name)
+
+                        # Avoid using do_lzop_s3_put to store
+                        # uncompressed: easier to read/double click
+                        # on/dump to terminal
+                        run_s3cmd([S3CMD_BIN, '-c', s3cmd_config.name,
+                                   '--mime-type=text/plain', 'put',
+                                   sentinel.name,
+                                   uploaded_to + '_backup_stop_sentinel.txt'])
             except KeyboardInterrupt, e:
                 # Specially allow termination when there is SIGINT.
                 raise e
