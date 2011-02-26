@@ -295,7 +295,7 @@ class S3Backup(object):
         wal_file_name = os.path.basename(wal_path)
 
         with self.s3cmd_temp_config as s3cmd_config:
-            do_put('{0}/wal/{1}'.format(self.s3_prefix, wal_file_name),
+            do_put('{0}/wal/{1}.lzo'.format(self.s3_prefix, wal_file_name),
                    wal_path, s3cmd_config.name)
 
 
