@@ -140,41 +140,17 @@ def do_put(s3_url, path, s3cmd_config_path):
 
 class S3Backup(object):
     """
-    A performs s3cmd uploads to copy a PostgreSQL cluster to S3.
-
-    Note that this is also lzo compresses the files: thus, the number
-    of pooled processes involves doing a full sequential scan of the
-    uncompressed Postgres heap file that is pipelined into lzo. Once
-    lzo is completely finished (necessary to have access to the file
-    size) the file is sent to S3.
-
-    TODO: Investigate an optimization to decouple the compression and
-    upload steps to make sure that the most efficient possible use of
-    pipelining of network and disk resources occurs.  Right now it
-    possible to bounce back and forth between bottlenecking on reading
-    from the database block device and subsequently the S3 sending
-    steps should the processes be at the same stage of the upload
-    pipeline: this can have a very negative impact on being able to
-    make full use of system resources.
-
-    Furthermore, it desirable to overflowing the page cache: having
-    separate tunables for number of simultanious compression jobs
-    (which occupy /tmp space and page cache) and number of uploads
-    (which affect upload throughput) would help.
+    A performs s3cmd uploads to of PostgreSQL WAL files and clusters
 
     """
 
     def __init__(self,
-                 aws_access_key_id, aws_secret_access_key,
-                 s3_prefix, pg_cluster_dir,
-                 pool_size=6):
+                 aws_access_key_id, aws_secret_access_key, s3_prefix):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
 
         # Canonicalize the s3 prefix by stripping any trailing slash
         self.s3_prefix = s3_prefix.rstrip('/')
-        self.pg_cluster_dir = pg_cluster_dir
-        self.pool = multiprocessing.Pool(processes=pool_size)
 
     @property
     @contextlib.contextmanager
@@ -192,33 +168,33 @@ class S3Backup(object):
 
             yield s3cmd_config
 
-    def upload_file(self, s3_url, path, s3cmd_config_path):
-        """
-        Asychronously uploads the path to the provided s3 url
-
-        Returns a multiprocessing async result, which, when complete,
-        will yield "None".  However, the result may also have an
-        exception: this should be carefully checked for by callers to
-        ensure the operation has (likely) succeeded.
-
-        Mechanism includes lzo compression.  Because S3 requires a
-        file size when starting the upload, it is necessary to buffer
-        the complete compressed output in a temp file as to measure
-        its size.  This is unfortunate but probably worth it because
-        lzo output tends to be between 10% and 30% of the original
-        heap file size.  Special effort should be made to not sync()
-        to disk, so that most of the temp file mangling will occur
-        in-memory in practice.
-
-        """
-        return self.pool.apply_async(do_put, [s3_url, path, s3cmd_config_path])
-
-    def _s3_upload_pg_cluster_dir(self, start_backup_info):
+    def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
+                                  pool_size=6):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
         This function ignores the directory pg_xlog, which contains WAL
         files and are not generally part of a base backup.
+
+        Note that this is also lzo compresses the files: thus, the number
+        of pooled processes involves doing a full sequential scan of the
+        uncompressed Postgres heap file that is pipelined into lzo. Once
+        lzo is completely finished (necessary to have access to the file
+        size) the file is sent to S3.
+
+        TODO: Investigate an optimization to decouple the compression and
+        upload steps to make sure that the most efficient possible use of
+        pipelining of network and disk resources occurs.  Right now it
+        possible to bounce back and forth between bottlenecking on reading
+        from the database block device and subsequently the S3 sending
+        steps should the processes be at the same stage of the upload
+        pipeline: this can have a very negative impact on being able to
+        make full use of system resources.
+
+        Furthermore, it desirable to overflowing the page cache: having
+        separate tunables for number of simultanious compression jobs
+        (which occupy /tmp space and page cache) and number of uploads
+        (which affect upload throughput) would help.
 
         """
 
@@ -228,7 +204,7 @@ class S3Backup(object):
         def raise_walk_error(e):
             raise e
 
-        walker = os.walk(self.pg_cluster_dir, onerror=raise_walk_error)
+        walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
         for root, dirnames, filenames in walker:
             # Don't care about WAL, only heap. Also skip the textual log
             # directory.
@@ -249,6 +225,9 @@ class S3Backup(object):
         # information when storing on S3
         common_local_prefix = os.path.commonprefix(local_abspaths)
 
+        # A multiprocessing pool to do the uploads with
+        pool = multiprocessing.Pool(processes=pool_size)
+
         with self.s3cmd_temp_config as s3cmd_config:
             try:
                 uploads = []
@@ -257,15 +236,15 @@ class S3Backup(object):
                     remote_absolute_path = '{0}/{1}.lzo'.format(
                         canonical_s3_prefix, remote_suffix)
 
-                    uploads.append(self.upload_file(
-                            remote_absolute_path, local_abspath,
-                            s3cmd_config.name))
+                    uploads.append(pool.apply_async(
+                            do_put, [remote_absolute_path, local_abspath,
+                                     s3cmd_config.name]))
 
-                self.pool.close()
+                pool.close()
             finally:
                 # Necessary in case finally block gets hit before
                 # .close()
-                self.pool.close()
+                pool.close()
 
                 while uploads:
                     # XXX: Need timeout to work around Python bug:
@@ -273,11 +252,14 @@ class S3Backup(object):
                     # http://bugs.python.org/issue8296
                     uploads.pop().get(1e100)
 
-                self.pool.join()
+                pool.join()
 
-    def database_s3_backup(self):
+    def database_s3_backup(self, *args, **kwargs):
         """
-        Wraps s3_upload_pg_cluster_dir with start/stop backup actions
+        Uploads a PostgreSQL file cluster to S3
+
+        Mechanism: just wraps _s3_upload_pg_cluster_dir with
+        start/stop backup actions with exception handling.
 
         In particular there is a 'finally' block to stop the backup in
         most situations.
@@ -288,7 +270,7 @@ class S3Backup(object):
         backup_stop_good = False
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
-            self._s3_upload_pg_cluster_dir(start_backup_info)
+            self._s3_upload_pg_cluster_dir(start_backup_info, *args, **kwargs)
             upload_good = True
         finally:
             stop_backup_info = PgBackupStatements.run_stop_backup()
@@ -414,9 +396,9 @@ def main(argv=None):
 
     external_program_check()
 
-    backup = (S3Backup(aws_access_key_id, secret_key, s3_prefix,
-                       args.PG_CLUSTER_DIRECTORY, pool_size=args.pool_size)
-              .database_s3_backup())
+    backup = (S3Backup(aws_access_key_id, secret_key, s3_prefix)
+              .database_s3_backup(args.PG_CLUSTER_DIRECTORY,
+                                  pool_size=args.pool_size))
 
 if __name__ == "__main__":
     sys.exit(main())
