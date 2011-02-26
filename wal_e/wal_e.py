@@ -133,7 +133,7 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
         tf.flush()
 
         subprocess.check_call([S3CMD_BIN, '-c', s3cmd_config_path,
-                               'put', tf.name, s3_url])
+                               'put', tf.name, s3_url + '.lzo'])
 
     return None
 
@@ -235,7 +235,7 @@ class S3Backup(object):
             try:
                 for local_abspath in local_abspaths:
                     remote_suffix = local_abspath[len(common_local_prefix):]
-                    remote_absolute_path = '{0}/{1}.lzo'.format(
+                    remote_absolute_path = '{0}/{1}'.format(
                         canonical_s3_prefix, remote_suffix)
 
                     uploads.append(pool.apply_async(
@@ -297,7 +297,7 @@ class S3Backup(object):
 
         with self.s3cmd_temp_config as s3cmd_config:
             do_lzop_s3_put(
-                '{0}/wal/{1}.lzo'.format(self.s3_prefix, wal_file_name),
+                '{0}/wal/{1}'.format(self.s3_prefix, wal_file_name),
                 wal_path, s3cmd_config.name)
 
 
