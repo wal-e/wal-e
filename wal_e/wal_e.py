@@ -6,6 +6,7 @@ backups of the PostgreSQL file cluster.
 """
 
 import argparse
+import contextlib
 import csv
 import datetime
 import multiprocessing
@@ -175,6 +176,22 @@ class S3Backup(object):
         self.pg_cluster_dir = pg_cluster_dir
         self.pool = multiprocessing.Pool(processes=pool_size)
 
+    @property
+    @contextlib.contextmanager
+    def s3cmd_temp_config(self):
+        with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
+            s3cmd_config.write(textwrap.dedent("""\
+            [default]
+            access_key = {aws_access_key_id}
+            secret_key = {aws_secret_access_key}
+            """).format(aws_access_key_id=self.aws_access_key_id,
+                        aws_secret_access_key=self.aws_secret_access_key))
+
+            s3cmd_config.flush()
+            s3cmd_config.seek(0)
+
+            yield s3cmd_config
+
     def upload_file(self, s3_url, path, s3cmd_config_path):
         """
         Asychronously uploads the path to the provided s3 url
@@ -232,17 +249,8 @@ class S3Backup(object):
         # information when storing on S3
         common_local_prefix = os.path.commonprefix(local_abspaths)
 
-        with tempfile.NamedTemporaryFile(mode='w') as s3cmd_config:
+        with self.s3cmd_temp_config as s3cmd_config:
             try:
-                s3cmd_config.write(textwrap.dedent("""\
-                [default]
-                access_key = {aws_access_key_id}
-                secret_key = {aws_secret_access_key}
-                """).format(aws_access_key_id=self.aws_access_key_id,
-                            aws_secret_access_key=self.aws_secret_access_key))
-
-                s3cmd_config.flush()
-
                 uploads = []
                 for local_abspath in local_abspaths:
                     remote_suffix = local_abspath[len(common_local_prefix):]
