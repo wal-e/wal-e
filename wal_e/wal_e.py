@@ -27,12 +27,19 @@ S3CMD_BIN = 's3cmd'
 
 
 def subprocess_setup(f=None):
-    # Python installs a SIGPIPE handler by default. This is usually
-    # not what non-Python subprocesses expect.
-    #
-    # Calls an optional "f" first in case other code wants a
-    # preexec_fn, then restores SIGPIPE to what most Unix processes
-    # expect.
+    """
+    SIGPIPE reset for subprocess workaround
+
+    Python installs a SIGPIPE handler by default. This is usually not
+    what non-Python subprocesses expect.
+
+    Calls an optional "f" first in case other code wants a preexec_fn,
+    then restores SIGPIPE to what most Unix processes expect.
+
+    http://bugs.python.org/issue1652
+    http://www.chiark.greenend.org.uk/ucgi/~cjwatson/blosxom/2009-07-02-python-sigpipe.html
+
+    """
 
     def wrapper(*args, **kwargs):
         if f is not None:
@@ -47,10 +54,10 @@ def popen_sp(*args, **kwargs):
     """
     Same as subprocess.Popen, but restores SIGPIPE
 
-    This bug/missing feature is documented in
-    http://bugs.python.org/issue1652, but did not make it to standard
-    library.  Could also be resolved by using the python-subprocess32
-    backport.
+    This bug is documented (See subprocess_setup) but did not make it
+    to standard library.  Could also be resolved by using the
+    python-subprocess32 backport and using it appropriately (See
+    'restore_signals' keyword argument to Popen)
     """
 
     kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
