@@ -72,3 +72,8 @@ TODO
 * backup_fetch: fetching a base backup
 * wal_fetch: fetching a WAL segment
 * wal_push: pushing a WAL segment
+* Investigate pg_lesslog.  This tool strips the WAL file of full-page
+  binary images, making it *much* smaller, but this also makes the
+  recovery process more expensive (has to do more seeking to do
+  recovery).  The question is: is the increased speed of fetching a
+  WAL segment dominated by recovery time, or vice-versa?
