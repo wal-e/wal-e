@@ -171,7 +171,7 @@ def run_s3cmd(cmd):
             s3cmd_proc.wait()
             if s3cmd_proc.returncode != 0:
                 raise subprocess.CalledProcessError(
-                    s3cmd_proc.returncode, args)
+                    s3cmd_proc.returncode, cmd)
             else:
                 return s3cmd_proc.returncode
 
