@@ -280,8 +280,7 @@ class S3Backup(object):
 
         walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
         for root, dirnames, filenames in walker:
-            # Don't care about WAL, only heap. Also skip the textual log
-            # directory.
+            # Don't care about WAL, only heap.
             if 'pg_xlog' in dirnames:
                 dirnames.remove('pg_xlog')
 
