@@ -457,8 +457,7 @@ def external_program_check():
 
     if could_not_run:
         error_msgs.append(textwrap.fill(
-                'Could not run the following programs with exit '
-                'status zero, are they installed and working? ' +
+                'Could not run the following programs, are they installed? ' +
                 ', '.join(could_not_run)))
 
 
