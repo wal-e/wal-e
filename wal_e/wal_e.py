@@ -145,8 +145,6 @@ class PgBackupStatements(object):
             assert popen.returncode != 0
             raise Exception('Could not stop hot backup')
 
-        label = 'freeze_start_' + datetime.datetime.now().isoformat()
-
         return cls._dict_transform(psql_csv_run(
                 "SELECT file_name, "
                 "  lpad(file_offset::text, 8, '0') AS file_offset "
