@@ -33,6 +33,14 @@ operators.  This context-driven approach attempts to help users avoid
 errors such as one database overwriting the WAL segments of another,
 as long as the WALE_S3_PREFIX is set uniquely for each database.
 
+Dependencies
+------------
+
+* s3cmd
+* lzop
+* psql
+* python-argparse *or* Python 2.7
+
 Examples
 --------
 
@@ -41,7 +49,50 @@ Pushing a base backup to S3::
   $ AWS_SECRET_ACCESS_KEY=... python wal_e.py		\
     -k AWS_ACCESS_KEY_ID				\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
-    backup_push /var/lib/my/database
+    backup-push /var/lib/my/database
+
+Sending a WAL segment to S3::
+
+  $ AWS_SECRET_ACCESS_KEY=... python wal_e.py		\
+    -k AWS_ACCESS_KEY_ID				\
+    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+    wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
+
+It is generally recommended that one use some sort of environment
+variable management with WAL-E: working with it this way less verbose,
+less prone to error, and less likely to expose secret information in
+logs.
+
+At this time, AWS_SECRET_KEY is the only secret value, and recording
+it frequently in logs is not recommended.  The tool has never and
+should never accept secret information in argv to avoid process table
+security problems.  However, the user running PostgreSQL (typically
+'postgres') must be able to run a program that can access this secret
+information, as part of its archive_command_.
+
+.. _archive_command: http://www.postgresql.org/docs/8.3/static/runtime-config-wal.html#GUC-ARCHIVE-COMMAND>
+
+envdir_, part of the daemontools_ package is one recommended approach
+to setting environment variables.  One can prepare an
+envdir-compatible directory like so::
+
+  # Assumption: the group is trusted to read secret information
+  $ umask u=rwx,g=rx,o=
+  $ mkdir -p /etc/wal-e.d/env
+  $ echo "secret-key-content" > /etc/wal-e.d/env/AWS_SECRET_ACCESS_KEY
+  $ echo "access-key" > /etc/wal-e.d/env/AWS_ACCESS_KEY_ID
+  $ echo 's3://some-bucket/directory/or/whatever' > /etc/wal-e.d/env/WALE_PREFIX
+  $ chown -R root:postgres /etc/wal-e.d
+
+After having done this preparation, it is possible to run WAL-E
+commands much more simply, with less risk of accidentally using
+incorrect values::
+
+  $ envdir /etc/wal-e.d/env python wal_e.py backup-push ...
+  $ envdir /etc/wal-e.d/env python wal_e.py wal-push ...
+
+.. _envdir: http://cr.yp.to/daemontools/envdir.html
+.. _daemontools: http://cr.yp.to/daemontools.html
 
 Compression and Temporary Files
 -------------------------------
