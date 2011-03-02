@@ -88,7 +88,8 @@ envdir-compatible directory like so::
   $ mkdir -p /etc/wal-e.d/env
   $ echo "secret-key-content" > /etc/wal-e.d/env/AWS_SECRET_ACCESS_KEY
   $ echo "access-key" > /etc/wal-e.d/env/AWS_ACCESS_KEY_ID
-  $ echo 's3://some-bucket/directory/or/whatever' > /etc/wal-e.d/env/WALE_PREFIX
+  $ echo 's3://some-bucket/directory/or/whatever' > \
+    /etc/wal-e.d/env/WALE_S3_PREFIX
   $ chown -R root:postgres /etc/wal-e.d
 
 After having done this preparation, it is possible to run WAL-E
