@@ -33,6 +33,12 @@ operators.  This context-driven approach attempts to help users avoid
 errors such as one database overwriting the WAL segments of another,
 as long as the WALE_S3_PREFIX is set uniquely for each database.
 
+.. IMPORTANT::
+   Ensure that all servers have different WALE_S3_PREFIXes set.  Reuse
+   of a value between two servers will likely cause unrecoverable
+   backups.
+
+
 Dependencies
 ------------
 
@@ -40,6 +46,7 @@ Dependencies
 * lzop
 * psql
 * python-argparse *or* Python 2.7
+
 
 Examples
 --------
@@ -94,6 +101,7 @@ incorrect values::
 .. _envdir: http://cr.yp.to/daemontools/envdir.html
 .. _daemontools: http://cr.yp.to/daemontools.html
 
+
 Compression and Temporary Files
 -------------------------------
 
@@ -111,6 +119,7 @@ entire input file and storing the compressed output in a temporary
 file.  Thus, the temporary file directory needs to be big enough and
 fast enough to support this, although this tool is designed to avoid
 calling fsync(), so some memory can be leveraged.
+
 
 TODO
 ----
