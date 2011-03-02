@@ -98,6 +98,30 @@ incorrect values::
   $ envdir /etc/wal-e.d/env python wal_e.py backup-push ...
   $ envdir /etc/wal-e.d/env python wal_e.py wal-push ...
 
+envdir is conveniently combined with the archive_command functionality
+used by PostgreSQL to enable continuous archiving.  To enable
+continuous archiving, one needs to edit ``postgresql.conf`` and
+restart the server.  The important settings to enable continuous
+archiving are related here::
+
+  wal_level = archive # hot_standby in 9.0 is also acceptable
+  archive_mode = on
+  archive_command = 'envdir /etc/wal-e.d/env python /path/wal_e.py wal-push %p'
+  archive_timeout = 60
+
+Every segment archived will be noted in the PostgreSQL log.
+
+.. WARNING::
+   PostgreSQL users can check the pg_settings table and see the
+   archive_command employed.  Do not put secret information into
+   postgresql.conf for that reason, and use envdir instead.
+
+A base backup (via ``backup-push``) can be uploaded at any time, but
+this must be done at least once in order to perform a restoration.  It
+must be done again if any WAL segment was not correctly uploaded:
+continuous archiving will stop if there are any gaps in the WAL
+segments.
+
 .. _envdir: http://cr.yp.to/daemontools/envdir.html
 .. _daemontools: http://cr.yp.to/daemontools.html
 
