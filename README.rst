@@ -79,3 +79,5 @@ TODO
   WAL segment dominated by recovery time, or vice-versa?
 * Ask pgsql-hackers about a pg_cancel_backup() function
 * Sane error messages, such as on Ctrl-C or during errors.
+* Pipeline-WAL-Segment Management: S3 ACK is long enough that a
+  totally non-pipelined, non-parallel archive_command can fall behind.
