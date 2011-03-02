@@ -119,8 +119,8 @@ Every segment archived will be noted in the PostgreSQL log.
 A base backup (via ``backup-push``) can be uploaded at any time, but
 this must be done at least once in order to perform a restoration.  It
 must be done again if any WAL segment was not correctly uploaded:
-continuous archiving will stop if there are any gaps in the WAL
-segments.
+point in time recovery will not be able to continue if there are any
+gaps in the WAL segments.
 
 .. _envdir: http://cr.yp.to/daemontools/envdir.html
 .. _daemontools: http://cr.yp.to/daemontools.html
