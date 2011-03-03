@@ -7,10 +7,12 @@ backups of the PostgreSQL file cluster.
 
 import argparse
 import contextlib
+import copy
 import csv
 import datetime
 import multiprocessing
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -58,10 +60,59 @@ def popen_sp(*args, **kwargs):
     to standard library.  Could also be resolved by using the
     python-subprocess32 backport and using it appropriately (See
     'restore_signals' keyword argument to Popen)
+
     """
 
     kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
     return subprocess.Popen(*args, **kwargs)
+
+
+def pipe(*args):
+    """
+    Takes as parameters several dicts, each with the same
+    parameters passed to popen.
+
+    Runs the various processes in a pipeline, connecting
+    the stdout of every process except the last with the
+    stdin of the next process.
+
+    Adapted from http://www.enricozini.org/2009/debian/python-pipes/
+
+    """
+    if len(args) < 2:
+        raise ValueError, "pipe needs at least 2 processes"
+    # Set stdout=PIPE in every subprocess except the last
+    for i in args[:-1]:
+        i["stdout"] = subprocess.PIPE
+
+    # Runs all subprocesses connecting stdins and stdouts to create the
+    # pipeline. Closes stdouts to avoid deadlocks.
+    popens = [popen_sp(**args[0])]
+    for i in range(1,len(args)):
+        args[i]["stdin"] = popens[i - 1].stdout
+        popens.append(popen_sp(**args[i]))
+        popens[i - 1].stdout.close()
+
+    # Returns the array of subprocesses just created
+    return popens
+
+
+def pipe_wait(popens):
+    """
+    Given an array of Popen objects returned by the
+    pipe method, wait for all processes to terminate
+    and return the array with their return values.
+
+    Taken from http://www.enricozini.org/2009/debian/python-pipes/
+
+    """
+    # Avoid mutating the passed copy
+    popens = copy.copy(popens)
+    results = [0] * len(popens)
+    while popens:
+        last = popens.pop(-1)
+        results[len(popens)] = last.wait()
+    return results
 
 
 def psql_csv_run(sql_command, error_handler=None):
@@ -152,26 +203,29 @@ class PgBackupStatements(object):
                 "  pg_stop_backup())", error_handler=handler))
 
 
-def run_s3cmd(cmd):
+def check_call_wait_sigint(*args, **kwargs):
     got_sigint = False
-    s3cmd_proc = None
+    wait_sigint_proc = None
 
     try:
-        s3cmd_proc = popen_sp(cmd)
+        print 'Invoking'
+        wait_sigint_proc = popen_sp(*args, **kwargs)
     except KeyboardInterrupt, e:
         got_sigint = True
-        if s3cmd_proc is not None:
-            s3cmd_proc.send_signal(signal.SIGINT)
-            s3cmd_proc.wait()
+        if wait_sigint_proc is not None:
+            wait_sigint_proc.send_signal(signal.SIGINT)
+            wait_sigint_proc.wait()
             raise e
     finally:
-        if s3cmd_proc and not got_sigint:
-            s3cmd_proc.wait()
-            if s3cmd_proc.returncode != 0:
+        if wait_sigint_proc and not got_sigint:
+            print 'waiting'
+            wait_sigint_proc.wait()
+            print 'done'
+            if wait_sigint_proc.returncode != 0:
                 raise subprocess.CalledProcessError(
-                    s3cmd_proc.returncode, cmd)
+                    wait_sigint_proc.returncode, cmd)
             else:
-                return s3cmd_proc.returncode
+                return wait_sigint_proc.returncode
 
 
 def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
@@ -196,8 +250,55 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
         # processes, but *NOT* force a write to disk.
         tf.flush()
 
-        run_s3cmd([S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
-                   s3_url + '.lzo'])
+        check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config_path,
+                                'put', tf.name, s3_url + '.lzo'])
+
+
+def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
+    """
+    Get and decompress a S3 URL
+
+    This streams the s3cmd directly to lzop; the compressed version is
+    never stored on disk.
+
+    """
+
+    assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
+
+    with open(path, 'wb') as decomp_out:
+        popens = []
+
+        try:
+            popens = pipe(
+                dict(args=[S3CMD_BIN, '-c', s3cmd_config_path,
+                           'get', s3_url, '-']),
+                dict(args=[LZOP_BIN, '-d'], stdout=decomp_out))
+            pipe_wait(popens)
+
+            s3cmd_proc, lzop_proc = popens
+
+            def check_exitcode(cmdname, popen):
+                if popen.returncode != 0:
+                    raise Exception(cmdname + ' terminated with exit code: ' +
+                                    unicode(s3cmd_proc.returncode))
+
+            check_exitcode('s3cmd', s3cmd_proc)
+            check_exitcode('lzop', lzop_proc)
+
+            print >>sys.stderr, ('Got and decompressed file: '
+                                 '{s3_url} to {path}'
+                                 .format(**locals()))
+        except KeyboardInterrupt, keyboard_int:
+            for popen in popens:
+                try:
+                    popen.send_signal(signal.SIGINT)
+                    popen.wait()
+                except OSError, e:
+                    # No such process == 3
+                    if e.errno != 3:
+                        raise e
+
+            raise keyboard_int
 
 
 class S3Backup(object):
@@ -239,8 +340,8 @@ class S3Backup(object):
         text wrangling or casual inspection.
         """
         with self.s3cmd_temp_config as s3cmd_config:
-            run_s3cmd([S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
-                       self.s3_prefix + '/basebackups/'])
+            check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
+                                    self.s3_prefix + '/basebackups/'])
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
                                   pool_size=6):
@@ -333,6 +434,89 @@ class S3Backup(object):
 
         return canonical_s3_prefix
 
+    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size=16):
+        # Verify sane looking input for backup_name
+        base_backup_regexp = (r'base'
+                              r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
+                              r'_(?P<position>[0-9A-F]{8})'
+                              r'_(?P<wal_e_version>\d{3})')
+        match = re.match(base_backup_regexp, backup_name)
+        if match is None:
+            raise Exception('Non-conformant backup name passed: ' +
+                            backup_name)
+
+        # Reject all WAL-E versions that are not the same as the
+        # current version.  In the future, should backwards
+        # compability be a desired feature, change this check.
+        if match.group('wal_e_version') != FILE_STRUCTURE_VERSION:
+            raise Exception('Incompatible WAL-E backup version selected')
+
+        backup_url = self.s3_prefix + '/basebackups/' + backup_name + '/'
+        with self.s3cmd_temp_config as s3cmd_config:
+            ls_proc = popen_sp(
+                [S3CMD_BIN, '-c', s3cmd_config.name, '--recursive',
+                 'ls', backup_url],
+                stdout=subprocess.PIPE)
+            stdout, stderr = ls_proc.communicate()
+
+            pool = multiprocessing.Pool(processes=pool_size)
+            results = []
+            try:
+                for line in stdout.split('\n'):
+                    # Skip any blank lines
+                    if not line.strip():
+                        continue
+
+                    pos = line.rfind('s3://')
+                    if pos > 0:
+                        s3_url = line[pos:]
+                        assert s3_url.startswith(backup_url)
+
+                        relative_local_path = \
+                            s3_url[len(backup_url):-len('.lzo')]
+
+                        assert not relative_local_path.startswith('/')
+
+                        cluster_abspath = os.path.abspath(pg_cluster_dir)
+                        complete_abspath = os.path.join(cluster_abspath,
+                                                        relative_local_path)
+
+                        assert not (set(complete_abspath.split(os.path.sep)) &
+                                    set(['..', '.'])), \
+                                    'S3 must not return relative paths'
+
+                        dirpart, filepart = os.path.split(complete_abspath)
+
+                        try:
+                            os.makedirs(dirpart)
+                        except OSError, e:
+                            # file already exists, in this case, for a
+                            # directory -- that is probably okay, just
+                            # continue
+                            if e.errno != 17 or not os.path.isdir(dirpart):
+                                raise e
+
+                        results.append(pool.apply_async(
+                                do_lzop_s3_get,
+                                (s3_url, complete_abspath, s3cmd_config.name)))
+                    else:
+                        raise Exception('Unexpected s3cmd output: '
+                                        'could not find s3:// url')
+                pool.close()
+            finally:
+                # Necessary in case finally block gets hit before
+                # .close()
+                pool.close()
+
+                while results:
+                    # XXX: Need timeout to work around Python bug:
+                    #
+                    # http://bugs.python.org/issue8296
+                    results.pop().get(1e100)
+
+                pool.join()
+
+
     def database_s3_backup(self, *args, **kwargs):
         """
         Uploads a PostgreSQL file cluster to S3
@@ -419,8 +603,27 @@ class S3Backup(object):
                                          wal_file_name),
                 wal_path, s3cmd_config.name)
 
+    def wal_s3_restore(self, wal_name, wal_destination):
+        """
+        Downloads a WAL file from S3
 
-def external_program_check():
+        This code is intended to typically be called from Postgres's
+        restore_command feature.
+
+        NB: Postgres doesn't guarantee that wal_name ==
+        basename(wal_path), so both are required.
+
+        """
+        with self.s3cmd_temp_config as s3cmd_config:
+            do_lzop_s3_get(
+                '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
+                                             FILE_STRUCTURE_VERSION,
+                                             wal_name),
+                wal_destination, s3cmd_config.name)
+
+
+def external_program_check(
+    to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN])):
     """
     Validates the existence and basic working-ness of other programs
 
@@ -446,7 +649,7 @@ def external_program_check():
         raise Exception('It is also possible that psql is not installed')
 
     with open(os.devnull, 'w') as nullf:
-        for program in [PSQL_BIN, LZOP_BIN, S3CMD_BIN]:
+        for program in to_check:
             try:
                 if program is PSQL_BIN:
                     psql_csv_run('SELECT 1', error_handler=psql_err_handler)
@@ -489,34 +692,72 @@ def main(argv=None):
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
+    # Common options for backup-fetch and backup-push
+    backup_fetchpull_parent = argparse.ArgumentParser(add_help=False)
+    backup_fetchpull_parent.add_argument('PG_CLUSTER_DIRECTORY',
+                                         help="Postgres cluster path, "
+                                         "such as '/var/lib/database'")
+    backup_fetchpull_parent.add_argument('--pool-size', '-p',
+                                         type=int,
+                                         help='Download pooling size')
+
+    wal_fetchpull_parent = argparse.ArgumentParser(add_help=False)
+    wal_fetchpull_parent.add_argument('WAL_SEGMENT',
+                                      help='Path to a WAL segment to upload')
+
     backup_fetch_parser = subparsers.add_parser(
-        'backup-fetch', help='fetch a hot backup from S3')
+        'backup-fetch', help='fetch a hot backup from S3',
+        parents=[backup_fetchpull_parent])
     backup_list_parser = subparsers.add_parser(
         'backup-list', help='list backups in S3')
     backup_push_parser = subparsers.add_parser(
-        'backup-push', help='pushing a fresh hot backup to S3')
+        'backup-push', help='pushing a fresh hot backup to S3',
+        parents=[backup_fetchpull_parent])
+    recovery_conf_generate_parser = subparsers.add_parser(
+        'recovery-conf-generator', help='help generating recovery.conf')
     wal_fetch_parser = subparsers.add_parser(
-        'wal-fetch', help='fetch a WAL file from S3')
+        'wal-fetch', help='fetch a WAL file from S3',
+        parents=[wal_fetchpull_parent])
     wal_push_parser = subparsers.add_parser(
-        'wal-push', help='push a WAL file to S3')
+        'wal-push', help='push a WAL file to S3',
+        parents=[wal_fetchpull_parent])
 
-    # backup-push operator section
-    backup_push_parser.add_argument('PG_CLUSTER_DIRECTORY',
-                                    help="Postgres cluster path, "
-                                    "such as '/var/lib/database'")
-    backup_push_parser.add_argument('--pool-size', '-p',
-                                    type=int,
-                                    help='Upload pooling size')
+
+    # backup-fetch operator section
+    backup_fetch_parser.add_argument('BACKUP_NAME',
+                                     help='the name of the backup to fetch')
+
+    # recovery conf generator section
+    recovery_conf_generate_parser.add_argument(
+        'RECOVERY_COMMAND_FORMAT',
+        help='A recovery command format string.  See README.  '
+        'Example: "python %%w"')
+
+    recovery_conf_generate_parser.add_argument(
+        'RECOVERY_OUTPUT_FILE',
+        type=argparse.FileType('w'), nargs='?', default=sys.stdout,
+        help='the destination of the recovery.conf to write, '
+        'or \'-\' for stdout.')
+
+    timeline_recovery_group = (recovery_conf_generate_parser
+                               .add_mutually_exclusive_group())
+    timeline_recovery_group.add_argument(
+        '-t', '--target-time',
+        help='Provide a time for Postgres to recover to.  '
+        'Any Postgres-compatible time format is allowed.')
+    timeline_recovery_group.add_argument(
+        '-x', '--target-xid',
+        type=int, help='Provide a transaction id for Postgres to recover to.')
 
     # wal-push operator section
-    wal_push_parser.add_argument('WAL_SEGMENT',
-                                 help='Path to a WAL segment to upload')
+    wal_fetch_parser.add_argument('WAL_DESTINATION',
+                                 help='Path to download the WAL segment to')
 
     args = parser.parse_args()
 
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
-        print >>sys.stderr, ('Must define AWS_SECRET_ACCESS_KEY to upload '
+        print >>sys.stderr, ('Must define AWS_SECRET_ACCESS_KEY ask S3 to do '
                              'anything')
         sys.exit(1)
 
@@ -537,18 +778,49 @@ def main(argv=None):
     else:
         aws_access_key_id = args.aws_access_key_id
 
-    external_program_check()
-
     backup_cxt = S3Backup(aws_access_key_id, secret_key, s3_prefix)
 
     subcommand = args.subcommand
-    if subcommand == 'backup-push':
-        backup_cxt.database_s3_backup(args.PG_CLUSTER_DIRECTORY,
-                                      pool_size=args.pool_size)
-    elif subcommand == 'wal-push':
-        backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+
+    if subcommand == 'backup-fetch':
+        external_program_check([S3CMD_BIN, LZOP_BIN])
+        backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
+                                     args.BACKUP_NAME)
     elif subcommand == 'backup-list':
         backup_cxt.backup_list()
+    elif subcommand == 'backup-push':
+        external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN])
+        backup_cxt.database_s3_backup(args.PG_CLUSTER_DIRECTORY,
+                                      pool_size=args.pool_size)
+    elif subcommand == 'wal-fetch':
+        external_program_check([S3CMD_BIN, LZOP_BIN])
+        backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
+    elif subcommand == 'wal-push':
+        external_program_check([S3CMD_BIN, LZOP_BIN])
+        backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+    elif subcommand == 'recovery-conf-generator':
+        this_bin = os.path.abspath(argv[0])
+        command = (args.RECOVERY_COMMAND_FORMAT
+                   # Allow escaping of percent via two percent
+                   .replace('%%', '%')
+                   # replace %w with wal-e path
+                   .replace('%w', this_bin) + ' "%f" "%p"')
+
+        lines = []
+        lines.append("restore_command = '{0}'".format(command))
+
+        if args.target_time is not None:
+            assert ('"' not in args.point_in_time and
+                    "'" not in args.point_in_time)
+            lines.append("recovery_target_time = '{0}'"
+                         .format(args.point_in_time))
+        elif args.target_xid is not None:
+            # No sanitization necessary: argparse knows this is an
+            # integer.
+            lines.append("recovery_target_xid = '{0}'"
+                         .format(args.target_xid))
+
+        print >>args.RECOVERY_OUTPUT_FILE, '\n'.join(lines)
     else:
         print >>sys.stderr, ('Subcommand {0} not implemented!'
                              .format(subcommand))

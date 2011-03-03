@@ -165,3 +165,8 @@ TODO
 * Sane error messages, such as on Ctrl-C or during errors.
 * Pipeline-WAL-Segment Management: S3 ACK is long enough that a
   totally non-pipelined, non-parallel archive_command can fall behind.
+* Eliminate some copy-pasta from interrupt-processing with
+  multiprocessing pools
+* Eliminate copy-pasta in formatting URLs for getting/putting things
+* do_lzop_s3_get do_lzop_s3_push should probably share more code,
+  since they take common arguments.
