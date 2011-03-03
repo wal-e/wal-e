@@ -500,7 +500,7 @@ def main(argv=None):
     wal_push_parser = subparsers.add_parser(
         'wal-push', help='push a WAL file to S3')
 
-    # backup_push operator section
+    # backup-push operator section
     backup_push_parser.add_argument('PG_CLUSTER_DIRECTORY',
                                     help="Postgres cluster path, "
                                     "such as '/var/lib/database'")
@@ -508,7 +508,7 @@ def main(argv=None):
                                     type=int,
                                     help='Upload pooling size')
 
-    # wal_push operator section
+    # wal-push operator section
     wal_push_parser.add_argument('WAL_SEGMENT',
                                  help='Path to a WAL segment to upload')
 
