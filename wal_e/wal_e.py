@@ -730,7 +730,7 @@ def main(argv=None):
 
     # recovery conf generator section
     recovery_conf_generate_parser.add_argument(
-        'RECOVERY_COMMAND_FORMAT',
+        'RECOVERY_COMMAND_FORMAT', default='%w', nargs='?',
         help='A recovery command format string.  See README.  '
         'Example: "python %%w"')
 
@@ -805,7 +805,7 @@ def main(argv=None):
                    # Allow escaping of percent via two percent
                    .replace('%%', '%')
                    # replace %w with wal-e path
-                   .replace('%w', this_bin) + ' "%f" "%p"')
+                   .replace('%w', this_bin) + ' wal-fetch "%f" "%p"')
 
         lines = []
         lines.append("restore_command = '{0}'".format(command))
