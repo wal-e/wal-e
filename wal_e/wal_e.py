@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """WAL-E is a program to assist in performing PostgreSQL continuous
 archiving on S3: it handles the major four operations of
 arching/receiving WAL segments and archiving/receiving base hot
