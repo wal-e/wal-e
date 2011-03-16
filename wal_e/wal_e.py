@@ -209,7 +209,6 @@ def check_call_wait_sigint(*args, **kwargs):
     wait_sigint_proc = None
 
     try:
-        print 'Invoking'
         wait_sigint_proc = popen_sp(*args, **kwargs)
     except KeyboardInterrupt, e:
         got_sigint = True
@@ -219,9 +218,8 @@ def check_call_wait_sigint(*args, **kwargs):
             raise e
     finally:
         if wait_sigint_proc and not got_sigint:
-            print 'waiting'
             wait_sigint_proc.wait()
-            print 'done'
+
             if wait_sigint_proc.returncode != 0:
                 raise subprocess.CalledProcessError(
                     wait_sigint_proc.returncode, cmd)
