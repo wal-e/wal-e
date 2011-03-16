@@ -343,7 +343,7 @@ class S3Backup(object):
                                     self.s3_prefix + '/basebackups/'])
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
-                                  pool_size=6):
+                                  pool_size):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
@@ -698,7 +698,7 @@ def main(argv=None):
                                          help="Postgres cluster path, "
                                          "such as '/var/lib/database'")
     backup_fetchpull_parent.add_argument('--pool-size', '-p',
-                                         type=int,
+                                         type=int, default=6,
                                          help='Download pooling size')
 
     wal_fetchpull_parent = argparse.ArgumentParser(add_help=False)
@@ -785,7 +785,8 @@ def main(argv=None):
     if subcommand == 'backup-fetch':
         external_program_check([S3CMD_BIN, LZOP_BIN])
         backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
-                                     args.BACKUP_NAME)
+                                     args.BACKUP_NAME,
+                                     pool_size=args.pool_size)
     elif subcommand == 'backup-list':
         external_program_check([S3CMD_BIN])
         backup_cxt.backup_list()
