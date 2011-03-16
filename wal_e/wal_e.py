@@ -728,9 +728,9 @@ def main(argv=None):
 
     # recovery conf generator section
     recovery_conf_generate_parser.add_argument(
-        'RECOVERY_COMMAND_FORMAT', default='%w', nargs='?',
-        help='A recovery command format string.  See README.  '
-        'Example: "python %%w"')
+        '--python-bin', default='python', nargs='?',
+        help='the Python binary to run wal-e with.'
+        'Example: "python2.6"')
 
     recovery_conf_generate_parser.add_argument(
         'RECOVERY_OUTPUT_FILE',
@@ -799,11 +799,11 @@ def main(argv=None):
         backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
     elif subcommand == 'recovery-conf-generator':
         this_bin = os.path.abspath(argv[0])
-        command = (args.RECOVERY_COMMAND_FORMAT
-                   # Allow escaping of percent via two percent
-                   .replace('%%', '%')
-                   # replace %w with wal-e path
-                   .replace('%w', this_bin) + ' wal-fetch "%f" "%p"')
+        command = ('{python} {wal_e} --aws-access-key-id={aws_access_key_id} '
+                   '--s3-prefix={s3_prefix} wal-fetch "%f" "%p"'
+                   .format(python=args.python_bin, wal_e=this_bin,
+                           aws_access_key_id=aws_access_key_id,
+                           s3_prefix=s3_prefix))
 
         lines = []
         lines.append("restore_command = '{0}'".format(command))
