@@ -786,6 +786,7 @@ def main(argv=None):
         backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
                                      args.BACKUP_NAME)
     elif subcommand == 'backup-list':
+        external_program_check([S3CMD_BIN])
         backup_cxt.backup_list()
     elif subcommand == 'backup-push':
         external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN])
