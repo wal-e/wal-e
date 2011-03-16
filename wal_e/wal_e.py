@@ -567,10 +567,11 @@ class S3Backup(object):
                         # Avoid using do_lzop_s3_put to store
                         # uncompressed: easier to read/double click
                         # on/dump to terminal
-                        run_s3cmd([S3CMD_BIN, '-c', s3cmd_config.name,
-                                   '--mime-type=text/plain', 'put',
-                                   sentinel.name,
-                                   uploaded_to + '_backup_stop_sentinel.txt'])
+                        check_call_wait_sigint(
+                            [S3CMD_BIN, '-c', s3cmd_config.name,
+                             '--mime-type=text/plain', 'put',
+                             sentinel.name,
+                             uploaded_to + '_backup_stop_sentinel.txt'])
             except KeyboardInterrupt, e:
                 # Specially re-raise exception on SIGINT to allow
                 # propagation.
