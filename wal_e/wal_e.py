@@ -23,7 +23,7 @@ import time
 
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = '001'
+FILE_STRUCTURE_VERSION = '002'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
@@ -159,7 +159,6 @@ class PgBackupStatements(object):
     def _dict_transform(csv_reader):
         rows = list(csv_reader)
         assert len(rows) == 2, 'Expect header row and data row'
-        assert len(rows[1]) == 2, 'Expect (wal_file_name, offset) tuple'
         return dict(zip(*rows))
 
     @classmethod
@@ -203,13 +202,24 @@ class PgBackupStatements(object):
                 "FROM pg_xlogfile_name_offset("
                 "  pg_stop_backup())", error_handler=handler))
 
+    @classmethod
+    def pg_version(cls):
+        """
+        Get a very informative version string from Postgres
 
-def check_call_wait_sigint(*args, **kwargs):
+        Includes minor version, major version, and architecture, among
+        other details.
+
+        """
+        return cls._dict_transform(psql_csv_run('SELECT * FROM version()'))
+
+
+def check_call_wait_sigint(*popenargs, **kwargs):
     got_sigint = False
     wait_sigint_proc = None
 
     try:
-        wait_sigint_proc = popen_sp(*args, **kwargs)
+        wait_sigint_proc = popen_sp(*popenargs, **kwargs)
     except KeyboardInterrupt, e:
         got_sigint = True
         if wait_sigint_proc is not None:
@@ -221,8 +231,17 @@ def check_call_wait_sigint(*args, **kwargs):
             wait_sigint_proc.wait()
 
             if wait_sigint_proc.returncode != 0:
-                raise subprocess.CalledProcessError(
-                    wait_sigint_proc.returncode, cmd)
+                # Try to identify the argv sent via 'popenargs' and
+                # kwargs sent to subprocess.Popen: this can be sent
+                # positionally, or in the form of kwargs.
+                if len(args) > 0:
+                    raise subprocess.CalledProcessError(
+                        wait_sigint_proc.returncode, args[0])
+                elif 'args' in kwargs:
+                    raise subprocess.CalledProcessError(
+                        wait_sigint_proc.returncode, kwargs['args'])
+                else:
+                    assert False
             else:
                 return wait_sigint_proc.returncode
 
@@ -340,10 +359,11 @@ class S3Backup(object):
         """
         with self.s3cmd_temp_config as s3cmd_config:
             check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
-                                    self.s3_prefix + '/basebackups/'])
+                                    self.s3_prefix + '/basebackups_{version}/'
+                                    .format(version=FILE_STRUCTURE_VERSION)])
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
-                                  pool_size):
+                                  version, pool_size):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
@@ -387,8 +407,8 @@ class S3Backup(object):
             for filename in filenames:
                 matches.append(os.path.join(root, filename))
 
-        canonical_s3_prefix = ('{0}/basebackups/'
-                               'base_{file_name}_{file_offset}_{1}'
+        backup_s3_prefix = ('{0}/basebackups_{1}/'
+                               'base_{file_name}_{file_offset}'
                                .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
                                        **start_backup_info))
 
@@ -406,11 +426,25 @@ class S3Backup(object):
         uploads = []
 
         with self.s3cmd_temp_config as s3cmd_config:
+
+            # Make an attempt to upload extended version metadata
+            with tempfile.NamedTemporaryFile(mode='w') as version_tempf:
+                version_tempf.write(unicode(version))
+                version_tempf.flush()
+
+                check_call_wait_sigint(
+                    [S3CMD_BIN, '-c', s3cmd_config.name,
+                     '--mime-type=text/plain', 'put',
+                     version_tempf.name,
+                     backup_s3_prefix + '/extended_version.txt'])
+
+            # Enqueue uploads for parallel execution
             try:
                 for local_abspath in local_abspaths:
                     remote_suffix = local_abspath[len(common_local_prefix):]
-                    remote_absolute_path = '{0}/{1}'.format(
-                        canonical_s3_prefix, remote_suffix)
+
+                    remote_absolute_path = '/'.join(
+                        [backup_s3_prefix, 'pgcluster', remote_suffix])
 
                     uploads.append(pool.apply_async(
                             do_lzop_s3_put,
@@ -431,30 +465,69 @@ class S3Backup(object):
 
                 pool.join()
 
-        return canonical_s3_prefix
+        return backup_s3_prefix
 
-    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size=16):
-        # Verify sane looking input for backup_name
-        base_backup_regexp = (r'base'
-                              r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
-                              r'_(?P<position>[0-9A-F]{8})'
-                              r'_(?P<wal_e_version>\d{3})')
-        match = re.match(base_backup_regexp, backup_name)
-        if match is None:
-            raise Exception('Non-conformant backup name passed: ' +
-                            backup_name)
+    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size):
 
-        # Reject all WAL-E versions that are not the same as the
-        # current version.  In the future, should backwards
-        # compability be a desired feature, change this check.
-        if match.group('wal_e_version') != FILE_STRUCTURE_VERSION:
-            raise Exception('Incompatible WAL-E backup version selected')
+        basebackups_prefix = '/'.join(
+            [self.s3_prefix, 'basebackups_' + FILE_STRUCTURE_VERSION])
 
-        backup_url = self.s3_prefix + '/basebackups/' + backup_name + '/'
         with self.s3cmd_temp_config as s3cmd_config:
+
+            # Verify sane looking input for backup_name
+            if backup_name == 'LATEST':
+                # "LATEST" is a special backup name that is always valid
+                # to always find the lexically-largest backup, with the
+                # intend of getting the freshest database as soon as
+                # possible.
+
+                backup_find = popen_sp(
+                    [S3CMD_BIN, '-c', s3cmd_config.name,
+                     'ls', basebackups_prefix + '/'],
+                    stdout=subprocess.PIPE)
+                stdout, stderr = backup_find.communicate()
+
+
+                sentinel_suffix = '_backup_stop_sentinel.txt'
+                # Find sentinel files as markers of guaranteed good backups
+                sentinel_urls = []
+
+                for line in (l.strip() for l in stdout.split('\n')):
+
+                    if line.endswith(sentinel_suffix):
+                        sentinel_urls.append(line.split()[-1])
+
+                if not sentinel_urls:
+                    raise Exception('No base backups found in ' +
+                                    basebackups_prefix)
+                else:
+                    sentinel_urls.sort()
+
+                    # Slice away the extra URL cruft to locate just
+                    # the base backup name.
+                    #
+                    # NB: '... + 1' is for trailing slash
+                    begin_slice = len(basebackups_prefix) + 1
+                    end_slice = -len(sentinel_suffix)
+                    backup_name = sentinel_urls[-1][begin_slice:end_slice]
+
+            base_backup_regexp = (r'base'
+                                  r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
+                                  r'_(?P<position>[0-9A-F]{8})')
+            match = re.match(base_backup_regexp, backup_name)
+            if match is None:
+                raise Exception('Non-conformant backup name passed: ' +
+                                backup_name)
+
+            assert backup_name != 'LATEST', ('Must be rewritten to the actual '
+                                             'name of the last base backup')
+
+            backup_s3_cluster_prefix = '/'.join([basebackups_prefix, backup_name,
+                                                 'pgcluster']) + '/'
+
             ls_proc = popen_sp(
                 [S3CMD_BIN, '-c', s3cmd_config.name, '--recursive',
-                 'ls', backup_url],
+                 'ls', backup_s3_cluster_prefix],
                 stdout=subprocess.PIPE)
             stdout, stderr = ls_proc.communicate()
 
@@ -469,10 +542,10 @@ class S3Backup(object):
                     pos = line.rfind('s3://')
                     if pos > 0:
                         s3_url = line[pos:]
-                        assert s3_url.startswith(backup_url)
+                        assert s3_url.startswith(backup_s3_cluster_prefix)
 
                         relative_local_path = \
-                            s3_url[len(backup_url):-len('.lzo')]
+                            s3_url[len(backup_s3_cluster_prefix):-len('.lzo')]
 
                         assert not relative_local_path.startswith('/')
 
@@ -532,7 +605,9 @@ class S3Backup(object):
         backup_stop_good = False
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
+            version = PgBackupStatements.pg_version()['version']
             uploaded_to = self._s3_upload_pg_cluster_dir(start_backup_info,
+                                                         version=version,
                                                          *args, **kwargs)
             upload_good = True
         finally:

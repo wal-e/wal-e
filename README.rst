@@ -170,3 +170,5 @@ TODO
 * Eliminate copy-pasta in formatting URLs for getting/putting things
 * do_lzop_s3_get do_lzop_s3_push should probably share more code,
   since they take common arguments.
+* Consistently applied FILE_STRUCTURE_VERSION to S3 keys (right now,
+  this is done per object by hand and format strings)
