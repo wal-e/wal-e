@@ -168,7 +168,13 @@ TODO
 * Eliminate some copy-pasta from interrupt-processing with
   multiprocessing pools
 * Eliminate copy-pasta in formatting URLs for getting/putting things
-* do_lzop_s3_get do_lzop_s3_push should probably share more code,
-  since they take common arguments.
+* do_lzop_s3_get do_lzop_s3_push, do_partition_put, do_partition_get
+  should probably share more code, since they take common arguments.
 * Consistently applied FILE_STRUCTURE_VERSION to S3 keys (right now,
   this is done per object by hand and format strings)
+* Verify Tar paths instead of using tarfile.extractall()
+* Handle shrinking files gracefully (growing files are already handled
+  gracefully).  This is because the tarfile module's copyfileobj
+  procedure raises an exception if the file has been truncated.
+  Unfortunately the best solution I can see is to cook up a custom
+  tarfile.addfile() equivalent.

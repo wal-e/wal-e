@@ -17,13 +17,16 @@ import re
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
 import time
 
+import tar_partition
+
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = '002'
+FILE_STRUCTURE_VERSION = '003'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
@@ -246,6 +249,89 @@ def check_call_wait_sigint(*popenargs, **kwargs):
                 return wait_sigint_proc.returncode
 
 
+def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
+    """
+    Synchronous version of the s3-upload wrapper
+
+    Nominally intended to be used through a pool, but exposed here
+    for testing and experimentation.
+
+    """
+    with tempfile.NamedTemporaryFile(mode='w') as tf:
+        print 'doing put'
+        compression_p = popen_sp([LZOP_BIN, '--stdout'],
+                                 stdin=subprocess.PIPE, stdout=tf)
+        tpart.tarfile_write(compression_p.stdin)
+        compression_p.stdin.flush()
+        compression_p.stdin.close()
+        print 'waiting for compression process'
+        compression_p.wait()
+        print 'compression process finished'
+        if compression_p.returncode != 0:
+            raise Exception(
+                ('Could not properly compress tar partition: {tpart_number}  '
+                 'Parts: \n{error_manifest}')
+                .format(error_manifest=tpart.format_manifest(),
+                        tpart_number=tpart_number))
+
+        # Not to be confused with fsync: the point is to make
+        # sure any Python-buffered output is visible to other
+        # processes, but *NOT* force a write to disk.
+        tf.flush()
+
+        print 'attempting to send'
+        check_call_wait_sigint(
+            [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
+             '/'.join([backup_s3_prefix, 'tar_partitions',
+                       'part_{tpart_number}.tar.lzo'.format(
+                            tpart_number=tpart_number)])])
+        print 'sent'
+
+
+def do_partition_get(backup_s3_prefix, local_root, tpart_number,
+                     s3cmd_config_path):
+    tar = None
+    try:
+        popens = pipe(
+            dict(args=[S3CMD_BIN, '-c', s3cmd_config_path, 'get',
+                       '/'.join([backup_s3_prefix, 'tar_partitions',
+                                 'part_{0}.tar.lzo'.format(tpart_number)]),
+                       '-']),
+            dict(args=[LZOP_BIN, '-d', '--stdout'], stdout=subprocess.PIPE))
+
+        assert len(popens) > 0
+        tar = tarfile.open(mode='r|', fileobj=popens[-1].stdout)
+        tar.extractall(local_root)
+        tar.close()
+        popens[-1].stdout.close()
+
+        pipe_wait(popens)
+
+        s3cmd_proc, lzop_proc = popens
+
+        def check_exitcode(cmdname, popen):
+            if popen.returncode != 0:
+                raise Exception(cmdname + ' terminated with exit code: ' +
+                                unicode(s3cmd_proc.returncode))
+
+        check_exitcode('s3cmd', s3cmd_proc)
+        check_exitcode('lzop', lzop_proc)
+    except KeyboardInterrupt, keyboard_int:
+        for popen in popens:
+            try:
+                popen.send_signal(signal.SIGINT)
+                popen.wait()
+            except OSError, e:
+                # No such process == 3
+                if e.errno != 3:
+                    raise e
+
+        raise keyboard_int
+    finally:
+        if tar is not None:
+            tar.close()
+
+
 def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
@@ -407,6 +493,11 @@ class S3Backup(object):
             for filename in filenames:
                 matches.append(os.path.join(root, filename))
 
+            # Special case for empty directories
+            if not filenames:
+                matches.append(root)
+
+
         backup_s3_prefix = ('{0}/basebackups_{1}/'
                                'base_{file_name}_{file_offset}'
                                .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
@@ -418,6 +509,13 @@ class S3Backup(object):
         # computed to subtract out extra extraneous absolute path
         # information when storing on S3
         common_local_prefix = os.path.commonprefix(local_abspaths)
+
+        partitions = tar_partition.tar_partitions_plan(
+            common_local_prefix, local_abspaths,
+
+            # 1610612736 bytes == 1.5 gigabytes, per partition,
+            # non-tunable
+            1610612736)
 
         # A multiprocessing pool to do the uploads with
         pool = multiprocessing.Pool(processes=pool_size)
@@ -440,16 +538,10 @@ class S3Backup(object):
 
             # Enqueue uploads for parallel execution
             try:
-                for local_abspath in local_abspaths:
-                    remote_suffix = local_abspath[len(common_local_prefix):]
-
-                    remote_absolute_path = '/'.join(
-                        [backup_s3_prefix, 'pgcluster', remote_suffix])
-
-                    uploads.append(pool.apply_async(
-                            do_lzop_s3_put,
-                            [remote_absolute_path, local_abspath,
-                             s3cmd_config.name]))
+                for tpart_number, tpart in enumerate(partitions):
+                    #uploads.append(pool.apply_async(
+                    apply(do_partition_put, [backup_s3_prefix, tpart_number, tpart,
+                                             s3cmd_config.name])
 
                 pool.close()
             finally:
@@ -522,18 +614,21 @@ class S3Backup(object):
             assert backup_name != 'LATEST', ('Must be rewritten to the actual '
                                              'name of the last base backup')
 
-            backup_s3_cluster_prefix = '/'.join([basebackups_prefix, backup_name,
-                                                 'pgcluster']) + '/'
+
+            backup_s3_prefix = '/'.join([basebackups_prefix, backup_name])
+            backup_s3_cluster_prefix = '/'.join([backup_s3_prefix, 'tar_partitions', ''])
 
             ls_proc = popen_sp(
-                [S3CMD_BIN, '-c', s3cmd_config.name, '--recursive',
-                 'ls', backup_s3_cluster_prefix],
+                [S3CMD_BIN, '-c', s3cmd_config.name, 'ls', backup_s3_cluster_prefix],
                 stdout=subprocess.PIPE)
             stdout, stderr = ls_proc.communicate()
 
             pool = multiprocessing.Pool(processes=pool_size)
             results = []
+            cluster_abspath = os.path.abspath(pg_cluster_dir)
             try:
+                partitions = set()
+
                 for line in stdout.split('\n'):
                     # Skip any blank lines
                     if not line.strip():
@@ -543,37 +638,36 @@ class S3Backup(object):
                     if pos > 0:
                         s3_url = line[pos:]
                         assert s3_url.startswith(backup_s3_cluster_prefix)
-
-                        relative_local_path = \
-                            s3_url[len(backup_s3_cluster_prefix):-len('.lzo')]
-
-                        assert not relative_local_path.startswith('/')
-
-                        cluster_abspath = os.path.abspath(pg_cluster_dir)
-                        complete_abspath = os.path.join(cluster_abspath,
-                                                        relative_local_path)
-
-                        assert not (set(complete_abspath.split(os.path.sep)) &
-                                    set(['..', '.'])), \
-                                    'S3 must not return relative paths'
-
-                        dirpart, filepart = os.path.split(complete_abspath)
-
-                        try:
-                            os.makedirs(dirpart)
-                        except OSError, e:
-                            # file already exists, in this case, for a
-                            # directory -- that is probably okay, just
-                            # continue
-                            if e.errno != 17 or not os.path.isdir(dirpart):
-                                raise e
-
-                        results.append(pool.apply_async(
-                                do_lzop_s3_get,
-                                (s3_url, complete_abspath, s3cmd_config.name)))
+                        base, partition_name = s3_url.rsplit('/', 1)
+                        match = re.match(r'part_(\d+).tar.lzo', partition_name)
+                        if not match:
+                            raise Exception('Malformed tar partition in base backup')
+                        else:
+                            partition_number = int(match.group(1))
+                            assert partition_number not in partitions, \
+                                'Must not have duplicates'
+                            partitions.add(partition_number)
                     else:
                         raise Exception('Unexpected s3cmd output: '
                                         'could not find s3:// url')
+
+                # Verify that partitions look sane: they should be
+                # numbered contiguously from 0 to some number.
+                expected_partitions = set(xrange(max(partitions) + 1))
+                if partitions != expected_partitions:
+                    print partitions, expected_partitions
+                    raise Exception('There exist missing tar partitions.  '
+                                    'Numbers missing: ' +
+                                    unicode(expected_partitions - partitions))
+                else:
+                    assert expected_partitions == partitions
+
+                    for tpart_number in partitions:
+                        results.append(pool.apply_async(
+                                do_partition_get,
+                                [backup_s3_prefix, cluster_abspath,
+                                 tpart_number, s3cmd_config.name]))
+
                 pool.close()
             finally:
                 # Necessary in case finally block gets hit before
