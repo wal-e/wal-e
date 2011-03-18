@@ -92,7 +92,7 @@ def pipe(*args):
     # Runs all subprocesses connecting stdins and stdouts to create the
     # pipeline. Closes stdouts to avoid deadlocks.
     popens = [popen_sp(**args[0])]
-    for i in range(1,len(args)):
+    for i in range(1, len(args)):
         args[i]["stdin"] = popens[i - 1].stdout
         popens.append(popen_sp(**args[i]))
         popens[i - 1].stdout.close()
@@ -560,7 +560,6 @@ class S3Backup(object):
         return backup_s3_prefix
 
     def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size):
-
         basebackups_prefix = '/'.join(
             [self.s3_prefix, 'basebackups_' + FILE_STRUCTURE_VERSION])
 
@@ -824,7 +823,7 @@ def external_program_check(
                     psql_csv_run('SELECT 1', error_handler=psql_err_handler)
                 else:
                     subprocess.call([program], stdout=nullf, stderr=nullf)
-            except IOError, e:
+            except IOError:
                 could_not_run.append(program)
 
     if could_not_run:
@@ -877,19 +876,17 @@ def main(argv=None):
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
         parents=[backup_fetchpull_parent])
-    backup_list_parser = subparsers.add_parser(
-        'backup-list', help='list backups in S3')
-    backup_push_parser = subparsers.add_parser(
-        'backup-push', help='pushing a fresh hot backup to S3',
-        parents=[backup_fetchpull_parent])
+    subparsers.add_parser('backup-list', help='list backups in S3')
+    subparsers.add_parser('backup-push',
+                          help='pushing a fresh hot backup to S3',
+                          parents=[backup_fetchpull_parent])
     recovery_conf_generate_parser = subparsers.add_parser(
         'recovery-conf-generator', help='help generating recovery.conf')
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
         parents=[wal_fetchpull_parent])
-    wal_push_parser = subparsers.add_parser(
-        'wal-push', help='push a WAL file to S3',
-        parents=[wal_fetchpull_parent])
+    subparsers.add_parser('wal-push', help='push a WAL file to S3',
+                          parents=[wal_fetchpull_parent])
 
 
     # backup-fetch operator section
