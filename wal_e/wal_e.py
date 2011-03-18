@@ -140,7 +140,7 @@ def psql_csv_run(sql_command, error_handler=None):
         else:
             assert error_handler is None
             raise Exception('Could not csv-execute "{query}" successfully'
-                            .format(query=self._sqlcmd))
+                            .format(sql_command))
 
     # Previous code must raise any desired exceptions for non-zero
     # exit codes
@@ -237,9 +237,9 @@ def check_call_wait_sigint(*popenargs, **kwargs):
                 # Try to identify the argv sent via 'popenargs' and
                 # kwargs sent to subprocess.Popen: this can be sent
                 # positionally, or in the form of kwargs.
-                if len(args) > 0:
+                if len(popenargs) > 0:
                     raise subprocess.CalledProcessError(
-                        wait_sigint_proc.returncode, args[0])
+                        wait_sigint_proc.returncode, popenargs[0])
                 elif 'args' in kwargs:
                     raise subprocess.CalledProcessError(
                         wait_sigint_proc.returncode, kwargs['args'])
