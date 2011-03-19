@@ -145,17 +145,16 @@ file.  Thus, the temporary file directory needs to be big enough and
 fast enough to support this, although this tool is designed to avoid
 calling fsync(), so some memory can be leveraged.
 
+Base backups first have their files consolidated into disjoint tar
+files of limited length to avoid the relatively large per-file S3
+overhead.  This has the effect of making base backups and restores
+much faster when many small relations and ancillary files are
+involved.
+
 
 TODO
 ----
 
-* setup.py
-
-  * Should have dependencies (e.g. argparse)
-  * Should install commands into bin using setuptools entry points
-
-* backup-fetch: fetching a base backup
-* wal-fetch: fetching a WAL segment
 * Investigate pg_lesslog.  This tool strips the WAL file of full-page
   binary images, making it *much* smaller, but this also makes the
   recovery process more expensive (has to do more seeking to do
@@ -170,11 +169,14 @@ TODO
 * Eliminate copy-pasta in formatting URLs for getting/putting things
 * do_lzop_s3_get do_lzop_s3_push, do_partition_put, do_partition_get
   should probably share more code, since they take common arguments.
-* Consistently applied FILE_STRUCTURE_VERSION to S3 keys (right now,
-  this is done per object by hand and format strings)
+* Write a new class to handle addressing paths of a WAL-E context: its
+  base backups and WAL segments.
 * Verify Tar paths instead of using tarfile.extractall()
 * Handle shrinking files gracefully (growing files are already handled
   gracefully).  This is because the tarfile module's copyfileobj
   procedure raises an exception if the file has been truncated.
   Unfortunately the best solution I can see is to cook up a custom
   tarfile.addfile() equivalent.
+* Handle unlinked-file race conditions gracefully
+* Consider replacing s3cmd with boto, as metadata checking
+  requirements become more elaborate.
