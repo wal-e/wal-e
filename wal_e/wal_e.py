@@ -514,12 +514,22 @@ class S3Backup(object):
 
         walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
         for root, dirnames, filenames in walker:
+            is_cluster_toplevel = (os.path.abspath(root) ==
+                                   os.path.abspath(pg_cluster_dir))
+
             # Don't care about WAL, only heap.
-            if 'pg_xlog' in dirnames:
-                dirnames.remove('pg_xlog')
+            if is_cluster_toplevel:
+                if 'pg_xlog' in dirnames:
+                    dirnames.remove('pg_xlog')
 
             for filename in filenames:
-                matches.append(os.path.join(root, filename))
+                if is_cluster_toplevel and filename in ('postmaster.pid',
+                                                        'postgresql.conf'):
+                    # Do not include the postmaster pid file or the
+                    # configuration file in the backup.
+                    pass
+                else:
+                    matches.append(os.path.join(root, filename))
 
             # Special case for empty directories
             if not filenames:
