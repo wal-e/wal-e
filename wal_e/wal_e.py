@@ -12,6 +12,7 @@ import copy
 import csv
 import datetime
 import errno
+import glob
 import multiprocessing
 import os
 import re
@@ -821,6 +822,63 @@ class S3Backup(object):
                                              wal_name),
                 wal_destination, s3cmd_config.name)
 
+    def wal_fark(self, pg_cluster_dir):
+        """
+        A function that performs similarly to the PostgreSQL archiver
+
+        It's the FAke ArKiver.
+
+        This is for use when the database is not online (and can't
+        archive its segments) or in put into standby mode to quiesce
+        the system.  It was written to be useful in switchover
+        scenarios.
+
+        Notes:
+
+        It is questionable if it belongs to class S3Backup (where it
+        began life)
+
+        It'd be nice if there was a way to use the PostgreSQL archiver
+        separately from the database, possibly with enough hooks to
+        enable parallel archiving.
+
+        """
+        xlog_dir = os.path.join(pg_cluster_dir, 'pg_xlog')
+        archive_status_dir = os.path.join(xlog_dir, 'archive_status')
+        suffix = '.ready'
+        for ready_path in sorted(glob.iglob(os.path.join(
+                    archive_status_dir, '*.ready'))):
+            try:
+                assert ready_path.endswith(suffix)
+                archivee_name = os.path.basename(ready_path)[:-len(suffix)]
+                self.wal_s3_archive(os.path.join(xlog_dir, archivee_name))
+            except OSError, e:
+                if e.errno == errno.ENOENT:
+                    raise Exception('Unexpected, could not read file: ' +
+                                    unicode(e.filename))
+                else:
+                    raise e
+
+            # It's critically important that this only happen if
+            # the archiving completed successfully, but an ENOENT
+            # can happen if there is a (harmless) race condition,
+            # assuming that anyone who would move the archive
+            # status file has done the requisite work.
+            try:
+                done_path = os.path.join(os.path.dirname(ready_path),
+                                         archivee_name + '.done')
+                os.rename(ready_path, done_path)
+            except OSError, e:
+                if e.errno == errno.ENOENT:
+                    print >>sys.stderr, \
+                        ('Archive status file {ready_path} no longer '
+                         'exists, there may be another racing archiving '
+                         'process.  This is harmless IF ALL ARCHIVERS ARE '
+                         'WELL-BEHAVED but potentially wasteful.'
+                         .format(ready_path=ready_path))
+                else:
+                    raise e
+
 
 def external_program_check(
     to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN])):
@@ -918,6 +976,13 @@ def main(argv=None):
     subparsers.add_parser('wal-push', help='push a WAL file to S3',
                           parents=[wal_fetchpull_parent])
 
+    wal_fark_parser = subparsers.add_parser('wal-fark', help='The FAke Arkiver')
+
+    # XXX: Partial copy paste, because no parallel archiving support
+    # is supported and to have the --pool option would be confusing.
+    wal_fark_parser.add_argument('PG_CLUSTER_DIRECTORY',
+                                 help="Postgres cluster path, "
+                                 "such as '/var/lib/database'")
 
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
@@ -974,6 +1039,9 @@ def main(argv=None):
     elif subcommand == 'wal-push':
         external_program_check([S3CMD_BIN, LZOP_BIN])
         backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+    elif subcommand == 'wal-fark':
+        external_program_check([S3CMD_BIN, LZOP_BIN])
+        backup_cxt.wal_fark(args.PG_CLUSTER_DIRECTORY)
     else:
         print >>sys.stderr, ('Subcommand {0} not implemented!'
                              .format(subcommand))
