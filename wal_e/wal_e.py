@@ -11,6 +11,7 @@ import contextlib
 import copy
 import csv
 import datetime
+import errno
 import multiprocessing
 import os
 import re
@@ -349,8 +350,8 @@ def do_partition_get(backup_s3_prefix, local_root, tpart_number,
                 popen.send_signal(signal.SIGINT)
                 popen.wait()
             except OSError, e:
-                # No such process == 3
-                if e.errno != 3:
+                # ESRCH aka "no such process"
+                if e.errno != errno.ESRCH:
                     raise e
 
         raise keyboard_int
@@ -425,8 +426,8 @@ def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
                     popen.send_signal(signal.SIGINT)
                     popen.wait()
                 except OSError, e:
-                    # No such process == 3
-                    if e.errno != 3:
+                    # ESRCH aka "no such process"
+                    if e.errno != errno.ESRCH:
                         raise e
 
             raise keyboard_int
