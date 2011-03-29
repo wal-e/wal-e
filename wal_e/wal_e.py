@@ -880,8 +880,6 @@ def main(argv=None):
     subparsers.add_parser('backup-push',
                           help='pushing a fresh hot backup to S3',
                           parents=[backup_fetchpull_parent])
-    recovery_conf_generate_parser = subparsers.add_parser(
-        'recovery-conf-generator', help='help generating recovery.conf')
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
         parents=[wal_fetchpull_parent])
@@ -892,28 +890,6 @@ def main(argv=None):
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
-
-    # recovery conf generator section
-    recovery_conf_generate_parser.add_argument(
-        '--python-bin', default='python', nargs='?',
-        help='the Python binary to run wal-e with.'
-        'Example: "python2.6"')
-
-    recovery_conf_generate_parser.add_argument(
-        'RECOVERY_OUTPUT_FILE',
-        type=argparse.FileType('w'), nargs='?', default=sys.stdout,
-        help='the destination of the recovery.conf to write, '
-        'or \'-\' for stdout.')
-
-    timeline_recovery_group = (recovery_conf_generate_parser
-                               .add_mutually_exclusive_group())
-    timeline_recovery_group.add_argument(
-        '-t', '--target-time',
-        help='Provide a time for Postgres to recover to.  '
-        'Any Postgres-compatible time format is allowed.')
-    timeline_recovery_group.add_argument(
-        '-x', '--target-xid',
-        type=int, help='Provide a transaction id for Postgres to recover to.')
 
     # wal-push operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
@@ -966,29 +942,6 @@ def main(argv=None):
     elif subcommand == 'wal-push':
         external_program_check([S3CMD_BIN, LZOP_BIN])
         backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
-    elif subcommand == 'recovery-conf-generator':
-        this_bin = os.path.abspath(argv[0])
-        command = ('{python} {wal_e} --aws-access-key-id={aws_access_key_id} '
-                   '--s3-prefix={s3_prefix} wal-fetch "%f" "%p"'
-                   .format(python=args.python_bin, wal_e=this_bin,
-                           aws_access_key_id=aws_access_key_id,
-                           s3_prefix=s3_prefix))
-
-        lines = []
-        lines.append("restore_command = '{0}'".format(command))
-
-        if args.target_time is not None:
-            assert ('"' not in args.point_in_time and
-                    "'" not in args.point_in_time)
-            lines.append("recovery_target_time = '{0}'"
-                         .format(args.point_in_time))
-        elif args.target_xid is not None:
-            # No sanitization necessary: argparse knows this is an
-            # integer.
-            lines.append("recovery_target_xid = '{0}'"
-                         .format(args.target_xid))
-
-        print >>args.RECOVERY_OUTPUT_FILE, '\n'.join(lines)
     else:
         print >>sys.stderr, ('Subcommand {0} not implemented!'
                              .format(subcommand))
