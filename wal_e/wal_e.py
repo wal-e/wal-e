@@ -32,6 +32,27 @@ LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 
 
+class UTC(datetime.tzinfo):
+    """
+    UTC timezone
+
+    Adapted from a Python example
+
+    """
+
+    ZERO = datetime.timedelta(0)
+    HOUR = datetime.timedelta(hours=1)
+
+    def utcoffset(self, dt):
+        return self.ZERO
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def dst(self, dt):
+        return self.ZERO
+
+
 def subprocess_setup(f=None):
     """
     SIGPIPE reset for subprocess workaround
@@ -177,7 +198,13 @@ class PgBackupStatements(object):
             assert popen.returncode != 0
             raise Exception('Could not start hot backup')
 
-        label = 'freeze_start_' + datetime.datetime.now().isoformat()
+
+        # The difficulty of getting a timezone-stamped, UTC,
+        # ISO-formatted datetime is downright embarrassing.
+        #
+        # See http://bugs.python.org/issue5094
+        label = 'freeze_start_' + (datetime.datetime.utcnow()
+                                   .replace(tzinfo=UTC()).isoformat())
 
         return cls._dict_transform(psql_csv_run(
                 "SELECT file_name, "
