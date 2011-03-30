@@ -577,9 +577,9 @@ class S3Backup(object):
             # Enqueue uploads for parallel execution
             try:
                 for tpart_number, tpart in enumerate(partitions):
-                    #uploads.append(pool.apply_async(
-                    apply(do_partition_put, [backup_s3_prefix, tpart_number, tpart,
-                                             s3cmd_config.name])
+                    uploads.append(pool.apply_async(
+                            do_partition_put, [backup_s3_prefix, tpart_number, tpart,
+                                               s3cmd_config.name]))
 
                 pool.close()
             finally:
