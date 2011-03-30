@@ -286,15 +286,12 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
 
     """
     with tempfile.NamedTemporaryFile(mode='w') as tf:
-        print 'doing put'
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf)
         tpart.tarfile_write(compression_p.stdin)
         compression_p.stdin.flush()
         compression_p.stdin.close()
-        print 'waiting for compression process'
         compression_p.wait()
-        print 'compression process finished'
         if compression_p.returncode != 0:
             raise Exception(
                 ('Could not properly compress tar partition: {tpart_number}  '
@@ -307,13 +304,11 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
         # processes, but *NOT* force a write to disk.
         tf.flush()
 
-        print 'attempting to send'
         check_call_wait_sigint(
             [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
              '/'.join([backup_s3_prefix, 'tar_partitions',
                        'part_{tpart_number}.tar.lzo'.format(
                             tpart_number=tpart_number)])])
-        print 'sent'
 
 
 def do_partition_get(backup_s3_prefix, local_root, tpart_number,
@@ -692,7 +687,6 @@ class S3Backup(object):
                 # numbered contiguously from 0 to some number.
                 expected_partitions = set(xrange(max(partitions) + 1))
                 if partitions != expected_partitions:
-                    print partitions, expected_partitions
                     raise Exception('There exist missing tar partitions.  '
                                     'Numbers missing: ' +
                                     unicode(expected_partitions - partitions))
