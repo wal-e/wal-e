@@ -13,6 +13,7 @@ import csv
 import datetime
 import errno
 import glob
+import json
 import multiprocessing
 import os
 import re
@@ -28,7 +29,7 @@ import tar_partition
 
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = '003'
+FILE_STRUCTURE_VERSION = '004'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
@@ -557,6 +558,7 @@ class S3Backup(object):
         # a list to accumulate async upload jobs
         uploads = []
 
+        total_size = 0
         with self.s3cmd_temp_config as s3cmd_config:
 
             # Make an attempt to upload extended version metadata
@@ -573,6 +575,7 @@ class S3Backup(object):
             # Enqueue uploads for parallel execution
             try:
                 for tpart_number, tpart in enumerate(partitions):
+                    total_size += tpart.total_member_size
                     uploads.append(pool.apply_async(
                             do_partition_put, [backup_s3_prefix, tpart_number, tpart,
                                                s3cmd_config.name]))
@@ -591,7 +594,7 @@ class S3Backup(object):
 
                 pool.join()
 
-        return backup_s3_prefix
+        return backup_s3_prefix, total_size
 
     def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size):
         basebackups_prefix = '/'.join(
@@ -613,7 +616,7 @@ class S3Backup(object):
                 stdout, stderr = backup_find.communicate()
 
 
-                sentinel_suffix = '_backup_stop_sentinel.txt'
+                sentinel_suffix = '_backup_stop_sentinel.json'
                 # Find sentinel files as markers of guaranteed good backups
                 sentinel_urls = []
 
@@ -732,9 +735,10 @@ class S3Backup(object):
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
             version = PgBackupStatements.pg_version()['version']
-            uploaded_to = self._s3_upload_pg_cluster_dir(start_backup_info,
-                                                         version=version,
-                                                         *args, **kwargs)
+            uploaded_to, expanded_size_bytes = \
+                self._s3_upload_pg_cluster_dir(start_backup_info,
+                                               version=version,
+                                               *args, **kwargs)
             upload_good = True
         finally:
             # XXX: Gross timing hack to get message to appear at the
@@ -761,8 +765,12 @@ class S3Backup(object):
             try:
                 with self.s3cmd_temp_config as s3cmd_config:
                     with tempfile.NamedTemporaryFile(mode='w') as sentinel:
-                        sentinel.write('{file_name}:{file_offset}\n'
-                                       .format(**stop_backup_info))
+                        json.dump(
+                            {'wal_segment': stop_backup_info['file_name'],
+                             'wal_segment_offset':
+                                 stop_backup_info['file_offset'],
+                             'expanded_size_bytes': expanded_size_bytes},
+                            sentinel)
                         sentinel.flush()
 
                         # Avoid using do_lzop_s3_put to store
@@ -770,9 +778,9 @@ class S3Backup(object):
                         # on/dump to terminal
                         check_call_wait_sigint(
                             [S3CMD_BIN, '-c', s3cmd_config.name,
-                             '--mime-type=text/plain', 'put',
+                             '--mime-type=application/json', 'put',
                              sentinel.name,
-                             uploaded_to + '_backup_stop_sentinel.txt'])
+                             uploaded_to + '_backup_stop_sentinel.json'])
             except KeyboardInterrupt, e:
                 # Specially re-raise exception on SIGINT to allow
                 # propagation.

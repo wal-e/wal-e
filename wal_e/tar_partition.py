@@ -91,6 +91,16 @@ class TarPartition(list):
             if tar is not None:
                 tar.close()
 
+    @property
+    def total_member_size(self):
+        """
+        Compute the sum of the size of expanded TAR member
+
+        Expressed in bytes.
+
+        """
+        return sum(et_info.tarinfo.size for et_info in self)
+
     def format_manifest(self):
         parts = []
         for tpart in self:
