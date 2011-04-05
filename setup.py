@@ -5,11 +5,11 @@ import os.path
 # Version file managment scheme and graceful degredation for
 # setuptools borrowed and adapted from GitPython.
 try:
-	from setuptools import setup, find_packages
+    from setuptools import setup, find_packages
 except ImportError:
-	from ez_setup import use_setuptools
-	use_setuptools()
-	from setuptools import setup, find_packages
+    from ez_setup import use_setuptools
+    use_setuptools()
+    from setuptools import setup, find_packages
 
 v = open(os.path.join(os.path.dirname(__file__), 'VERSION'))
 VERSION = v.readline().strip()
