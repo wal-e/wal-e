@@ -126,6 +126,36 @@ gaps in the WAL segments.
 .. _envdir: http://cr.yp.to/daemontools/envdir.html
 .. _daemontools: http://cr.yp.to/daemontools.html
 
+Pulling a base backup from S3::
+
+    $ sudo -u postgres bash -c                          \
+    "envdir /etc/wal-e.d/pull-env wal-e			\
+    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+    backup-fetch /var/lib/my/database/pg_xlog LATEST"
+
+This command makes use of the "LATEST" pseudo-name for a backup, which
+defaults to querying S3 to find the latest complete backup.
+Otherwise, a real name can be used::
+
+    $ sudo -u postgres bash -c                          \
+    "envdir /etc/wal-e.d/pull-env wal-e			\
+    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+    backup-fetch					\
+    /var/lib/my/database/pg_xlog base_LONGWALNUMBER_POSITION_NUMBER"
+
+One can find the name of available backups via the experimental
+``backup-list`` operator, or using one's S3 browsing program of
+choice, by looking at the ``S3PREFIX/basebackups_NNN/...`` directory.
+
+it is also likely one will need to provide a ``recovery.conf`` file,
+as documented in the PostgreSQL manual, to recover the base backup, as
+WAL files will need to be downloaded to make the hot-backup taken with
+backup-push.  The WAL-E's ``wal-fetch`` subcommand is designed to be
+useful for this very purpose, as it may be used in a ``recovery.conf``
+file like this::
+
+    restore_command = 'envdir /etc/wal-e.d/env wal-e wal-fetch "%f" "%p"'
+
 
 Compression and Temporary Files
 -------------------------------
