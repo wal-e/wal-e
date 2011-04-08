@@ -959,32 +959,33 @@ def main(argv=None):
                                        dest='subcommand')
 
     # Common options for backup-fetch and backup-push
-    backup_fetchpull_parent = argparse.ArgumentParser(add_help=False)
-    backup_fetchpull_parent.add_argument('PG_CLUSTER_DIRECTORY',
+    backup_fetchpush_parent = argparse.ArgumentParser(add_help=False)
+    backup_fetchpush_parent.add_argument('PG_CLUSTER_DIRECTORY',
                                          help="Postgres cluster path, "
                                          "such as '/var/lib/database'")
-    backup_fetchpull_parent.add_argument('--pool-size', '-p',
+    backup_fetchpush_parent.add_argument('--pool-size', '-p',
                                          type=int, default=6,
                                          help='Download pooling size')
 
-    wal_fetchpull_parent = argparse.ArgumentParser(add_help=False)
-    wal_fetchpull_parent.add_argument('WAL_SEGMENT',
+    wal_fetchpush_parent = argparse.ArgumentParser(add_help=False)
+    wal_fetchpush_parent.add_argument('WAL_SEGMENT',
                                       help='Path to a WAL segment to upload')
 
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
-        parents=[backup_fetchpull_parent])
+        parents=[backup_fetchpush_parent])
     subparsers.add_parser('backup-list', help='list backups in S3')
     subparsers.add_parser('backup-push',
                           help='pushing a fresh hot backup to S3',
-                          parents=[backup_fetchpull_parent])
+                          parents=[backup_fetchpush_parent])
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
-        parents=[wal_fetchpull_parent])
+        parents=[wal_fetchpush_parent])
     subparsers.add_parser('wal-push', help='push a WAL file to S3',
-                          parents=[wal_fetchpull_parent])
+                          parents=[wal_fetchpush_parent])
 
-    wal_fark_parser = subparsers.add_parser('wal-fark', help='The FAke Arkiver')
+    wal_fark_parser = subparsers.add_parser('wal-fark',
+                                            help='The FAke Arkiver')
 
     # XXX: Partial copy paste, because no parallel archiving support
     # is supported and to have the --pool option would be confusing.
