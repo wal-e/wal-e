@@ -29,7 +29,7 @@ import tar_partition
 
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = '004'
+FILE_STRUCTURE_VERSION = '005'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
@@ -779,8 +779,9 @@ class S3Backup(object):
                 with self.s3cmd_temp_config as s3cmd_config:
                     with tempfile.NamedTemporaryFile(mode='w') as sentinel:
                         json.dump(
-                            {'wal_segment': stop_backup_info['file_name'],
-                             'wal_segment_offset':
+                            {'wal_segment_backup_stop':
+                                 stop_backup_info['file_name'],
+                             'wal_segment_offset_backup_stop':
                                  stop_backup_info['file_offset'],
                              'expanded_size_bytes': expanded_size_bytes},
                             sentinel)
