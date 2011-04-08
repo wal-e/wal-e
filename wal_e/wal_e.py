@@ -964,7 +964,7 @@ def main(argv=None):
                                          help="Postgres cluster path, "
                                          "such as '/var/lib/database'")
     backup_fetchpush_parent.add_argument('--pool-size', '-p',
-                                         type=int, default=6,
+                                         type=int, default=4,
                                          help='Download pooling size')
 
     wal_fetchpush_parent = argparse.ArgumentParser(add_help=False)
