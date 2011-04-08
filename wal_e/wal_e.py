@@ -35,6 +35,13 @@ LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 
 
+# BUFSIZE_HT: Buffer Size, High Throughput
+#
+# A buffer size used for high-throughput pipes.  About 88 Megabytes.
+# Default borrowed from mbuffer.
+BUFSIZE_HT = 11326 * 8192
+
+
 class UTC(datetime.tzinfo):
     """
     UTC timezone
@@ -289,7 +296,8 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
     """
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
-                                 stdin=subprocess.PIPE, stdout=tf)
+                                 stdin=subprocess.PIPE, stdout=tf,
+                                 bufsize=BUFSIZE_HT)
         tpart.tarfile_write(compression_p.stdin)
         compression_p.stdin.flush()
         compression_p.stdin.close()
@@ -321,8 +329,10 @@ def do_partition_get(backup_s3_prefix, local_root, tpart_number,
             dict(args=[S3CMD_BIN, '-c', s3cmd_config_path, 'get',
                        '/'.join([backup_s3_prefix, 'tar_partitions',
                                  'part_{0}.tar.lzo'.format(tpart_number)]),
-                       '-']),
-            dict(args=[LZOP_BIN, '-d', '--stdout'], stdout=subprocess.PIPE))
+                       '-'],
+                 bufsize=BUFSIZE_HT),
+            dict(args=[LZOP_BIN, '-d', '--stdout'], stdout=subprocess.PIPE,
+                 bufsize=BUFSIZE_HT))
 
         assert len(popens) > 0
         tar = tarfile.open(mode='r|', fileobj=popens[-1].stdout)
@@ -366,7 +376,8 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
 
     """
     with tempfile.NamedTemporaryFile(mode='w') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf)
+        compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf,
+                                 bufsize=BUFSIZE_HT)
         compression_p.wait()
 
         if compression_p.returncode != 0:
@@ -400,8 +411,10 @@ def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
         try:
             popens = pipe(
                 dict(args=[S3CMD_BIN, '-c', s3cmd_config_path,
-                           'get', s3_url, '-']),
-                dict(args=[LZOP_BIN, '-d'], stdout=decomp_out))
+                           'get', s3_url, '-'],
+                     bufsize=BUFSIZE_HT),
+                dict(args=[LZOP_BIN, '-d'], stdout=decomp_out,
+                     bufsize=BUFSIZE_HT))
             pipe_wait(popens)
 
             s3cmd_proc, lzop_proc = popens
