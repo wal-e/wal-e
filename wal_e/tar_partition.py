@@ -42,6 +42,9 @@ import tarfile
 import collections
 
 
+import piper
+
+
 class TarMemberTooBigError(Exception):
     def __init__(self, member_name, limited_to, requested, *args, **kwargs):
         self.member_name = member_name
@@ -73,16 +76,24 @@ ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
                                          'submitted_path tarinfo')
 
 class TarPartition(list):
-    def tarfile_write(self, fileobj):
+    def tarfile_write(self, fileobj, rate_limit=None):
         tar = None
-
         try:
             tar = tarfile.open(fileobj=fileobj, mode='w|')
 
             for et_info in self:
                 if et_info.tarinfo.isfile():
-                    with open(et_info.submitted_path, 'rb') as f:
-                        tar.addfile(et_info.tarinfo, f)
+                    if rate_limit is not None:
+                        # Use mbuffer if a rate limit is defined.
+                        mbuffer = piper.popen_sp(
+                            ['mbuffer', '-r', unicode(int(rate_limit)), '-i'] +
+                            [et_info.submitted_path], stdout=piper.PIPE)
+                        tar.addfile(et_info.tarinfo, mbuffer.stdout)
+                        mbuffer.wait()
+                        mbuffer.stdout.close()
+                    else:
+                        with open(et_info.submitted_path, 'rb') as f:
+                            tar.addfile(et_info.tarinfo, f)
                 else:
                     # No file handle required
                     tar.addfile(et_info.tarinfo)
@@ -105,7 +116,6 @@ class TarPartition(list):
         parts = []
         for tpart in self:
             for et_info in tpart:
-                et_info.submitted_path
                 tarinfo = et_info.tarinfo
                 parts.append('\t'.join([tarinfo.name, tarinfo.size]))
 

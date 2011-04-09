@@ -45,6 +45,7 @@ Dependencies
 * s3cmd
 * lzop
 * psql
+* mbuffer
 * python-argparse *or* Python 2.7
 
 
@@ -180,6 +181,9 @@ files of limited length to avoid the relatively large per-file S3
 overhead.  This has the effect of making base backups and restores
 much faster when many small relations and ancillary files are
 involved.
+
+To reduce the read load on base backups, they are sent through the
+tool "mbuffer" first.
 
 
 TODO

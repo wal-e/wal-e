@@ -8,7 +8,6 @@ backups of the PostgreSQL file cluster.
 
 import argparse
 import contextlib
-import copy
 import csv
 import datetime
 import errno
@@ -27,12 +26,15 @@ import time
 
 import tar_partition
 
+from piper import pipe, pipe_wait, popen_sp
+
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = '005'
 PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
+MBUFFER_BIN = 'mbuffer'
 
 
 # BUFSIZE_HT: Buffer Size, High Throughput
@@ -61,93 +63,6 @@ class UTC(datetime.tzinfo):
 
     def dst(self, dt):
         return self.ZERO
-
-
-def subprocess_setup(f=None):
-    """
-    SIGPIPE reset for subprocess workaround
-
-    Python installs a SIGPIPE handler by default. This is usually not
-    what non-Python subprocesses expect.
-
-    Calls an optional "f" first in case other code wants a preexec_fn,
-    then restores SIGPIPE to what most Unix processes expect.
-
-    http://bugs.python.org/issue1652
-    http://www.chiark.greenend.org.uk/ucgi/~cjwatson/blosxom/2009-07-02-python-sigpipe.html
-
-    """
-
-    def wrapper(*args, **kwargs):
-        if f is not None:
-            f(*args, **kwargs)
-
-        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-
-    return wrapper
-
-
-def popen_sp(*args, **kwargs):
-    """
-    Same as subprocess.Popen, but restores SIGPIPE
-
-    This bug is documented (See subprocess_setup) but did not make it
-    to standard library.  Could also be resolved by using the
-    python-subprocess32 backport and using it appropriately (See
-    'restore_signals' keyword argument to Popen)
-
-    """
-
-    kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
-    return subprocess.Popen(*args, **kwargs)
-
-
-def pipe(*args):
-    """
-    Takes as parameters several dicts, each with the same
-    parameters passed to popen.
-
-    Runs the various processes in a pipeline, connecting
-    the stdout of every process except the last with the
-    stdin of the next process.
-
-    Adapted from http://www.enricozini.org/2009/debian/python-pipes/
-
-    """
-    if len(args) < 2:
-        raise ValueError, "pipe needs at least 2 processes"
-    # Set stdout=PIPE in every subprocess except the last
-    for i in args[:-1]:
-        i["stdout"] = subprocess.PIPE
-
-    # Runs all subprocesses connecting stdins and stdouts to create the
-    # pipeline. Closes stdouts to avoid deadlocks.
-    popens = [popen_sp(**args[0])]
-    for i in range(1, len(args)):
-        args[i]["stdin"] = popens[i - 1].stdout
-        popens.append(popen_sp(**args[i]))
-        popens[i - 1].stdout.close()
-
-    # Returns the array of subprocesses just created
-    return popens
-
-
-def pipe_wait(popens):
-    """
-    Given an array of Popen objects returned by the
-    pipe method, wait for all processes to terminate
-    and return the array with their return values.
-
-    Taken from http://www.enricozini.org/2009/debian/python-pipes/
-
-    """
-    # Avoid mutating the passed copy
-    popens = copy.copy(popens)
-    results = [0] * len(popens)
-    while popens:
-        last = popens.pop(-1)
-        results[len(popens)] = last.wait()
-    return results
 
 
 def psql_csv_run(sql_command, error_handler=None):
@@ -286,7 +201,8 @@ def check_call_wait_sigint(*popenargs, **kwargs):
                 return wait_sigint_proc.returncode
 
 
-def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
+def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
+                     s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -298,7 +214,7 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, s3cmd_config_path):
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf,
                                  bufsize=BUFSIZE_HT)
-        tpart.tarfile_write(compression_p.stdin)
+        tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
         compression_p.stdin.flush()
         compression_p.stdin.close()
         compression_p.wait()
@@ -487,7 +403,7 @@ class S3Backup(object):
                                     .format(version=FILE_STRUCTURE_VERSION)])
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
-                                  version, pool_size):
+                                  version, pool_size, rate_limit=None):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
@@ -568,6 +484,15 @@ class S3Backup(object):
         # A multiprocessing pool to do the uploads with
         pool = multiprocessing.Pool(processes=pool_size)
 
+        if rate_limit is None:
+            per_process_limit = None
+        else:
+            per_process_limit = int(rate_limit / pool_size)
+
+        # Reject tiny per-process rate limits.  They should be
+        # rejected more nicely elsewher.
+        assert per_process_limit > 0 or per_process_limit is None
+
         # a list to accumulate async upload jobs
         uploads = []
 
@@ -591,6 +516,7 @@ class S3Backup(object):
                     total_size += tpart.total_member_size
                     uploads.append(pool.apply_async(
                             do_partition_put, [backup_s3_prefix, tpart_number, tpart,
+                                               per_process_limit,
                                                s3cmd_config.name]))
 
                 pool.close()
@@ -749,9 +675,9 @@ class S3Backup(object):
             start_backup_info = PgBackupStatements.run_start_backup()
             version = PgBackupStatements.pg_version()['version']
             uploaded_to, expanded_size_bytes = \
-                self._s3_upload_pg_cluster_dir(start_backup_info,
-                                               version=version,
-                                               *args, **kwargs)
+                self._s3_upload_pg_cluster_dir(
+                start_backup_info, version=version,
+                *args, **kwargs)
             upload_good = True
         finally:
             # XXX: Gross timing hack to get message to appear at the
@@ -903,7 +829,7 @@ class S3Backup(object):
 
 
 def external_program_check(
-    to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN])):
+    to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN])):
     """
     Validates the existence and basic working-ness of other programs
 
@@ -934,7 +860,22 @@ def external_program_check(
                 if program is PSQL_BIN:
                     psql_csv_run('SELECT 1', error_handler=psql_err_handler)
                 else:
-                    subprocess.call([program], stdout=nullf, stderr=nullf)
+                    if program is MBUFFER_BIN:
+                        # Prevent noise on the TTY, as mbuffer writes
+                        # text there: suppressing stdout/stderr
+                        # doesn't seem to work.
+                        extra_args = ['-q']
+                    else:
+                        extra_args = []
+
+                    proc = popen_sp([program] + extra_args, stdout=nullf, stderr=nullf,
+                                    stdin=subprocess.PIPE)
+
+                    # Close stdin for processes that default to
+                    # reading from the pipe; the programs WAL-E uses
+                    # of this kind will terminate in this case.
+                    proc.stdin.close()
+                    proc.wait()
             except IOError:
                 could_not_run.append(program)
 
@@ -989,9 +930,16 @@ def main(argv=None):
         'backup-fetch', help='fetch a hot backup from S3',
         parents=[backup_fetchpush_parent])
     subparsers.add_parser('backup-list', help='list backups in S3')
-    subparsers.add_parser('backup-push',
-                          help='pushing a fresh hot backup to S3',
-                          parents=[backup_fetchpush_parent])
+    backup_push_parser = subparsers.add_parser(
+        'backup-push', help='pushing a fresh hot backup to S3',
+        parents=[backup_fetchpush_parent])
+    backup_push_parser.add_argument(
+        '--cluster-read-rate-limit',
+        help='Rate limit reading the PostgreSQL cluster directory to a '
+        'tunable number of bytes per second', dest='rate_limit',
+        metavar='BYTES_PER_SECOND',
+        type=int, default=None)
+
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
         parents=[wal_fetchpush_parent])
@@ -1053,9 +1001,16 @@ def main(argv=None):
         external_program_check([S3CMD_BIN])
         backup_cxt.backup_list()
     elif subcommand == 'backup-push':
-        external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN])
-        backup_cxt.database_s3_backup(args.PG_CLUSTER_DIRECTORY,
-                                      pool_size=args.pool_size)
+        external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
+        rate_limit = args.rate_limit
+        if rate_limit is not None and rate_limit < 8192:
+            print >>sys.stderr, ('--cluster-read-rate-limit must be a '
+                                 'positive integer over or equal to 8192')
+            sys.exit(1)
+
+        backup_cxt.database_s3_backup(
+            args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,
+            pool_size=args.pool_size)
     elif subcommand == 'wal-fetch':
         external_program_check([S3CMD_BIN, LZOP_BIN])
         backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
