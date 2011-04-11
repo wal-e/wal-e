@@ -214,3 +214,11 @@ TODO
 * Handle unlinked-file race conditions gracefully
 * Consider replacing s3cmd with boto, as metadata checking
   requirements become more elaborate.
+* For small databases, the --cluster-rate-limit feature will
+  over-restrict the amount of disk bandwidth used: the number provided
+  by the user is divided by the number of processes that can
+  theoretically send data, but for small databases only one process
+  will ever be scheduled, so the result is the actual limit may be
+  only (limit / pool-size) -- much smaller than indicated.  Fix this
+  by increasing the rate limit when there are few processes that are
+  scheduled to run.
