@@ -68,6 +68,15 @@ class StreamPadFileObj(object):
         self.pos += lenret
         return ret + '\0' * (max_readable - lenret)
 
+    def close(self):
+        return self.underlying_fp.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self.close()
+
 
 class TarMemberTooBigError(Exception):
     def __init__(self, member_name, limited_to, requested, *args, **kwargs):
@@ -112,11 +121,12 @@ class TarPartition(list):
                         mbuffer = piper.popen_sp(
                             ['mbuffer', '-r', unicode(int(rate_limit)), '-i'] +
                             [et_info.submitted_path], stdout=piper.PIPE)
-                        tar.addfile(et_info.tarinfo,
-                                    StreamPadFileObj(mbuffer.stdout,
-                                                     et_info.tarinfo.size))
+
+                        with StreamPadFileObj(mbuffer.stdout,
+                                              et_info.tarinfo.size) as f:
+                            tar.addfile(et_info.tarinfo, f)
+
                         mbuffer.wait()
-                        mbuffer.stdout.close()
                     else:
                         with open(et_info.submitted_path, 'rb') as f:
                             tar.addfile(
