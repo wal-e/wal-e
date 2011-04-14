@@ -45,6 +45,30 @@ import collections
 import piper
 
 
+class StreamPadFileObj(object):
+    """
+    Layer on a file to provide a precise stream byte length
+
+    This file-like-object accepts an underlying file-like-object and a
+    target size.  Once the target size is reached, no more bytes will
+    be returned.  Furthermore, if the underlying stream runs out of
+    bytes, '\0' will be returned until the target size is reached.
+
+    """
+
+    def __init__(self, underlying_fp, target_size):
+        self.underlying_fp = underlying_fp
+        self.target_size = target_size
+        self.pos = 0
+
+    def read(self, size):
+        max_readable = min(self.target_size - self.pos, size)
+        ret = self.underlying_fp.read(max_readable)
+        lenret = len(ret)
+        self.pos += lenret
+        return ret + '\0' * (max_readable - lenret)
+
+
 class TarMemberTooBigError(Exception):
     def __init__(self, member_name, limited_to, requested, *args, **kwargs):
         self.member_name = member_name
@@ -88,12 +112,16 @@ class TarPartition(list):
                         mbuffer = piper.popen_sp(
                             ['mbuffer', '-r', unicode(int(rate_limit)), '-i'] +
                             [et_info.submitted_path], stdout=piper.PIPE)
-                        tar.addfile(et_info.tarinfo, mbuffer.stdout)
+                        tar.addfile(et_info.tarinfo,
+                                    StreamPadFileObj(mbuffer.stdout,
+                                                     et_info.tarinfo.size))
                         mbuffer.wait()
                         mbuffer.stdout.close()
                     else:
                         with open(et_info.submitted_path, 'rb') as f:
-                            tar.addfile(et_info.tarinfo, f)
+                            tar.addfile(
+                                et_info.tarinfo,
+                                StreamPadFileObj(f, et_info.tarinfo.size))
                 else:
                     # No file handle required
                     tar.addfile(et_info.tarinfo)
