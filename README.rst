@@ -132,7 +132,7 @@ Pulling a base backup from S3::
     $ sudo -u postgres bash -c                          \
     "envdir /etc/wal-e.d/pull-env wal-e			\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
-    backup-fetch /var/lib/my/database/pg_xlog LATEST"
+    backup-fetch /var/lib/my/database LATEST"
 
 This command makes use of the "LATEST" pseudo-name for a backup, which
 defaults to querying S3 to find the latest complete backup.
@@ -142,7 +142,7 @@ Otherwise, a real name can be used::
     "envdir /etc/wal-e.d/pull-env wal-e			\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     backup-fetch					\
-    /var/lib/my/database/pg_xlog base_LONGWALNUMBER_POSITION_NUMBER"
+    /var/lib/my/database base_LONGWALNUMBER_POSITION_NUMBER"
 
 One can find the name of available backups via the experimental
 ``backup-list`` operator, or using one's S3 browsing program of
