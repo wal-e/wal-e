@@ -443,10 +443,12 @@ class S3Backup(object):
             is_cluster_toplevel = (os.path.abspath(root) ==
                                    os.path.abspath(pg_cluster_dir))
 
-            # Don't care about WAL, only heap.
+            # Do not capture any WAL files, although we do want to
+            # capture the WAL directory or symlink
             if is_cluster_toplevel:
                 if 'pg_xlog' in dirnames:
                     dirnames.remove('pg_xlog')
+                    matches.append(os.path.join(root, 'pg_xlog'))
 
             for filename in filenames:
                 if is_cluster_toplevel and filename in ('postmaster.pid',
