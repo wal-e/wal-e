@@ -593,10 +593,12 @@ class S3Backup(object):
 
 
             backup_s3_prefix = '/'.join([basebackups_prefix, backup_name])
-            backup_s3_cluster_prefix = '/'.join([backup_s3_prefix, 'tar_partitions', ''])
+            backup_s3_cluster_prefix = '/'.join(
+                [backup_s3_prefix, 'tar_partitions', ''])
 
             ls_proc = popen_sp(
-                [S3CMD_BIN, '-c', s3cmd_config.name, 'ls', backup_s3_cluster_prefix],
+                [S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
+                 backup_s3_cluster_prefix],
                 stdout=subprocess.PIPE)
             stdout, stderr = ls_proc.communicate()
 
