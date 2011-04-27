@@ -275,7 +275,7 @@ def do_partition_get(backup_s3_prefix, local_root, tpart_number,
             except OSError, e:
                 # ESRCH aka "no such process"
                 if e.errno != errno.ESRCH:
-                    raise e
+                    raise
 
         raise keyboard_int
     finally:
@@ -726,7 +726,7 @@ class S3Backup(object):
             except KeyboardInterrupt, e:
                 # Specially re-raise exception on SIGINT to allow
                 # propagation.
-                raise e
+                raise
             except:
                 # Failing to upload the sentinel is not strictly
                 # lethal, so ignore any (other) exception.
@@ -827,7 +827,7 @@ class S3Backup(object):
                          'WELL-BEHAVED but potentially wasteful.'
                          .format(ready_path=ready_path))
                 else:
-                    raise e
+                    raise
 
 
 def external_program_check(
