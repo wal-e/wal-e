@@ -78,7 +78,7 @@ def psql_csv_run(sql_command, error_handler=None):
 
     psql_proc = popen_sp([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
                          stdout=subprocess.PIPE)
-    stdout, stderr = psql_proc.communicate()
+    stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
         if error_handler is not None:
