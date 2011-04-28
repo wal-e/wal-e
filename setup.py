@@ -38,5 +38,5 @@ setup(
     url = "https://github.com/heroku/wal-e",
 
     # install 
-    entry_points = {'console_scripts': ['wal-e = wal_e.wal_e:main']}
+    entry_points = {'console_scripts': ['wal-e = wal_e.cmd:main']}
 )

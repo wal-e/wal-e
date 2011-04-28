@@ -13,6 +13,7 @@ import datetime
 import errno
 import glob
 import json
+import logging
 import multiprocessing
 import os
 import re
@@ -22,26 +23,26 @@ import sys
 import tarfile
 import tempfile
 import textwrap
-import time
 
-import tar_partition
+import wal_e.worker as worker
+import wal_e.tar_partition as tar_partition
+import wal_e.log_help as log_help
 
-from piper import pipe, pipe_wait, popen_sp
+from wal_e.exception import UserException, UserCritical
+from wal_e.piper import pipe, pipe_wait, popen_sp
+from wal_e.worker import PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
+from wal_e.worker import check_call_wait_sigint
+
+# TODO: Make controllable from userland
+log_help.configure(
+    level=logging.DEBUG,
+    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+
+logger = log_help.get_logger('wal_e.main')
 
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = '005'
-PSQL_BIN = 'psql'
-LZOP_BIN = 'lzop'
-S3CMD_BIN = 's3cmd'
-MBUFFER_BIN = 'mbuffer'
-
-
-# BUFSIZE_HT: Buffer Size, High Throughput
-#
-# A buffer size used for high-throughput pipes.  About 88 Megabytes.
-# Default borrowed from mbuffer.
-BUFSIZE_HT = 11326 * 8192
 
 
 class UTC(datetime.tzinfo):
@@ -85,8 +86,11 @@ def psql_csv_run(sql_command, error_handler=None):
             error_handler(psql_proc)
         else:
             assert error_handler is None
-            raise Exception('Could not csv-execute "{query}" successfully'
-                            .format(sql_command))
+            raise UserException(
+                'could not csv-execute a query successfully via psql',
+                'Query was "{query}".'.format(sql_command),
+                'You may have to set some libpq environment '
+                'variables if you are sure the server is running.')
 
     # Previous code must raise any desired exceptions for non-zero
     # exit codes
@@ -121,8 +125,7 @@ class PgBackupStatements(object):
         """
         def handler(popen):
             assert popen.returncode != 0
-            raise Exception('Could not start hot backup')
-
+            raise UserException('Could not start hot backup')
 
         # The difficulty of getting a timezone-stamped, UTC,
         # ISO-formatted datetime is downright embarrassing.
@@ -149,7 +152,7 @@ class PgBackupStatements(object):
         """
         def handler(popen):
             assert popen.returncode != 0
-            raise Exception('Could not stop hot backup')
+            raise UserException('Could not stop hot backup')
 
         return cls._dict_transform(psql_csv_run(
                 "SELECT file_name, "
@@ -167,196 +170,6 @@ class PgBackupStatements(object):
 
         """
         return cls._dict_transform(psql_csv_run('SELECT * FROM version()'))
-
-
-def check_call_wait_sigint(*popenargs, **kwargs):
-    got_sigint = False
-    wait_sigint_proc = None
-
-    try:
-        wait_sigint_proc = popen_sp(*popenargs, **kwargs)
-    except KeyboardInterrupt, e:
-        got_sigint = True
-        if wait_sigint_proc is not None:
-            wait_sigint_proc.send_signal(signal.SIGINT)
-            wait_sigint_proc.wait()
-            raise e
-    finally:
-        if wait_sigint_proc and not got_sigint:
-            wait_sigint_proc.wait()
-
-            if wait_sigint_proc.returncode != 0:
-                # Try to identify the argv sent via 'popenargs' and
-                # kwargs sent to subprocess.Popen: this can be sent
-                # positionally, or in the form of kwargs.
-                if len(popenargs) > 0:
-                    raise subprocess.CalledProcessError(
-                        wait_sigint_proc.returncode, popenargs[0])
-                elif 'args' in kwargs:
-                    raise subprocess.CalledProcessError(
-                        wait_sigint_proc.returncode, kwargs['args'])
-                else:
-                    assert False
-            else:
-                return wait_sigint_proc.returncode
-
-
-def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
-                     s3cmd_config_path):
-    """
-    Synchronous version of the s3-upload wrapper
-
-    Nominally intended to be used through a pool, but exposed here
-    for testing and experimentation.
-
-    """
-    with tempfile.NamedTemporaryFile(mode='w') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout'],
-                                 stdin=subprocess.PIPE, stdout=tf,
-                                 bufsize=BUFSIZE_HT)
-        tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
-        compression_p.stdin.flush()
-        compression_p.stdin.close()
-        compression_p.wait()
-        if compression_p.returncode != 0:
-            raise Exception(
-                ('Could not properly compress tar partition: {tpart_number}  '
-                 'Parts: \n{error_manifest}')
-                .format(error_manifest=tpart.format_manifest(),
-                        tpart_number=tpart_number))
-
-        # Not to be confused with fsync: the point is to make
-        # sure any Python-buffered output is visible to other
-        # processes, but *NOT* force a write to disk.
-        tf.flush()
-
-        check_call_wait_sigint(
-            [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
-             '/'.join([backup_s3_prefix, 'tar_partitions',
-                       'part_{tpart_number}.tar.lzo'.format(
-                            tpart_number=tpart_number)])])
-
-
-def do_partition_get(backup_s3_prefix, local_root, tpart_number,
-                     s3cmd_config_path):
-    tar = None
-    try:
-        popens = pipe(
-            dict(args=[S3CMD_BIN, '-c', s3cmd_config_path, 'get',
-                       '/'.join([backup_s3_prefix, 'tar_partitions',
-                                 'part_{0}.tar.lzo'.format(tpart_number)]),
-                       '-'],
-                 bufsize=BUFSIZE_HT),
-            dict(args=[LZOP_BIN, '-d', '--stdout'], stdout=subprocess.PIPE,
-                 bufsize=BUFSIZE_HT))
-
-        assert len(popens) > 0
-        tar = tarfile.open(mode='r|', fileobj=popens[-1].stdout)
-        tar.extractall(local_root)
-        tar.close()
-        popens[-1].stdout.close()
-
-        pipe_wait(popens)
-
-        s3cmd_proc, lzop_proc = popens
-
-        def check_exitcode(cmdname, popen):
-            if popen.returncode != 0:
-                raise Exception(cmdname + ' terminated with exit code: ' +
-                                unicode(s3cmd_proc.returncode))
-
-        check_exitcode('s3cmd', s3cmd_proc)
-        check_exitcode('lzop', lzop_proc)
-    except KeyboardInterrupt, keyboard_int:
-        for popen in popens:
-            try:
-                popen.send_signal(signal.SIGINT)
-                popen.wait()
-            except OSError, e:
-                # ESRCH aka "no such process"
-                if e.errno != errno.ESRCH:
-                    raise
-
-        raise keyboard_int
-    finally:
-        if tar is not None:
-            tar.close()
-
-
-def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
-    """
-    Synchronous version of the s3-upload wrapper
-
-    Nominally intended to be used through a pool, but exposed here
-    for testing and experimentation.
-
-    """
-    with tempfile.NamedTemporaryFile(mode='w') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf,
-                                 bufsize=BUFSIZE_HT)
-        compression_p.wait()
-
-        if compression_p.returncode != 0:
-            raise Exception(
-                'Could not properly compress heap file: {path}'
-                .format(path=path))
-
-        # Not to be confused with fsync: the point is to make
-        # sure any Python-buffered output is visible to other
-        # processes, but *NOT* force a write to disk.
-        tf.flush()
-
-        check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config_path,
-                                'put', tf.name, s3_url + '.lzo'])
-
-
-def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
-    """
-    Get and decompress a S3 URL
-
-    This streams the s3cmd directly to lzop; the compressed version is
-    never stored on disk.
-
-    """
-
-    assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
-
-    with open(path, 'wb') as decomp_out:
-        popens = []
-
-        try:
-            popens = pipe(
-                dict(args=[S3CMD_BIN, '-c', s3cmd_config_path,
-                           'get', s3_url, '-'],
-                     bufsize=BUFSIZE_HT),
-                dict(args=[LZOP_BIN, '-d'], stdout=decomp_out,
-                     bufsize=BUFSIZE_HT))
-            pipe_wait(popens)
-
-            s3cmd_proc, lzop_proc = popens
-
-            def check_exitcode(cmdname, popen):
-                if popen.returncode != 0:
-                    raise Exception(cmdname + ' terminated with exit code: ' +
-                                    unicode(s3cmd_proc.returncode))
-
-            check_exitcode('s3cmd', s3cmd_proc)
-            check_exitcode('lzop', lzop_proc)
-
-            print >>sys.stderr, ('Got and decompressed file: '
-                                 '{s3_url} to {path}'
-                                 .format(**locals()))
-        except KeyboardInterrupt, keyboard_int:
-            for popen in popens:
-                try:
-                    popen.send_signal(signal.SIGINT)
-                    popen.wait()
-                except OSError, e:
-                    # ESRCH aka "no such process"
-                    if e.errno != errno.ESRCH:
-                        raise e
-
-            raise keyboard_int
 
 
 class S3Backup(object):
@@ -517,9 +330,9 @@ class S3Backup(object):
                 for tpart_number, tpart in enumerate(partitions):
                     total_size += tpart.total_member_size
                     uploads.append(pool.apply_async(
-                            do_partition_put, [backup_s3_prefix, tpart_number, tpart,
-                                               per_process_limit,
-                                               s3cmd_config.name]))
+                            worker.do_partition_put,
+                            [backup_s3_prefix, tpart_number, tpart,
+                             per_process_limit, s3cmd_config.name]))
 
                 pool.close()
             finally:
@@ -567,8 +380,14 @@ class S3Backup(object):
                         sentinel_urls.append(line.split()[-1])
 
                 if not sentinel_urls:
-                    raise Exception('No base backups found in ' +
-                                    basebackups_prefix)
+                    raise UserException(
+                        'no base backups found',
+                        'The prefix searched was "{0}"'
+                        .format(basebackups_prefix),
+                        'Consider checking to make sure that you have taken a '
+                        'base backup and that the prefix is correct.  '
+                        'New versions of WAL-E with new file formats will '
+                        'fail to recognize old backups, too.')
                 else:
                     sentinel_urls.sort()
 
@@ -585,8 +404,9 @@ class S3Backup(object):
                                   r'_(?P<position>[0-9A-F]{8})')
             match = re.match(base_backup_regexp, backup_name)
             if match is None:
-                raise Exception('Non-conformant backup name passed: ' +
-                                backup_name)
+                raise UserException('non-conformant backup name passed',
+                                    'The invalid name was "{0}"'
+                                    .format(backup_name))
 
             assert backup_name != 'LATEST', ('Must be rewritten to the actual '
                                              'name of the last base backup')
@@ -620,29 +440,37 @@ class S3Backup(object):
                         base, partition_name = s3_url.rsplit('/', 1)
                         match = re.match(r'part_(\d+).tar.lzo', partition_name)
                         if not match:
-                            raise Exception('Malformed tar partition in base backup')
+                            raise UserCritical(
+                                'Malformed tar partition in base backup',
+                                'The offensive line from s3cmd is ' + line)
                         else:
                             partition_number = int(match.group(1))
                             assert partition_number not in partitions, \
                                 'Must not have duplicates'
                             partitions.add(partition_number)
                     else:
-                        raise Exception('Unexpected s3cmd output: '
-                                        'could not find s3:// url')
+                        raise UserCritical(
+                            'could not parse s3cmd output',
+                            'Could not find "s3://" in {0}'.format(line))
 
                 # Verify that partitions look sane: they should be
                 # numbered contiguously from 0 to some number.
                 expected_partitions = set(xrange(max(partitions) + 1))
                 if partitions != expected_partitions:
-                    raise Exception('There exist missing tar partitions.  '
-                                    'Numbers missing: ' +
-                                    unicode(expected_partitions - partitions))
+                    raise UserCritical(
+                        'some tar partitions are missing in the base backup',
+                        'The following is a list of missing partition '
+                        'numbers: ' +
+                        unicode(expected_partitions - partitions),
+                        'If this is a backup with a sentinel, S3 may be '
+                        'inconsistent -- try again later, and note how long '
+                        'it takes.  If not, there is a bug somewhere.')
                 else:
                     assert expected_partitions == partitions
 
                     for tpart_number in partitions:
                         results.append(pool.apply_async(
-                                do_partition_get,
+                                worker.do_partition_get,
                                 [backup_s3_prefix, cluster_abspath,
                                  tpart_number, s3cmd_config.name]))
 
@@ -684,17 +512,14 @@ class S3Backup(object):
                 *args, **kwargs)
             upload_good = True
         finally:
-            # XXX: Gross timing hack to get message to appear at the
-            # bottom of a terminal.  Better solution: don't spew
-            # multiprocessing stack traces everywhere.  This message
-            # itself is because of a hypothetical function missing
-            # from PostgreSQL: pg_cancel_backup()
-            time.sleep(1)
-
             if not upload_good:
-                print >>sys.stderr, ('Blocking on sending WAL segments, even '
-                                     'though backup was not completed.  '
-                                     'See README: TODO about pg_cancel_backup')
+                logger.warning(
+                    log_help.fmt_logline(
+                        'blocking on sending WAL segments',
+                        'The backup was not completed successfully, '
+                        'but we have to wait anyway.  '
+                        'See README: TODO about pg_cancel_backup'))
+
             stop_backup_info = PgBackupStatements.run_stop_backup()
             backup_stop_good = True
 
@@ -737,7 +562,7 @@ class S3Backup(object):
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
             # exception never will get raised.
-            raise Exception('Could not complete backup process')
+            raise UserCritical('could not complete backup process')
 
     def wal_s3_archive(self, wal_path):
         """
@@ -750,7 +575,7 @@ class S3Backup(object):
         wal_file_name = os.path.basename(wal_path)
 
         with self.s3cmd_temp_config as s3cmd_config:
-            do_lzop_s3_put(
+            worker.do_lzop_s3_put(
                 '{0}/wal_{1}/{2}'.format(self.s3_prefix,
                                          FILE_STRUCTURE_VERSION,
                                          wal_file_name),
@@ -768,7 +593,7 @@ class S3Backup(object):
 
         """
         with self.s3cmd_temp_config as s3cmd_config:
-            do_lzop_s3_get(
+            worker.do_lzop_s3_get(
                 '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
                                              FILE_STRUCTURE_VERSION,
                                              wal_name),
@@ -806,10 +631,12 @@ class S3Backup(object):
                 self.wal_s3_archive(os.path.join(xlog_dir, archivee_name))
             except OSError, e:
                 if e.errno == errno.ENOENT:
-                    raise Exception('Unexpected, could not read file: ' +
-                                    unicode(e.filename))
+                    raise UserException(
+                        'wal_fark could not read a file'
+                        'The file that could not be read is at:' +
+                        unicode(e.filename))
                 else:
-                    raise e
+                    raise
 
             # It's critically important that this only happen if
             # the archiving completed successfully, but an ENOENT
@@ -856,7 +683,8 @@ def external_program_check(
                 'note that superuser access is required'))
 
         # Bogus error message that is re-caught and re-raised
-        raise Exception('It is also possible that psql is not installed')
+        raise Exception('INTERNAL: Had problems running psql '
+                        'from external_program_check')
 
     with open(os.devnull, 'w') as nullf:
         for program in to_check:
@@ -884,13 +712,15 @@ def external_program_check(
                 could_not_run.append(program)
 
     if could_not_run:
-        error_msgs.append(textwrap.fill(
+        error_msgs.append(
                 'Could not run the following programs, are they installed? ' +
-                ', '.join(could_not_run)))
+                ', '.join(could_not_run))
 
 
     if error_msgs:
-        raise Exception('\n' + '\n'.join(error_msgs))
+        raise UserException(
+            'could not run one or more external programs WAL-E depends upon',
+            '\n'.join(error_msgs))
 
     return None
 
@@ -996,38 +826,43 @@ def main(argv=None):
 
     subcommand = args.subcommand
 
-    if subcommand == 'backup-fetch':
-        external_program_check([S3CMD_BIN, LZOP_BIN])
-        backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
-                                     args.BACKUP_NAME,
-                                     pool_size=args.pool_size)
-    elif subcommand == 'backup-list':
-        external_program_check([S3CMD_BIN])
-        backup_cxt.backup_list()
-    elif subcommand == 'backup-push':
-        external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
-        rate_limit = args.rate_limit
-        if rate_limit is not None and rate_limit < 8192:
-            print >>sys.stderr, ('--cluster-read-rate-limit must be a '
-                                 'positive integer over or equal to 8192')
-            sys.exit(1)
+    try:
+        if subcommand == 'backup-fetch':
+            external_program_check([S3CMD_BIN, LZOP_BIN])
+            backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
+                                         args.BACKUP_NAME,
+                                         pool_size=args.pool_size)
+        elif subcommand == 'backup-list':
+            external_program_check([S3CMD_BIN])
+            backup_cxt.backup_list()
+        elif subcommand == 'backup-push':
+            external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
+            rate_limit = args.rate_limit
+            if rate_limit is not None and rate_limit < 8192:
+                print >>sys.stderr, ('--cluster-read-rate-limit must be a '
+                                     'positive integer over or equal to 8192')
+                sys.exit(1)
 
-        backup_cxt.database_s3_backup(
-            args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,
-            pool_size=args.pool_size)
-    elif subcommand == 'wal-fetch':
-        external_program_check([S3CMD_BIN, LZOP_BIN])
-        backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
-    elif subcommand == 'wal-push':
-        external_program_check([S3CMD_BIN, LZOP_BIN])
-        backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
-    elif subcommand == 'wal-fark':
-        external_program_check([S3CMD_BIN, LZOP_BIN])
-        backup_cxt.wal_fark(args.PG_CLUSTER_DIRECTORY)
-    else:
-        print >>sys.stderr, ('Subcommand {0} not implemented!'
-                             .format(subcommand))
-        sys.exit(127)
+            backup_cxt.database_s3_backup(
+                args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,
+                pool_size=args.pool_size)
+        elif subcommand == 'wal-fetch':
+            external_program_check([S3CMD_BIN, LZOP_BIN])
+            backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
+        elif subcommand == 'wal-push':
+            external_program_check([S3CMD_BIN, LZOP_BIN])
+            backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+        elif subcommand == 'wal-fark':
+            external_program_check([S3CMD_BIN, LZOP_BIN])
+            backup_cxt.wal_fark(args.PG_CLUSTER_DIRECTORY)
+        else:
+            print >>sys.stderr, ('Subcommand {0} not implemented!'
+                                 .format(subcommand))
+            sys.exit(127)
+    except UserException, e:
+        logger.log(level=e.severity,
+                   msg=log_help.fmt_logline(e.msg, e.detail, e.hint))
+        sys.exit(1)
 
 if __name__ == "__main__":
     sys.exit(main())
