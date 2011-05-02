@@ -109,33 +109,42 @@ ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
                                          'submitted_path tarinfo')
 
 class TarPartition(list):
+
+    @staticmethod
+    def _padded_tar_add(tar, et_info, rate_limit=None):
+        try:
+            with open(et_info.submitted_path, 'rb') as raw_file:
+                with StreamPadFileObj(raw_file, et_info.tarinfo.size) as f:
+                    if rate_limit is not None:
+                        mbuffer = piper.popen_sp(
+                            ['mbuffer', '-r', unicode(int(rate_limit)), '-i'],
+                            stdin=f, stdout=piper.PIPE)
+                        tar.addfile(et_info.tarinfo, mbuffer.stdout)
+                    else:
+                        tar.addfile(et_info.tarinfo, f)
+
+        except OSError, e:
+            if e.errno == errno.ENOENT and e.filename == path:
+                # log a NOTICE/INFO that the file was unlinked.
+                # Ostensibly harmless (such unlinks should be replayed
+                # in the WAL) but good to know.
+                print >>sys.stderr, 'skipping unlinked file'
+                print >>sys.stderr, 'unlinked path: ' + path
+            else:
+                raise
+
     def tarfile_write(self, fileobj, rate_limit=None):
         tar = None
         try:
             tar = tarfile.open(fileobj=fileobj, mode='w|')
 
             for et_info in self:
+                # Treat files specially because they may grow, shrink,
+                # or may be unlinked in the meanwhile.
                 if et_info.tarinfo.isfile():
-                    if rate_limit is not None:
-                        # Use mbuffer if a rate limit is defined.
-                        mbuffer = piper.popen_sp(
-                            ['mbuffer', '-r', unicode(int(rate_limit)), '-i'] +
-                            [et_info.submitted_path], stdout=piper.PIPE)
-
-                        with StreamPadFileObj(mbuffer.stdout,
-                                              et_info.tarinfo.size) as f:
-                            tar.addfile(et_info.tarinfo, f)
-
-                        mbuffer.wait()
-                    else:
-                        with open(et_info.submitted_path, 'rb') as f:
-                            tar.addfile(
-                                et_info.tarinfo,
-                                StreamPadFileObj(f, et_info.tarinfo.size))
+                    self._padded_tar_add(tar, et_info, rate_limit=rate_limit)
                 else:
-                    # No file handle required
                     tar.addfile(et_info.tarinfo)
-
         finally:
             if tar is not None:
                 tar.close()
