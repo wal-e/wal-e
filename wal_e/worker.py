@@ -26,9 +26,9 @@ MBUFFER_BIN = 'mbuffer'
 
 # BUFSIZE_HT: Buffer Size, High Throughput
 #
-# A buffer size used for high-throughput pipes.  About 88 Megabytes.
-# Default borrowed from mbuffer.
-BUFSIZE_HT = 11326 * 8192
+# This is set conservatively because small systems can end up being
+# unhappy with too much memory usage in buffers.
+BUFSIZE_HT = 128 * 8192
 
 
 def check_call_wait_sigint(*popenargs, **kwargs):
