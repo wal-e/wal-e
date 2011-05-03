@@ -114,14 +114,16 @@ class TarPartition(list):
     def _padded_tar_add(tar, et_info, rate_limit=None):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
-                with StreamPadFileObj(raw_file, et_info.tarinfo.size) as f:
-                    if rate_limit is not None:
-                        mbuffer = piper.popen_sp(
-                            ['mbuffer', '-r', unicode(int(rate_limit)), '-i'],
-                            stdin=f, stdout=piper.PIPE)
-                        tar.addfile(et_info.tarinfo, mbuffer.stdout)
-                    else:
+                if rate_limit is not None:
+                    mbuffer = piper.popen_sp(
+                        ['mbuffer', '-r', unicode(int(rate_limit))],
+                        stdin=raw_file, stdout=piper.PIPE)
+
+                    with StreamPadFileObj(mbuffer.stdout,
+                                          et_info.tarinfo.size) as f:
                         tar.addfile(et_info.tarinfo, f)
+                else:
+                    tar.addfile(et_info.tarinfo, f)
 
         except OSError, e:
             if e.errno == errno.ENOENT and e.filename == path:
