@@ -182,13 +182,21 @@ overhead.  This has the effect of making base backups and restores
 much faster when many small relations and ancillary files are
 involved.
 
+Controlling the I/O of a Base Backup
+------------------------------------
+
 To reduce the read load on base backups, they are sent through the
-tool "mbuffer" first.
+tool "mbuffer" first.  To use this rate-limited-read mode, use the
+option --cluster-read-rate-limit as seen in ``wal-e backup-push``.
 
 
 TODO
 ----
 
+* WAL-E is expanding.  The lack of a testing strategy is starting to
+  hurt more.
+* WAL-E is expanding. A README is starting to get unwieldy.  A proper
+  Sphinx manual should be written soon
 * Investigate pg_lesslog.  This tool strips the WAL file of full-page
   binary images, making it *much* smaller, but this also makes the
   recovery process more expensive (has to do more seeking to do
