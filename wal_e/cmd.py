@@ -28,7 +28,7 @@ import wal_e.tar_partition as tar_partition
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.piper import pipe, pipe_wait, popen_sp
+from wal_e.piper import popen_sp
 from wal_e.worker import PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
 from wal_e.worker import check_call_wait_sigint
 

@@ -60,7 +60,7 @@ def configure(*args, **kwargs):
         filename = kwargs.get("filename")
         if filename:
             mode = kwargs.get("filemode", 'a')
-            hdlr = FileHandler(filename, mode)
+            hdlr = logging.FileHandler(filename, mode)
         else:
             stream = kwargs.get("stream")
             hdlr = logging.StreamHandler(stream)

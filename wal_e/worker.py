@@ -6,6 +6,8 @@ with the intention that they are used in forked worker processes.
 
 """
 
+import errno
+import signal
 import subprocess
 import sys
 import tarfile

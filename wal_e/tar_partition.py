@@ -37,10 +37,11 @@ extraction.  This coupling between tarfiles makes the extraction
 process considerably more complicated.
 
 """
-import os
-import tarfile
 import collections
-
+import errno
+import os
+import sys
+import tarfile
 
 import piper
 
@@ -126,12 +127,13 @@ class TarPartition(list):
                     tar.addfile(et_info.tarinfo, f)
 
         except OSError, e:
-            if e.errno == errno.ENOENT and e.filename == path:
+            if (e.errno == errno.ENOENT and
+                e.filename == et_info.submitted_path):
                 # log a NOTICE/INFO that the file was unlinked.
                 # Ostensibly harmless (such unlinks should be replayed
                 # in the WAL) but good to know.
                 print >>sys.stderr, 'skipping unlinked file'
-                print >>sys.stderr, 'unlinked path: ' + path
+                print >>sys.stderr, 'unlinked path: ' + et_info.submitted_path
             else:
                 raise
 
