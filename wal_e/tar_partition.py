@@ -124,7 +124,7 @@ class TarPartition(list):
                                           et_info.tarinfo.size) as f:
                         tar.addfile(et_info.tarinfo, f)
                 else:
-                    tar.addfile(et_info.tarinfo, f)
+                    tar.addfile(et_info.tarinfo, raw_file)
 
         except OSError, e:
             if (e.errno == errno.ENOENT and
