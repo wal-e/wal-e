@@ -17,10 +17,11 @@ v.close()
 
 import sys
 
+
+install_requires = ['gevent>=0.13.0', 'boto>=2.0b4']
+
 if sys.version_info < (2, 7):
-    install_requires = ['argparse>=0.8']
-else:
-    install_requires = []
+    install_requires.append('argparse>=0.8')
 
 setup(
     name = "WAL-E",

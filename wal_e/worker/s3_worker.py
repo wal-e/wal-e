@@ -5,23 +5,29 @@ These are functions that are amenable to be called from other modules,
 with the intention that they are used in forked worker processes.
 
 """
-
 import errno
+import gevent
+import gevent.pool
+import itertools
+import json
+import re
 import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
 
+import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
 from wal_e.piper import pipe, pipe_wait, popen_sp
+from wal_e.worker import retry_iter
 
-logger = log_help.get_logger('wal_e.worker')
+
+logger = log_help.get_logger(__name__)
 
 
-PSQL_BIN = 'psql'
 LZOP_BIN = 'lzop'
 S3CMD_BIN = 's3cmd'
 MBUFFER_BIN = 'mbuffer'
@@ -228,3 +234,138 @@ def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
                         raise e
 
             raise keyboard_int
+
+
+def bucket_lister(bucket, retry_count, timeout_seconds,
+                  prefix='', delimiter='', marker='', headers=None):
+    """
+    A generator function for listing keys in a bucket.
+
+    Adapted from bucketlistresultset.py in Boto, but to use gevent
+    timeouts.
+    """
+    more_results = True
+    k = None
+    while more_results:
+        rs = None
+        for i in retry_iter(retry_count):
+            with gevent.Timeout(timeout_seconds, False):
+                rs = bucket.get_all_keys(prefix=prefix, marker=marker,
+                                         delimiter=delimiter, headers=headers)
+
+        if rs is None:
+            raise UserException(msg='attempt to list bucket timed out',
+                                hint='try raising the number of retries, '
+                                'the length of the timeout, or try again '
+                                'later')
+
+        for k in rs:
+            yield k
+        if k:
+            marker = k.name
+        more_results= rs.is_truncated
+
+
+class BackupList(object):
+    def __init__(self, s3_conn, s3_prefix,
+
+                 # These can learn default values when necessary
+                 detail, detail_retry, detail_timeout, list_retry,
+                 list_timeout):
+        self.s3_conn = s3_conn
+        self.s3_prefix = s3_prefix
+        self.detail = detail
+        self.detail_retry = detail_retry
+        self.detail_timeout = detail_timeout
+        self.list_retry = list_retry
+        self.list_timeout = list_timeout
+
+
+    def _backup_detail(self, key):
+        contents = None
+        for i in retry_iter(self.detail_retry):
+            with gevent.Timeout(self.detail_timeout, False) as timeout:
+                contents = key.get_contents_as_string()
+
+            logger.debug('Retrying backup detail attempt: #{0}'.format(i))
+
+        if contents is None:
+            # Abuse gevent timeout to raise some sort of exception to
+            # the caller
+            raise gevent.Timeout(self.detail_timeout)
+        else:
+            return contents
+
+
+    def __iter__(self):
+        layout = s3_storage.StorageLayout(self.s3_prefix)
+
+        # Abuse pagination timeouts to also verify the bucket.  Close
+        # enough.(?)
+        bucket = None
+        for i in retry_iter(self.list_retry):
+            with gevent.Timeout(self.list_timeout, False) as timeout:
+                bucket = self.s3_conn.get_bucket(layout.bucket_name())
+
+        if bucket is None:
+            raise UserException(msg='could not verify bucket',
+                                detail='Could not verify bucket {0}.'
+                                .format(layout.s3_bucket_name()),
+                                hint='Consider raising the timeout, number '
+                                'of retries, or trying again later.')
+
+        # Try to identify the sentinel file.  This is sort of a drag, the
+        # storage format should be changed to put them in their own leaf
+        # directory.
+        #
+        # TODO: change storage format
+        base_depth = layout.basebackups().count('/')
+        sentinel_depth = base_depth + 1
+
+        matcher = re.compile(s3_storage.BASE_BACKUP_REGEXP).match
+
+        # bucket.list performs auto-pagination, which costs one web
+        # request per page.
+
+        for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
+                                 prefix=layout.basebackups()):
+            # Use key depth vs. base and regexp matching to find
+            # sentinel files.
+            key_depth = key.name.count('/')
+
+            if key_depth == sentinel_depth:
+                match = matcher(key.name.rsplit('/', 1)[-1])
+                if match:
+                    # TODO: It's necessary to use the name of the file to
+                    # get the beginning wal segment information, whereas
+                    # the ending information is encoded into the file
+                    # itself.  Perhaps later on it should all be encoded
+                    # into the name when the sentinel files are broken out
+                    # into their own directory, so that S3 listing gets
+                    # all commonly useful information without doing a
+                    # request-per.
+                    groups = match.groupdict()
+
+                    detail_dict = {'wal_segment_backup_stop': None,
+                                   'wal_segment_offset_backup_stop': None,
+                                   'expanded_size_bytes': None}
+                    if self.detail:
+                        try:
+                            # This costs one web request
+                            detail_dict.update(
+                                json.loads(self._backup_detail(key)))
+                        except gevent.Timeout:
+                            # NB: do *not* overwite "key" in this
+                            # scope, which is being used to mean a "s3
+                            # key", as this will cause later code to
+                            # blow up.
+                            for k in detail_dict:
+                                detail_dict[k] = 'timeout'
+
+                    info = s3_storage.BackupInfo(
+                        last_modified=key.last_modified,
+                        wal_segment_backup_start=groups['segment'],
+                        wal_segment_offset_backup_start=groups['position'],
+                        **detail_dict)
+
+                    yield info

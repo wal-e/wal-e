@@ -6,6 +6,18 @@ backups of the PostgreSQL file cluster.
 
 """
 
+
+def gevent_monkey(*args, **kwargs):
+    import gevent.monkey
+    gevent.monkey.patch_socket(dns=True, aggressive=True)
+    gevent.monkey.patch_ssl()
+    gevent.monkey.patch_time()
+
+# Monkey-patch procedures early.  If it doesn't work with gevent,
+# sadly it cannot be used (easily) in WAL-E.
+gevent_monkey()
+
+
 import argparse
 import contextlib
 import csv
@@ -23,18 +35,19 @@ import sys
 import tempfile
 import textwrap
 
-import wal_e.worker as worker
+import wal_e.worker.s3_worker as s3_worker
 import wal_e.tar_partition as tar_partition
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
 from wal_e.piper import popen_sp
-from wal_e.worker import PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
-from wal_e.worker import check_call_wait_sigint
+from wal_e.worker import PSQL_BIN
+from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
+from wal_e.worker.s3_worker import check_call_wait_sigint
 
 # TODO: Make controllable from userland
 log_help.configure(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 
 logger = log_help.get_logger('wal_e.main')
@@ -202,17 +215,35 @@ class S3Backup(object):
 
             yield s3cmd_config
 
-    def backup_list(self):
+    def backup_list(self, detail, detail_retry, detail_timeout, list_retry,
+                    list_timeout):
         """
-        Prints out a list of the basebackups directory
+        Lists base backups and basic information about them
 
-        This is raw s3cmd output, intended for processing via *NIX
-        text wrangling or casual inspection.
         """
-        with self.s3cmd_temp_config as s3cmd_config:
-            check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
-                                    self.s3_prefix + '/basebackups_{version}/'
-                                    .format(version=FILE_STRUCTURE_VERSION)])
+        import csv
+
+        from boto.s3.connection import OrdinaryCallingFormat
+        from boto.s3.connection import S3Connection
+
+        from wal_e.storage.s3_storage import BackupInfo
+
+        s3_conn = S3Connection(self.aws_access_key_id,
+                               self.aws_secret_access_key,
+                               calling_format=OrdinaryCallingFormat())
+
+        bl_iter = s3_worker.BackupList(s3_conn, self.s3_prefix,
+                                       detail, detail_retry, detail_timeout,
+                                       list_retry, list_timeout)
+
+        # TODO: support switchable formats for difference needs.
+        w_csv = csv.writer(sys.stdout, dialect='excel-tab')
+        w_csv.writerow(BackupInfo._fields)
+
+        for backup_info in bl_iter:
+            w_csv.writerow(backup_info)
+
+        sys.stdout.flush()
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
                                   version, pool_size, rate_limit=None):
@@ -329,7 +360,7 @@ class S3Backup(object):
                 for tpart_number, tpart in enumerate(partitions):
                     total_size += tpart.total_member_size
                     uploads.append(pool.apply_async(
-                            worker.do_partition_put,
+                            s3_worker.do_partition_put,
                             [backup_s3_prefix, tpart_number, tpart,
                              per_process_limit, s3cmd_config.name]))
 
@@ -469,7 +500,7 @@ class S3Backup(object):
 
                     for tpart_number in partitions:
                         results.append(pool.apply_async(
-                                worker.do_partition_get,
+                                s3_worker.do_partition_get,
                                 [backup_s3_prefix, cluster_abspath,
                                  tpart_number, s3cmd_config.name]))
 
@@ -574,7 +605,7 @@ class S3Backup(object):
         wal_file_name = os.path.basename(wal_path)
 
         with self.s3cmd_temp_config as s3cmd_config:
-            worker.do_lzop_s3_put(
+            s3_worker.do_lzop_s3_put(
                 '{0}/wal_{1}/{2}'.format(self.s3_prefix,
                                          FILE_STRUCTURE_VERSION,
                                          wal_file_name),
@@ -592,7 +623,7 @@ class S3Backup(object):
 
         """
         with self.s3cmd_temp_config as s3cmd_config:
-            worker.do_lzop_s3_get(
+            s3_worker.do_lzop_s3_get(
                 '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
                                              FILE_STRUCTURE_VERSION,
                                              wal_name),
@@ -762,7 +793,8 @@ def main(argv=None):
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
         parents=[backup_fetchpush_parent])
-    subparsers.add_parser('backup-list', help='list backups in S3')
+    backup_list_parser = subparsers.add_parser('backup-list',
+                                               help='list backups in S3')
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3',
         parents=[backup_fetchpush_parent])
@@ -791,6 +823,26 @@ def main(argv=None):
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
+
+    # backup-list operator section
+    backup_list_parser.add_argument(
+        '--detail', default=False, action='store_true',
+        help='show more detailed information about every backup')
+    backup_list_parser.add_argument(
+        '--detail-timeout', default=float(10), type=float, metavar='SECONDS',
+        help='how many seconds to wait before timing out an attempt to get '
+        'base backup details')
+    backup_list_parser.add_argument(
+        '--detail-retry', default=3, type=int, metavar='TIMES',
+        help='how many times to retry getting details')
+    backup_list_parser.add_argument(
+        '--list-timeout', default=float(10), type=float, metavar='SECONDS',
+        help='how many seconds to wait before timing out an attempt to get '
+        'base backup list')
+    backup_list_parser.add_argument(
+        '--list-retry', default=3, type=int, metavar='TIMES',
+        help='how many times to retry each pagination in listing backups')
+
 
     # wal-push operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
@@ -832,8 +884,11 @@ def main(argv=None):
                                          args.BACKUP_NAME,
                                          pool_size=args.pool_size)
         elif subcommand == 'backup-list':
-            external_program_check([S3CMD_BIN])
-            backup_cxt.backup_list()
+            backup_cxt.backup_list(detail=args.detail,
+                                   detail_retry=args.detail_retry,
+                                   detail_timeout=args.detail_timeout,
+                                   list_retry=args.list_retry,
+                                   list_timeout=args.list_timeout)
         elif subcommand == 'backup-push':
             external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
             rate_limit = args.rate_limit
