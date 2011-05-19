@@ -267,13 +267,13 @@ def bucket_lister(bucket, retry_count, timeout_seconds,
 
 
 class BackupList(object):
-    def __init__(self, s3_conn, s3_prefix,
+    def __init__(self, s3_conn, layout,
 
                  # These can learn default values when necessary
                  detail, detail_retry, detail_timeout, list_retry,
                  list_timeout):
         self.s3_conn = s3_conn
-        self.s3_prefix = s3_prefix
+        self.layout = layout
         self.detail = detail
         self.detail_retry = detail_retry
         self.detail_timeout = detail_timeout
@@ -332,19 +332,17 @@ class BackupList(object):
 
 
     def __iter__(self):
-        layout = s3_storage.StorageLayout(self.s3_prefix)
-
         # Abuse pagination timeouts to also verify the bucket.  Close
         # enough.(?)
         bucket = None
         for i in retry_iter(self.list_retry):
             with gevent.Timeout(self.list_timeout, False) as timeout:
-                bucket = self.s3_conn.get_bucket(layout.bucket_name())
+                bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
 
         if bucket is None:
             raise UserException(msg='could not verify bucket',
                                 detail='Could not verify bucket {0}.'
-                                .format(layout.s3_bucket_name()),
+                                .format(self.layout.s3_bucket_name()),
                                 hint='Consider raising the timeout, number '
                                 'of retries, or trying again later.')
 
@@ -353,7 +351,7 @@ class BackupList(object):
         # directory.
         #
         # TODO: change storage format
-        base_depth = layout.basebackups().count('/')
+        base_depth = self.layout.basebackups().count('/')
         sentinel_depth = base_depth + 1
 
         matcher = re.compile(s3_storage.COMPLETE_BASE_BACKUP_REGEXP).match
@@ -361,7 +359,7 @@ class BackupList(object):
         # bucket_lister performs auto-pagination, which costs one web
         # request per page.
         for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
-                                 prefix=layout.basebackups()):
+                                 prefix=self.layout.basebackups()):
             # Use key depth vs. base and regexp matching to find
             # sentinel files.
             key_depth = key.name.count('/')

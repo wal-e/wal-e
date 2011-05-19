@@ -232,7 +232,8 @@ class S3Backup(object):
                                self.aws_secret_access_key,
                                calling_format=OrdinaryCallingFormat())
 
-        bl = s3_worker.BackupList(s3_conn, self.s3_prefix,
+        bl = s3_worker.BackupList(s3_conn,
+                                  s3_storage.StorageLayout(self.s3_prefix),
                                   detail, detail_retry, detail_timeout,
                                   list_retry, list_timeout)
 
