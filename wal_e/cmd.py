@@ -215,8 +215,8 @@ class S3Backup(object):
 
             yield s3cmd_config
 
-    def backup_list(self, detail, detail_retry, detail_timeout, list_retry,
-                    list_timeout):
+    def backup_list(self, query, detail, detail_retry, detail_timeout,
+                    list_retry, list_timeout):
         """
         Lists base backups and basic information about them
 
@@ -232,9 +232,16 @@ class S3Backup(object):
                                self.aws_secret_access_key,
                                calling_format=OrdinaryCallingFormat())
 
-        bl_iter = s3_worker.BackupList(s3_conn, self.s3_prefix,
-                                       detail, detail_retry, detail_timeout,
-                                       list_retry, list_timeout)
+        bl = s3_worker.BackupList(s3_conn, self.s3_prefix,
+                                  detail, detail_retry, detail_timeout,
+                                  list_retry, list_timeout)
+
+        # If there is no query, return an exhaustive list, otherwise
+        # find a backup instad.
+        if query is None:
+            bl_iter = bl
+        else:
+            bl_iter = bl.find_all(query)
 
         # TODO: support switchable formats for difference needs.
         w_csv = csv.writer(sys.stdout, dialect='excel-tab')
@@ -826,6 +833,9 @@ def main(argv=None):
 
     # backup-list operator section
     backup_list_parser.add_argument(
+        'QUERY', nargs='?', default=None,
+        help='a string qualifying backups to list')
+    backup_list_parser.add_argument(
         '--detail', default=False, action='store_true',
         help='show more detailed information about every backup')
     backup_list_parser.add_argument(
@@ -884,7 +894,8 @@ def main(argv=None):
                                          args.BACKUP_NAME,
                                          pool_size=args.pool_size)
         elif subcommand == 'backup-list':
-            backup_cxt.backup_list(detail=args.detail,
+            backup_cxt.backup_list(query=args.QUERY,
+                                   detail=args.detail,
                                    detail_retry=args.detail_retry,
                                    detail_timeout=args.detail_timeout,
                                    list_retry=args.list_retry,

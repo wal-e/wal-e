@@ -16,7 +16,13 @@ from urlparse import urlparse
 
 BASE_BACKUP_REGEXP = (r'base'
                       r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
-                      r'_(?P<position>[0-9A-F]{8})')
+                      r'_(?P<offset>[0-9A-F]{8})')
+
+COMPLETE_BASE_BACKUP_REGEXP = \
+    (r'base'
+     r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
+     r'_(?P<offset>[0-9A-F]{8})_backup_stop_sentinel.json')
+
 
 # Exhaustively enumerates all possible metadata about a backup.  These
 # may not always all be filled depending what access method is used to
@@ -25,7 +31,8 @@ BASE_BACKUP_REGEXP = (r'base'
 # after some number of retries and timeouts, the field should be
 # filled with the string 'timeout'.
 BackupInfo = collections.namedtuple('BackupInfo',
-                                    ['last_modified',
+                                    ['name',
+                                     'last_modified',
                                      'expanded_size_bytes',
                                      'wal_segment_backup_start',
                                      'wal_segment_offset_backup_start',
@@ -60,6 +67,10 @@ class StorageLayout(object):
     def basebackup_directory(self, wal_file_name, wal_file_offset):
         return (self.basebackups() +
                 '/base_{0}_{1}'.format(wal_file_name, wal_file_offset))
+
+    def basebackup_sentinel(self, wal_file_name, wal_file_offset):
+        return (self.basebackup_directory(wal_file_name, wal_file_offset) +
+                '_backup_stop_sentinel.json')
 
     def wal_directory(self):
         return self._s3_api_prefix + '/wal_' + self.VERSION

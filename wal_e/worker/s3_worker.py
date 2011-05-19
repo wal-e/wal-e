@@ -280,6 +280,40 @@ class BackupList(object):
         self.list_retry = list_retry
         self.list_timeout = list_timeout
 
+    def find_all(self, query):
+        """
+        A procedure to assist in finding or detailing specific backups
+
+        Currently supports:
+
+        * a backup name (base_number_number)
+
+        * the psuedo-name LATEST, which finds the lexically highest
+          backup
+
+        """
+
+        match = re.match(s3_storage.BASE_BACKUP_REGEXP, query)
+
+        if match is not None:
+            for backup in iter(self):
+                if backup.name == query:
+                    yield backup
+                    return
+        elif query == 'LATEST':
+            all_backups = list(iter(self))
+
+            if all_backups is None:
+                yield None
+                return
+
+            all_backups.sort()
+            yield all_backups[-1]
+            return
+        else:
+            raise UserException(msg='invalid backup query submitted',
+                                detail='The submitted query operator was "{0}."'
+                                .format(query))
 
     def _backup_detail(self, key):
         contents = None
@@ -322,11 +356,10 @@ class BackupList(object):
         base_depth = layout.basebackups().count('/')
         sentinel_depth = base_depth + 1
 
-        matcher = re.compile(s3_storage.BASE_BACKUP_REGEXP).match
+        matcher = re.compile(s3_storage.COMPLETE_BASE_BACKUP_REGEXP).match
 
-        # bucket.list performs auto-pagination, which costs one web
+        # bucket_lister performs auto-pagination, which costs one web
         # request per page.
-
         for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
                                  prefix=layout.basebackups()):
             # Use key depth vs. base and regexp matching to find
@@ -334,7 +367,8 @@ class BackupList(object):
             key_depth = key.name.count('/')
 
             if key_depth == sentinel_depth:
-                match = matcher(key.name.rsplit('/', 1)[-1])
+                backup_sentinel_name = key.name.rsplit('/', 1)[-1]
+                match = matcher(backup_sentinel_name)
                 if match:
                     # TODO: It's necessary to use the name of the file to
                     # get the beginning wal segment information, whereas
@@ -363,9 +397,10 @@ class BackupList(object):
                                 detail_dict[k] = 'timeout'
 
                     info = s3_storage.BackupInfo(
+                        name='base_{segment}_{offset}'.format(**groups),
                         last_modified=key.last_modified,
                         wal_segment_backup_start=groups['segment'],
-                        wal_segment_offset_backup_start=groups['position'],
+                        wal_segment_offset_backup_start=groups['offset'],
                         **detail_dict)
 
                     yield info
