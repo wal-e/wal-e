@@ -197,6 +197,8 @@ TODO
   hurt more.
 * WAL-E is expanding. A README is starting to get unwieldy.  A proper
   Sphinx manual should be written soon
+* The the retry logic in boto and the exceptions it raises are not
+  know to me, and may defeat WAL-E's retry logic.
 * Investigate pg_lesslog.  This tool strips the WAL file of full-page
   binary images, making it *much* smaller, but this also makes the
   recovery process more expensive (has to do more seeking to do
