@@ -7,10 +7,74 @@ Mostly necessary only because of http://bugs.python.org/issue1652.
 """
 
 import copy
+import errno
+import fcntl
+import gevent.socket
+import os
 import signal
 import subprocess
+import sys
 
 from subprocess import PIPE
+from cStringIO import StringIO
+
+
+class NonBlockPipeFileWrap(object):
+    def __init__(self, fp):
+        # Make the file nonblocking
+        fcntl.fcntl(fp, fcntl.F_SETFL, os.O_NONBLOCK)
+        self._fp = fp
+
+    def read(self, size=None):
+        # Some adaptation from gevent's examples/processes.py
+        accum = StringIO()
+
+        while size is None or accum.tell() < size:
+            try:
+                if size is None:
+                    max_read = 4096
+                else:
+                    max_read = min(4096, size - accum.tell())
+            
+                chunk = self._fp.read(max_read)
+
+                # End of the stream: leave the loop
+                if not chunk:
+                    break
+                accum.write(chunk)
+            except IOError, ex:
+                if ex[0] != errno.EAGAIN:
+                    raise
+                sys.exc_clear()
+            gevent.socket.wait_read(self._fp.fileno())
+
+        return accum.getvalue()
+
+    def write(self, data):
+        # Some adaptation from gevent's examples/processes.py
+        buf = StringIO(data)
+        bytes_total = len(data)
+        bytes_written = 0
+        while bytes_written < bytes_total:
+            try:
+                # self._fp.write() doesn't return anything, so use
+                # os.write.
+                bytes_written += os.write(self._fp.fileno(), buf.read(4096))
+            except IOError, ex:
+                if ex[0] != errno.EAGAIN:
+                    raise
+                sys.exc_clear()
+            gevent.socket.wait_write(self._fp.fileno())
+
+    def fileno(self):
+        return self._fp.fileno()
+
+    def close(self):
+        return self._fp.close()
+
+    def flush(self):
+        return self._fp.flush()
+
 
 def subprocess_setup(f=None):
     """
@@ -48,7 +112,16 @@ def popen_sp(*args, **kwargs):
     """
 
     kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
-    return subprocess.Popen(*args, **kwargs)
+    proc = subprocess.Popen(*args, **kwargs)
+
+    # Patch up the process object to use non-blocking I/O that yields
+    # to the gevent hub.
+    for fp_symbol in ['stdin', 'stdout', 'stderr']:
+        value = getattr(proc, fp_symbol)
+        if value is not None:
+            setattr(proc, fp_symbol, NonBlockPipeFileWrap(value))
+
+    return proc
 
 
 def pipe(*args):
