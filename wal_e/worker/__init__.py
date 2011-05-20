@@ -1,6 +1,5 @@
 import itertools
 
-PSQL_BIN = 'psql'
 
 def retry_iter(num_times):
     """

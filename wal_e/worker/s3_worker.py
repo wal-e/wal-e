@@ -7,8 +7,6 @@ with the intention that they are used in forked worker processes.
 """
 import errno
 import gevent
-import gevent.pool
-import itertools
 import json
 import re
 import signal
