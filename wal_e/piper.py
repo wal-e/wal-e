@@ -75,6 +75,10 @@ class NonBlockPipeFileWrap(object):
     def flush(self):
         return self._fp.flush()
 
+    @property
+    def closed(self):
+        return self._fp.closed
+
 
 def subprocess_setup(f=None):
     """
