@@ -90,7 +90,7 @@ def external_program_check(
                     # of this kind will terminate in this case.
                     proc.stdin.close()
                     proc.wait()
-            except IOError:
+            except OSError, ose:
                 could_not_run.append(program)
 
     if could_not_run:
