@@ -3,7 +3,10 @@ import contextlib
 import csv
 import datetime
 import errno
+import functools
+import gevent.pool
 import glob
+import itertools
 import json
 import logging
 import multiprocessing
@@ -26,11 +29,14 @@ from wal_e.worker.psql_worker import PSQL_BIN, PgBackupStatements
 from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
 from wal_e.worker.s3_worker import check_call_wait_sigint
 
+
 logger = log_help.get_logger(__name__)
+
 
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = s3_storage.StorageLayout.VERSION
+
 
 class S3Backup(object):
     """
@@ -45,6 +51,8 @@ class S3Backup(object):
 
         # Canonicalize the s3 prefix by stripping any trailing slash
         self.s3_prefix = s3_prefix.rstrip('/')
+
+        self.exceptions = []
 
     @property
     @contextlib.contextmanager
@@ -78,7 +86,12 @@ class S3Backup(object):
 
         s3_conn = S3Connection(self.aws_access_key_id,
                                self.aws_secret_access_key,
-                               calling_format=OrdinaryCallingFormat())
+                               calling_format=OrdinaryCallingFormat()
+                               # TODO: Add https_connection_factory
+                               # with timeouts.  This is less
+                               # necessary with Boto 2.0b5, which is
+                               # yet to be released...
+                               )
 
         bl = s3_worker.BackupList(s3_conn,
                                   s3_storage.StorageLayout(self.s3_prefix),
@@ -236,144 +249,93 @@ class S3Backup(object):
 
         return backup_s3_prefix, total_size
 
-    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size):
-        basebackups_prefix = '/'.join(
-            [self.s3_prefix, 'basebackups_' + FILE_STRUCTURE_VERSION])
+    def _exception_gather_guard(self, fn):
+        """
+        A higher order function to trap UserExceptions and then log them.
 
-        with self.s3cmd_temp_config as s3cmd_config:
+        This is to present nicer output to the user when failures are
+        occuring in another thread of execution that may not end up at
+        the catch-all try/except in main().
+        """
 
-            # Verify sane looking input for backup_name
-            if backup_name == 'LATEST':
-                # "LATEST" is a special backup name that is always valid
-                # to always find the lexically-largest backup, with the
-                # intend of getting the freshest database as soon as
-                # possible.
-
-                backup_find = popen_sp(
-                    [S3CMD_BIN, '-c', s3cmd_config.name,
-                     'ls', basebackups_prefix + '/'],
-                    stdout=subprocess.PIPE)
-                stdout, stderr = backup_find.communicate()
-
-
-                sentinel_suffix = '_backup_stop_sentinel.json'
-                # Find sentinel files as markers of guaranteed good backups
-                sentinel_urls = []
-
-                for line in (l.strip() for l in stdout.split('\n')):
-
-                    if line.endswith(sentinel_suffix):
-                        sentinel_urls.append(line.split()[-1])
-
-                if not sentinel_urls:
-                    raise UserException(
-                        'no base backups found',
-                        'The prefix searched was "{0}"'
-                        .format(basebackups_prefix),
-                        'Consider checking to make sure that you have taken a '
-                        'base backup and that the prefix is correct.  '
-                        'New versions of WAL-E with new file formats will '
-                        'fail to recognize old backups, too.')
-                else:
-                    sentinel_urls.sort()
-
-                    # Slice away the extra URL cruft to locate just
-                    # the base backup name.
-                    #
-                    # NB: '... + 1' is for trailing slash
-                    begin_slice = len(basebackups_prefix) + 1
-                    end_slice = -len(sentinel_suffix)
-                    backup_name = sentinel_urls[-1][begin_slice:end_slice]
-
-            base_backup_regexp = (r'base'
-                                  r'_(?P<segment>[0-9a-zA-Z.]{0,60})'
-                                  r'_(?P<position>[0-9A-F]{8})')
-            match = re.match(base_backup_regexp, backup_name)
-            if match is None:
-                raise UserException('non-conformant backup name passed',
-                                    'The invalid name was "{0}"'
-                                    .format(backup_name))
-
-            assert backup_name != 'LATEST', ('Must be rewritten to the actual '
-                                             'name of the last base backup')
-
-
-            backup_s3_prefix = '/'.join([basebackups_prefix, backup_name])
-            backup_s3_cluster_prefix = '/'.join(
-                [backup_s3_prefix, 'tar_partitions', ''])
-
-            ls_proc = popen_sp(
-                [S3CMD_BIN, '-c', s3cmd_config.name, 'ls',
-                 backup_s3_cluster_prefix],
-                stdout=subprocess.PIPE)
-            stdout, stderr = ls_proc.communicate()
-
-            pool = multiprocessing.Pool(processes=pool_size)
-            results = []
-            cluster_abspath = os.path.abspath(pg_cluster_dir)
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
             try:
-                partitions = set()
+                return fn(*args, **kwargs)
+            except UserException, e:
+                self.exceptions.append(e)
 
-                for line in stdout.split('\n'):
-                    # Skip any blank lines
-                    if not line.strip():
-                        continue
+        return wrapper
 
-                    pos = line.rfind('s3://')
-                    if pos > 0:
-                        s3_url = line[pos:]
-                        assert s3_url.startswith(backup_s3_cluster_prefix)
-                        base, partition_name = s3_url.rsplit('/', 1)
-                        match = re.match(r'part_(\d+).tar.lzo', partition_name)
-                        if not match:
-                            raise UserCritical(
-                                'Malformed tar partition in base backup',
-                                'The offensive line from s3cmd is ' + line)
-                        else:
-                            partition_number = int(match.group(1))
-                            assert partition_number not in partitions, \
-                                'Must not have duplicates'
-                            partitions.add(partition_number)
-                    else:
-                        raise UserCritical(
-                            'could not parse s3cmd output',
-                            'Could not find "s3://" in {0}'.format(line))
+    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size,
+                          list_retry, list_timeout,
+                          partition_retry, partition_timeout):
+        from boto.s3.connection import OrdinaryCallingFormat
+        from boto.s3.connection import S3Connection
 
-                # Verify that partitions look sane: they should be
-                # numbered contiguously from 0 to some number.
-                expected_partitions = set(xrange(max(partitions) + 1))
-                if partitions != expected_partitions:
-                    raise UserCritical(
-                        'some tar partitions are missing in the base backup',
-                        'The following is a list of missing partition '
-                        'numbers: ' +
-                        unicode(expected_partitions - partitions),
-                        'If this is a backup with a sentinel, S3 may be '
-                        'inconsistent -- try again later, and note how long '
-                        'it takes.  If not, there is a bug somewhere.')
-                else:
-                    assert expected_partitions == partitions
+        layout = s3_storage.StorageLayout(self.s3_prefix)
 
-                    for tpart_number in partitions:
-                        results.append(pool.apply_async(
-                                s3_worker.do_partition_get,
-                                [backup_s3_prefix, cluster_abspath,
-                                 tpart_number, s3cmd_config.name]))
+        s3_connections = []
+        for i in xrange(pool_size):
+            s3_connections.append(S3Connection(
+                    self.aws_access_key_id,
+                    self.aws_secret_access_key,
+                    calling_format=OrdinaryCallingFormat(),
+                    # TODO: Add https_connection_factory
+                    # with timeouts.  This is less
+                    # necessary with Boto 2.0b5, which is
+                    # yet to be released...
+                    ))
 
-                pool.close()
-            finally:
-                # Necessary in case finally block gets hit before
-                # .close()
-                pool.close()
+        bl = s3_worker.BackupList(s3_connections[0],
+                                  s3_storage.StorageLayout(self.s3_prefix),
+                                  detail=False, detail_retry=None,
+                                  detail_timeout=None,
+                                  list_retry=list_retry,
+                                  list_timeout=list_timeout)
 
-                while results:
-                    # XXX: Need timeout to work around Python bug:
-                    #
-                    # http://bugs.python.org/issue8296
-                    results.pop().get(1e100)
+        # If there is no query, return an exhaustive list, otherwise
+        # find a backup instad.
+        backups = list(bl.find_all(backup_name))
+        assert len(backups) <= 1
+        if len(backups) == 0:
+            raise UserException(
+                msg='no backups found for fetching',
+                detail='No backup matching the query {0} was able to be '
+                'located.'.format(backup_name))
+        elif len(backups) > 1:
+            raise UserException(
+                msg='more than one backup found for fetching',
+                detail='More than one backup matching the query {0} was able '
+                'to be located.'.format(backup_name),
+                hint='To list qualifying backups, '
+                'try "wal-e backup-list QUERY".')
 
-                pool.join()
+        # There must be exactly one qualifying backup at this point.
+        assert len(backups) == 1
+        backup_info = backups[0]
+        layout.basebackup_tar_partition_directory(backup_info)
 
+        partition_iter = s3_worker.TarPartitionLister(
+            s3_connections[0], layout, backup_info, list_retry, list_timeout)        
+
+        assert len(s3_connections) == pool_size
+        fetchers = []
+        for i in xrange(pool_size):
+            fetchers.append(s3_worker.BackupFetcher(
+                    s3_connections[i], layout, backup_info, pg_cluster_dir,
+                    partition_retry, partition_timeout))
+        assert len(fetchers) == pool_size
+
+        p = gevent.pool.Pool(size=pool_size)
+        fetcher_cycle = itertools.cycle(fetchers)
+        for part_name in partition_iter:
+            p.spawn(
+                self._exception_gather_guard(
+                    fetcher_cycle.next().fetch_partition),
+                part_name)
+
+        p.join(raise_error=True)            
 
     def database_s3_backup(self, *args, **kwargs):
         """
@@ -543,5 +505,3 @@ class S3Backup(object):
                          .format(ready_path=ready_path))
                 else:
                     raise
-
-

@@ -138,15 +138,31 @@ def main(argv=None):
                                          type=int, default=4,
                                          help='Download pooling size')
 
+    # Common arguments for backup-list and backup-fetch
+    #
+    # NB: This does not include the --detail options because some
+    # other commands use backup listing functionality in a way where
+    # --detail is never required.
+    backup_list_nodetail_parent = argparse.ArgumentParser(add_help=False)
+    backup_list_nodetail_parent.add_argument(
+        '--list-timeout', default=float(10), type=float, metavar='SECONDS',
+        help='how many seconds to wait before timing out an attempt to get '
+        'base backup list')
+    backup_list_nodetail_parent.add_argument(
+        '--list-retry', default=3, type=int, metavar='TIMES',
+        help='how many times to retry each pagination in listing backups')
+
+    # Common arguments between wal-push and wal-fetch
     wal_fetchpush_parent = argparse.ArgumentParser(add_help=False)
     wal_fetchpush_parent.add_argument('WAL_SEGMENT',
                                       help='Path to a WAL segment to upload')
 
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
-        parents=[backup_fetchpush_parent])
-    backup_list_parser = subparsers.add_parser('backup-list',
-                                               help='list backups in S3')
+        parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
+    backup_list_parser = subparsers.add_parser(
+        'backup-list', parents=[backup_list_nodetail_parent],
+        help='list backups in S3')
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3',
         parents=[backup_fetchpush_parent])
@@ -175,6 +191,15 @@ def main(argv=None):
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
+    backup_fetch_parser.add_argument('--partition-retry', type=int,
+                                     metavar='TIMES', default=3,
+                                     help='the number of times to retry '
+                                     'getting one tar partition')
+    backup_fetch_parser.add_argument(
+        '--partition-timeout', default=float(10), type=float,
+        metavar='SECONDS', help='how many seconds to wait before '
+        'timing out an attempt to get one tar partition')
+
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -190,14 +215,6 @@ def main(argv=None):
     backup_list_parser.add_argument(
         '--detail-retry', default=3, type=int, metavar='TIMES',
         help='how many times to retry getting details')
-    backup_list_parser.add_argument(
-        '--list-timeout', default=float(10), type=float, metavar='SECONDS',
-        help='how many seconds to wait before timing out an attempt to get '
-        'base backup list')
-    backup_list_parser.add_argument(
-        '--list-retry', default=3, type=int, metavar='TIMES',
-        help='how many times to retry each pagination in listing backups')
-
 
     # wal-push operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
@@ -235,9 +252,14 @@ def main(argv=None):
     try:
         if subcommand == 'backup-fetch':
             external_program_check([S3CMD_BIN, LZOP_BIN])
-            backup_cxt.database_s3_fetch(args.PG_CLUSTER_DIRECTORY,
-                                         args.BACKUP_NAME,
-                                         pool_size=args.pool_size)
+            backup_cxt.database_s3_fetch(
+                args.PG_CLUSTER_DIRECTORY,
+                args.BACKUP_NAME,
+                pool_size=args.pool_size,
+                list_retry=args.list_retry,
+                list_timeout=args.list_timeout,
+                partition_retry=args.partition_retry,
+                partition_timeout=args.partition_timeout)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY,
                                    detail=args.detail,
@@ -269,6 +291,17 @@ def main(argv=None):
             print >>sys.stderr, ('Subcommand {0} not implemented!'
                                  .format(subcommand))
             sys.exit(127)
+
+        # Report on all encountered exceptions, and raise the last one
+        # to take advantage of the final catch-all reporting and exit
+        # code management.
+        if backup_cxt.exceptions:
+            for exc in backup_cxt.exceptions[:-1]:
+                logger.log(level=exc.severity,
+                           msg=log_help.fmt_logline(exc.msg, exc.detail,
+                                                    exc.hint))
+            raise backup_cxt.exceptions[-1]
+
     except UserException, e:
         logger.log(level=e.severity,
                    msg=log_help.fmt_logline(e.msg, e.detail, e.hint))

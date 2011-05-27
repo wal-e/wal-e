@@ -19,7 +19,8 @@ import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.piper import pipe, pipe_wait, popen_sp
+from wal_e.log_help import fmt_logline
+from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
 from wal_e.worker import retry_iter
 
 
@@ -106,54 +107,6 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
              '/'.join([backup_s3_prefix, 'tar_partitions',
                        'part_{tpart_number}.tar.lzo'.format(
                             tpart_number=tpart_number)])])
-
-
-def do_partition_get(backup_s3_prefix, local_root, tpart_number,
-                     s3cmd_config_path):
-    tar = None
-    try:
-        popens = pipe(
-            dict(args=[S3CMD_BIN, '-c', s3cmd_config_path, 'get',
-                       '/'.join([backup_s3_prefix, 'tar_partitions',
-                                 'part_{0}.tar.lzo'.format(tpart_number)]),
-                       '-'],
-                 bufsize=BUFSIZE_HT),
-            dict(args=[LZOP_BIN, '-d', '--stdout'], stdout=subprocess.PIPE,
-                 bufsize=BUFSIZE_HT))
-
-        assert len(popens) > 0
-        tar = tarfile.open(mode='r|', fileobj=popens[-1].stdout)
-        tar.extractall(local_root)
-        tar.close()
-        popens[-1].stdout.close()
-
-        pipe_wait(popens)
-
-        s3cmd_proc, lzop_proc = popens
-
-        def check_exitcode(cmdname, popen):
-            if popen.returncode != 0:
-                raise UserException(
-                    'downloading a tarfile cluster partition has failed',
-                    cmdname + ' terminated with exit code: ' +
-                    unicode(s3cmd_proc.returncode))
-
-        check_exitcode('s3cmd', s3cmd_proc)
-        check_exitcode('lzop', lzop_proc)
-    except KeyboardInterrupt, keyboard_int:
-        for popen in popens:
-            try:
-                popen.send_signal(signal.SIGINT)
-                popen.wait()
-            except OSError, e:
-                # ESRCH aka "no such process"
-                if e.errno != errno.ESRCH:
-                    raise
-
-        raise keyboard_int
-    finally:
-        if tar is not None:
-            tar.close()
 
 
 def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
@@ -261,7 +214,145 @@ def bucket_lister(bucket, retry_count, timeout_seconds,
             yield k
         if k:
             marker = k.name
-        more_results= rs.is_truncated
+        more_results = rs.is_truncated
+
+
+class StreamLzoDecompressionPipeline(object):
+    def __init__(self):
+        # NB: This strategy works semi-reasonably because popen_sp
+        # uses nonblocking pipes, and thus 'write' does not block and
+        # uses greenlet to yield.
+        self._decompression_p = popen_sp(
+            [LZOP_BIN, '-d', '--stdout', '-'],
+            stdin=PIPE, stdout=PIPE,
+            bufsize=BUFSIZE_HT)
+
+    @property
+    def input_fp(self):
+        return self._decompression_p.stdin
+
+    @property
+    def output_fp(self):
+        return self._decompression_p.stdout
+
+    def finish(self):
+        retcode = self._decompression_p.wait()
+        self.output_fp.close()
+
+        assert self.input_fp.closed
+        assert self.output_fp.closed
+        if retcode != 0:
+            logger.info(fmt_logline(
+                    msg='decompression process did not exit gracefully',
+                    detail='"lzop" had terminated with the exit status {0}.'
+                    .format(retcode)))
+
+
+class TarPartitionLister(object):
+    def __init__(self, s3_conn, layout, backup_info, list_retry, list_timeout):
+        self.s3_conn = s3_conn
+        self.layout = layout
+        self.backup_info = backup_info
+        self.list_retry = list_retry
+        self.list_timeout = list_timeout
+
+    def __iter__(self):
+        prefix = self.layout.basebackup_tar_partition_directory(
+            self.backup_info)
+
+        # XXX: seen elsewhere, factor this out
+        bucket = None
+        for i in retry_iter(self.list_retry):
+            with gevent.Timeout(self.list_timeout, False) as timeout:
+                bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+
+        for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
+                                 prefix=prefix):
+            yield key.name.rsplit('/', 1)[-1]
+
+
+class BackupFetcher(object):
+    def __init__(self, s3_conn, layout, backup_info, local_root,
+                 partition_retry, partition_timeout):
+        self.s3_conn = s3_conn
+        self.layout = layout
+        self.local_root = local_root
+        self.backup_info = backup_info
+        self.partition_retry = partition_retry
+        self.partition_timeout = partition_timeout
+
+        # XXX: seen elsewhere, factor this out
+        self.bucket = None
+        for i in retry_iter(self.partition_retry):
+            with gevent.Timeout(self.partition_timeout, False) as timeout:
+                self.bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+            if self.bucket is not None:
+                break
+
+        if self.bucket is None:
+            raise UserError(msg='could not verify S3 bucket')
+
+    def _write_and_close(self, key, lzod):
+        try:
+            key.get_contents_to_file(lzod.input_fp)
+        finally:
+            lzod.input_fp.flush()
+            lzod.input_fp.close()
+
+    def fetch_partition(self, partition_name):
+        part_abs_name = self.layout.basebackup_tar_partition(
+            self.backup_info, partition_name)
+
+        for i in retry_iter(self.partition_retry):
+            logger.info(fmt_logline(
+                    msg='beginning partition download',
+                    detail='The partition being downloaded is {0}.'
+                    .format(partition_name),
+                    hint='The absolute S3 key is {0}.'.format(part_abs_name)))
+            try:
+                with gevent.Timeout(self.partition_timeout) as timeout:
+                    key = self.bucket.get_key(part_abs_name)
+            except gevent.Timeout:
+                continue
+
+            if key is None:
+                raise UserCritical(
+                    msg='expected tar partition not found',
+                    detail='The tar partition "{0}" could '
+                    'not be located.'.format(part_abs_name))
+
+            good = False
+            try:
+                lzod = StreamLzoDecompressionPipeline()
+                g = gevent.spawn(self._write_and_close, key, lzod)
+                tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
+
+                # TODO: replace with per-member file handling,
+                # extractall very much warned against in the docs, and
+                # seems to have changed between Python 2.6 and Python
+                # 2.7.
+                tar.extractall(self.local_root)
+                tar.close()
+
+                # Raise any exceptions from self._write_and_close
+                g.get()
+
+                # Blocks on lzo exiting and raises an exception if the
+                # exit status it non-zero.
+                lzod.finish()
+                good = True
+            finally:
+                if good:
+                    return
+                else:
+                    assert not good
+                    logger.info(fmt_logline(
+                            msg='retrying partition download',
+                            detail='The partition being downloaded is {0}.'
+                            .format(partition_name)))
+
+        raise UserCritical(msg='failed to download partition {0}'
+                           .format(partition_name))
 
 
 class BackupList(object):

@@ -64,13 +64,23 @@ class StorageLayout(object):
     def basebackups(self):
         return self._s3_api_prefix + '/basebackups_' + self.VERSION
 
-    def basebackup_directory(self, wal_file_name, wal_file_offset):
+    def basebackup_directory(self, backup_info):
         return (self.basebackups() +
-                '/base_{0}_{1}'.format(wal_file_name, wal_file_offset))
+                '/base_{0}_{1}'.format(
+                backup_info.wal_segment_backup_start,
+                backup_info.wal_segment_offset_backup_start))
 
-    def basebackup_sentinel(self, wal_file_name, wal_file_offset):
-        return (self.basebackup_directory(wal_file_name, wal_file_offset) +
+    def basebackup_sentinel(self, backup_info):
+        return (self.basebackup_directory(backup_info) +
                 '_backup_stop_sentinel.json')
+
+    def basebackup_tar_partition_directory(self, backup_info):
+        return (self.basebackup_directory(backup_info) +
+                '/tar_partitions')
+
+    def basebackup_tar_partition(self, backup_info, part_name):
+        return (self.basebackup_tar_partition_directory(backup_info) +
+                '/' + part_name)
 
     def wal_directory(self):
         return self._s3_api_prefix + '/wal_' + self.VERSION
