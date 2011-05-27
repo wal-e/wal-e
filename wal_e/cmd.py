@@ -129,7 +129,7 @@ def main(argv=None):
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
-    # Common options for backup-fetch and backup-push
+    # Common arguments for backup-fetch and backup-push
     backup_fetchpush_parent = argparse.ArgumentParser(add_help=False)
     backup_fetchpush_parent.add_argument('PG_CLUSTER_DIRECTORY',
                                          help="Postgres cluster path, "
