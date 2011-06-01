@@ -18,6 +18,14 @@ import sys
 from subprocess import PIPE
 from cStringIO import StringIO
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# This is a brutal hack to make WAL-E usable while its operators are
+# in a transition phase between boto with nonblocking and regular
+# fork-worker based s3cmd.  In particular, the forked workers set
+# BRUTAL_AVOID_NONBLOCK_HACK to True, thus avoiding the
+# NonBlockPipeFileWrap wrapper around process pipes entirely.
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+BRUTAL_AVOID_NONBLOCK_HACK = False
 
 class NonBlockPipeFileWrap(object):
     def __init__(self, fp):
@@ -122,7 +130,7 @@ def popen_sp(*args, **kwargs):
     # to the gevent hub.
     for fp_symbol in ['stdin', 'stdout', 'stderr']:
         value = getattr(proc, fp_symbol)
-        if value is not None:
+        if value is not None and not BRUTAL_AVOID_NONBLOCK_HACK:
             setattr(proc, fp_symbol, NonBlockPipeFileWrap(value))
 
     return proc

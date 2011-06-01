@@ -80,6 +80,9 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
     for testing and experimentation.
 
     """
+    import wal_e.piper
+    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
+
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf,
@@ -117,6 +120,9 @@ def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
     for testing and experimentation.
 
     """
+    import wal_e.piper
+    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
+
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf,
                                  bufsize=BUFSIZE_HT)
@@ -144,6 +150,8 @@ def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
     never stored on disk.
 
     """
+    import wal_e.piper
+    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
 
     assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
 
