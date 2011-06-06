@@ -477,7 +477,7 @@ class S3Backup(object):
                 assert ready_path.endswith(suffix)
                 archivee_name = os.path.basename(ready_path)[:-len(suffix)]
                 self.wal_s3_archive(os.path.join(xlog_dir, archivee_name))
-            except OSError, e:
+            except EnvironmentError, e:
                 if e.errno == errno.ENOENT:
                     raise UserException(
                         'wal_fark could not read a file'
@@ -495,7 +495,7 @@ class S3Backup(object):
                 done_path = os.path.join(os.path.dirname(ready_path),
                                          archivee_name + '.done')
                 os.rename(ready_path, done_path)
-            except OSError, e:
+            except EnvironmentError, e:
                 if e.errno == errno.ENOENT:
                     print >>sys.stderr, \
                         ('Archive status file {ready_path} no longer '
