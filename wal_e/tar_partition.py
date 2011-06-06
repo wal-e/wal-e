@@ -126,7 +126,7 @@ class TarPartition(list):
                 else:
                     tar.addfile(et_info.tarinfo, raw_file)
 
-        except OSError, e:
+        except EnvironmentError, e:
             if (e.errno == errno.ENOENT and
                 e.filename == et_info.submitted_path):
                 # log a NOTICE/INFO that the file was unlinked.
