@@ -298,7 +298,7 @@ class BackupFetcher(object):
                 break
 
         if self.bucket is None:
-            raise UserError(msg='could not verify S3 bucket')
+            raise UserException(msg='could not verify S3 bucket')
 
     def _write_and_close(self, key, lzod):
         try:
