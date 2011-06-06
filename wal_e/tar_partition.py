@@ -124,7 +124,9 @@ class TarPartition(list):
                                           et_info.tarinfo.size) as f:
                         tar.addfile(et_info.tarinfo, f)
                 else:
-                    tar.addfile(et_info.tarinfo, raw_file)
+                    with StreamPadFileObj(raw_file,
+                                          et_info.tarinfo.size) as f:
+                        tar.addfile(et_info.tarinfo, f)
 
         except EnvironmentError, e:
             if (e.errno == errno.ENOENT and
