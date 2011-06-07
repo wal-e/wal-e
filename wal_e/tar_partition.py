@@ -206,12 +206,23 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
             assert file_path.startswith(root)
             assert root.endswith(os.path.sep)
 
-            et_info = ExtendedTarInfo(
-                tarinfo=bogus_tar.gettarinfo(
-                    file_path, arcname=file_path[len(root):]),
-                submitted_path=file_path)
+            try:
+                et_info = ExtendedTarInfo(
+                    tarinfo=bogus_tar.gettarinfo(
+                        file_path, arcname=file_path[len(root):]),
+                    submitted_path=file_path)
 
-            et_infos.append(et_info)
+                et_infos.append(et_info)
+            except EnvironmentError, e:
+                if (e.errno == errno.ENOENT and
+                    e.filename == file_path):
+                    # log a NOTICE/INFO that the file was unlinked.
+                    # Ostensibly harmless (such unlinks should be replayed
+                    # in the WAL) but good to know.
+                    print >>sys.stderr, 'skipping unlinked file'
+                    print >>sys.stderr, 'unlinked path: ' + et_info.submitted_path
+                else:
+                    raise
     finally:
         if bogus_tar is not None:
             bogus_tar.close()
