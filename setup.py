@@ -18,7 +18,7 @@ v.close()
 import sys
 
 
-install_requires = ['gevent>=0.13.0', 'boto>=2.0b4']
+install_requires = ['gevent>=0.13.0', 'boto>=2.0']
 
 if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
