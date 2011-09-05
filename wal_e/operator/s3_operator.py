@@ -270,6 +270,15 @@ class S3Backup(object):
     def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size,
                           list_retry, list_timeout,
                           partition_retry, partition_timeout):
+
+        if os.path.exists(os.path.join(pg_cluster_dir, 'postmaster.pid')):
+            raise UserException(
+                msg='attempting to overwrite a live data directory',
+                detail='Found a postmaster.pid lockfile, and aborting',
+                hint='Shut down postgres. If there is a stale lockfile, '
+                'then remove it after being very sure postgres is not '
+                'running.')
+
         from boto.s3.connection import OrdinaryCallingFormat
         from boto.s3.connection import S3Connection
 
