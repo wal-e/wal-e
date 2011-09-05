@@ -1,7 +1,7 @@
 WAL-E Disaster Recovery
 =======================
 
-WAL-E is a program designed perform continuous archiving of PostgreSQL
+WAL-E is a program designed to perform continuous archiving of PostgreSQL
 WAL files and manage the use of pg_start_backup and pg_stop_backup.
 It has four critical operators:
 
@@ -26,7 +26,7 @@ With the exception of AWS_SECRET_ACCESS_KEY, all of these can be
 specified as arguments as well.  The AWS_* variables are the standard
 access-control keying system provided by Amazon.
 
-The WALE_S3_PREFIX can be thought of a context whereby this program
+The WALE_S3_PREFIX can be thought of as a context whereby this program
 operates on a single database cluster at a time.  Generally, for any
 one database the WALE_S3_PREFIX will be the same between all four
 operators.  This context-driven approach attempts to help users avoid
@@ -67,7 +67,7 @@ Sending a WAL segment to S3::
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
 
 It is generally recommended that one use some sort of environment
-variable management with WAL-E: working with it this way less verbose,
+variable management with WAL-E: working with it this way is less verbose,
 less prone to error, and less likely to expose secret information in
 logs.
 
