@@ -298,13 +298,14 @@ def main(argv=None):
         if backup_cxt.exceptions:
             for exc in backup_cxt.exceptions[:-1]:
                 logger.log(level=exc.severity,
-                           msg=log_help.fmt_logline(exc.msg, exc.detail,
-                                                    exc.hint))
+                           msg=log_help.WalELogger
+                           .fmt_logline(exc.msg, exc.detail, exc.hint))
             raise backup_cxt.exceptions[-1]
 
     except UserException, e:
         logger.log(level=e.severity,
-                   msg=log_help.fmt_logline(e.msg, e.detail, e.hint))
+                   msg=log_help.WalELogger
+                   .fmt_logline(e.msg, e.detail, e.hint))
         sys.exit(1)
 
 if __name__ == "__main__":

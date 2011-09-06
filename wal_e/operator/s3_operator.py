@@ -30,7 +30,7 @@ from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
 from wal_e.worker.s3_worker import check_call_wait_sigint
 
 
-logger = log_help.get_logger(__name__)
+logger = log_help.WalELogger(__name__)
 
 
 # Provides guidence in object names as to the version of the file
@@ -371,11 +371,10 @@ class S3Backup(object):
         finally:
             if not upload_good:
                 logger.warning(
-                    log_help.fmt_logline(
-                        'blocking on sending WAL segments',
-                        'The backup was not completed successfully, '
-                        'but we have to wait anyway.  '
-                        'See README: TODO about pg_cancel_backup'))
+                    'blocking on sending WAL segments',
+                    detail=('The backup was not completed successfully, '
+                            'but we have to wait anyway.  '
+                            'See README: TODO about pg_cancel_backup'))
 
             stop_backup_info = PgBackupStatements.run_stop_backup()
             backup_stop_good = True

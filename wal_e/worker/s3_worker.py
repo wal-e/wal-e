@@ -19,12 +19,11 @@ import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.log_help import fmt_logline
 from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
 from wal_e.worker import retry_iter
 
 
-logger = log_help.get_logger(__name__)
+logger = log_help.WalELogger(__name__)
 
 
 LZOP_BIN = 'lzop'
@@ -250,10 +249,10 @@ class StreamLzoDecompressionPipeline(object):
         assert self.input_fp.closed
         assert self.output_fp.closed
         if retcode != 0:
-            logger.info(fmt_logline(
-                    msg='decompression process did not exit gracefully',
-                    detail='"lzop" had terminated with the exit status {0}.'
-                    .format(retcode)))
+            logger.info(
+                msg='decompression process did not exit gracefully',
+                detail='"lzop" had terminated with the exit status {0}.'
+                .format(retcode))
 
 
 class TarPartitionLister(object):
@@ -312,11 +311,11 @@ class BackupFetcher(object):
             self.backup_info, partition_name)
 
         for i in retry_iter(self.partition_retry):
-            logger.info(fmt_logline(
-                    msg='beginning partition download',
-                    detail='The partition being downloaded is {0}.'
-                    .format(partition_name),
-                    hint='The absolute S3 key is {0}.'.format(part_abs_name)))
+            logger.info(
+                msg='beginning partition download',
+                detail='The partition being downloaded is {0}.'
+                .format(partition_name),
+                hint='The absolute S3 key is {0}.'.format(part_abs_name))
             try:
                 with gevent.Timeout(self.partition_timeout) as timeout:
                     key = self.bucket.get_key(part_abs_name)
@@ -354,10 +353,10 @@ class BackupFetcher(object):
                     return
                 else:
                     assert not good
-                    logger.info(fmt_logline(
-                            msg='retrying partition download',
-                            detail='The partition being downloaded is {0}.'
-                            .format(partition_name)))
+                    logger.info(
+                        msg='retrying partition download',
+                        detail='The partition being downloaded is {0}.'
+                        .format(partition_name))
 
         raise UserCritical(msg='failed to download partition {0}'
                            .format(partition_name))
