@@ -430,12 +430,13 @@ class S3Backup(object):
         """
         wal_file_name = os.path.basename(wal_path)
 
-        with self.s3cmd_temp_config as s3cmd_config:
-            s3_worker.do_lzop_s3_put(
-                '{0}/wal_{1}/{2}'.format(self.s3_prefix,
-                                         FILE_STRUCTURE_VERSION,
-                                         wal_file_name),
-                wal_path, s3cmd_config.name)
+        # It's okay-ish for this to blow up in event of problems:
+        # Postgres will retry archiving *forever*
+        s3_worker.do_lzop_s3_put(
+            '{0}/wal_{1}/{2}'.format(self.s3_prefix,
+                                     FILE_STRUCTURE_VERSION,
+                                     wal_file_name),
+            wal_path)
 
     def wal_s3_restore(self, wal_name, wal_destination):
         """

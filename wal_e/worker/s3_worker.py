@@ -5,15 +5,19 @@ These are functions that are amenable to be called from other modules,
 with the intention that they are used in forked worker processes.
 
 """
+import boto
 import errno
 import gevent
 import json
+import logging
+import os
 import re
 import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
@@ -111,34 +115,52 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
                             tpart_number=tpart_number)])])
 
 
-def do_lzop_s3_put(s3_url, path, s3cmd_config_path):
+def do_lzop_s3_put(s3_url, local_path):
     """
-    Synchronous version of the s3-upload wrapper
+    Compress and upload a given local path.
 
-    Nominally intended to be used through a pool, but exposed here
-    for testing and experimentation.
+    :type s3_url: string
+    :param s3_url: A s3://bucket/key style URL that is the destination
+
+    :type local_path: string
+    :param local_path: a path to a file to be compressed
 
     """
-    import wal_e.piper
-    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
-
-    with tempfile.NamedTemporaryFile(mode='w') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout', path], stdout=tf,
+    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        compression_p = popen_sp([LZOP_BIN, '--stdout', local_path], stdout=tf,
                                  bufsize=BUFSIZE_HT)
         compression_p.wait()
 
         if compression_p.returncode != 0:
             raise UserCritical(
-                'could not properly compress heap file',
-                'the heap file is at {path}'.format(path=path))
+                'could not properly compress file',
+                'the file is at {path}'.format(path=path))
 
-        # Not to be confused with fsync: the point is to make
-        # sure any Python-buffered output is visible to other
-        # processes, but *NOT* force a write to disk.
         tf.flush()
+        upload_size = os.path.getsize(tf.name)
 
-        check_call_wait_sigint([S3CMD_BIN, '-c', s3cmd_config_path,
-                                'put', tf.name, s3_url + '.lzo'])
+        clock_start = time.clock()
+        logger.info(msg='begin archiving a file',
+                    detail=('Archived {upload_size} bytes to "{s3_url}" '
+                            'from the source file "{local_path}".')
+                    .format(**locals()))
+
+        # XXX: disable validation as a kludge to get around use of
+        # upper-case bucket names.
+        suri = boto.storage_uri(s3_url, validate=False)
+        k = suri.new_key()
+
+        tf.seek(0)
+        k.set_contents_from_file(tf)
+        clock_finish = time.clock()
+
+        logger.info(
+            msg='completed archiving to a file ',
+            detail=('Archiving to "{s3_url}" complete at '
+                    '{kib_per_second:02g}KiB/s. ')
+            .format(s3_url=s3_url,
+                    kib_per_second=
+                    (upload_size / 1024) / (clock_finish - clock_start)))
 
 
 def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
