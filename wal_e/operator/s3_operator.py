@@ -204,7 +204,7 @@ class S3Backup(object):
             per_process_limit = int(rate_limit / pool_size)
 
         # Reject tiny per-process rate limits.  They should be
-        # rejected more nicely elsewher.
+        # rejected more nicely elsewhere.
         assert per_process_limit > 0 or per_process_limit is None
 
         # a list to accumulate async upload jobs
