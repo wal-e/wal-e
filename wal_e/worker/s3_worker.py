@@ -74,8 +74,7 @@ def check_call_wait_sigint(*popenargs, **kwargs):
                 return wait_sigint_proc.returncode
 
 
-def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
-                     s3cmd_config_path):
+def do_partition_put(backup_s3_prefix, tpart, rate_limit, s3cmd_config_path):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -96,12 +95,12 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
         compression_p.wait()
         if compression_p.returncode != 0:
             raise UserCritical(
-                'could not properly compress tar partition',
-                'The partition failed is {tpart_number}.  '
+                'could not properly compress tar',
+                'The volume that failed is {volume}.  '
                 'It has the following manifest:\n  '
                 '{error_manifest}'
                 .format(error_manifest=tpart.format_manifest(),
-                        tpart_number=tpart_number))
+                        volume=tpart.name))
 
         # Not to be confused with fsync: the point is to make
         # sure any Python-buffered output is visible to other
@@ -111,8 +110,8 @@ def do_partition_put(backup_s3_prefix, tpart_number, tpart, rate_limit,
         check_call_wait_sigint(
             [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
              '/'.join([backup_s3_prefix, 'tar_partitions',
-                       'part_{tpart_number}.tar.lzo'.format(
-                            tpart_number=tpart_number)])])
+                       'part_{volume}.tar.lzo'.format(
+                            volume=tpart.name)])])
 
 
 def do_lzop_s3_put(s3_url, local_path):

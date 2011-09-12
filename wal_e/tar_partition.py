@@ -111,6 +111,10 @@ ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
 
 class TarPartition(list):
 
+    def __init__(self, name, *args, **kwargs):
+        self.name = name
+        list.__init__(self, *args, **kwargs)
+
     @staticmethod
     def _padded_tar_add(tar, et_info, rate_limit=None):
         try:
@@ -238,7 +242,9 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
 
     # Start actual partitioning pass
     partition_bytes = 0
-    current_partition = TarPartition()
+
+    current_partition_number = 0
+    current_partition = TarPartition(current_partition_number)
 
     for et_info in et_infos:
         # Size of members must be enforced elsewhere.
@@ -249,7 +255,8 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
 
             # Prepare a fresh partition.
             partition_bytes = et_info.tarinfo.size
-            current_partition = TarPartition([et_info])
+            current_partition = TarPartition(
+                current_partition_number, [et_info])
         else:
             partition_bytes += et_info.tarinfo.size
             current_partition.append(et_info)
