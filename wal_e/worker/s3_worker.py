@@ -27,7 +27,7 @@ from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
 from wal_e.worker import retry_iter
 
 
-logger = log_help.WalELogger(__name__)
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 LZOP_BIN = 'lzop'

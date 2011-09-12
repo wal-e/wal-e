@@ -35,11 +35,9 @@ from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
 
 # TODO: Make controllable from userland
 log_help.configure(
-    level=logging.INFO,
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 
-logger = log_help.get_logger('wal_e.main')
-
+logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
 def external_program_check(
     to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN])):

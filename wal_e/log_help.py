@@ -77,7 +77,15 @@ def configure(*args, **kwargs):
 
 class WalELogger(object):
     def __init__(self, *args, **kwargs):
+        # Enable a shortcut to create the logger and set its level all
+        # at once.  To do that, pop the level out of the dictionary,
+        # which will otherwise cause getLogger to explode.
+        level = kwargs.pop('level', None)
+
         self._logger = logging.getLogger(*args, **kwargs)
+
+        if level is not None:
+            self._logger.setLevel(level)
 
     @staticmethod
     def fmt_logline(msg, detail=None, hint=None):
@@ -116,8 +124,3 @@ class WalELogger(object):
         self.log(logging.CRITICAL, *args, **kwargs)
 
     # End convenience shims
-
-def get_logger(*args, **kwargs):
-    return logging.getLogger(*args, **kwargs)
-
-

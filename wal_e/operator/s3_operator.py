@@ -30,7 +30,7 @@ from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
 from wal_e.worker.s3_worker import check_call_wait_sigint
 
 
-logger = log_help.WalELogger(__name__)
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 # Provides guidence in object names as to the version of the file
