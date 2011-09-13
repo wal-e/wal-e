@@ -31,7 +31,6 @@ logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 LZOP_BIN = 'lzop'
-S3CMD_BIN = 's3cmd'
 MBUFFER_BIN = 'mbuffer'
 
 
@@ -42,50 +41,26 @@ MBUFFER_BIN = 'mbuffer'
 BUFSIZE_HT = 128 * 8192
 
 
-def check_call_wait_sigint(*popenargs, **kwargs):
-    got_sigint = False
-    wait_sigint_proc = None
+def uri_put_file(s3_uri, fp, content_encoding=None):
 
-    try:
-        wait_sigint_proc = popen_sp(*popenargs, **kwargs)
-    except KeyboardInterrupt, e:
-        got_sigint = True
-        if wait_sigint_proc is not None:
-            wait_sigint_proc.send_signal(signal.SIGINT)
-            wait_sigint_proc.wait()
-            raise e
-    finally:
-        if wait_sigint_proc and not got_sigint:
-            wait_sigint_proc.wait()
+    # XXX: disable validation as a kludge to get around use of
+    # upper-case bucket names.
+    suri = boto.storage_uri(s3_uri, validate=False)
+    k = suri.new_key()
 
-            if wait_sigint_proc.returncode != 0:
-                # Try to identify the argv sent via 'popenargs' and
-                # kwargs sent to subprocess.Popen: this can be sent
-                # positionally, or in the form of kwargs.
-                if len(popenargs) > 0:
-                    raise subprocess.CalledProcessError(
-                        wait_sigint_proc.returncode, popenargs[0])
-                elif 'args' in kwargs:
-                    raise subprocess.CalledProcessError(
-                        wait_sigint_proc.returncode, kwargs['args'])
-                else:
-                    assert False
-            else:
-                return wait_sigint_proc.returncode
+    if content_encoding is not None:
+        k.content_type = content_encoding
+
+    k.set_contents_from_file(fp)
+    return k
 
 
-def do_partition_put(backup_s3_prefix, tpart, rate_limit, s3cmd_config_path):
+def do_partition_put(backup_s3_prefix, tpart, rate_limit):
     """
     Synchronous version of the s3-upload wrapper
 
-    Nominally intended to be used through a pool, but exposed here
-    for testing and experimentation.
-
     """
-    import wal_e.piper
-    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
-
-    with tempfile.NamedTemporaryFile(mode='w') as tf:
+    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf,
                                  bufsize=BUFSIZE_HT)
@@ -101,17 +76,29 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, s3cmd_config_path):
                 '{error_manifest}'
                 .format(error_manifest=tpart.format_manifest(),
                         volume=tpart.name))
-
-        # Not to be confused with fsync: the point is to make
-        # sure any Python-buffered output is visible to other
-        # processes, but *NOT* force a write to disk.
         tf.flush()
 
-        check_call_wait_sigint(
-            [S3CMD_BIN, '-c', s3cmd_config_path, 'put', tf.name,
-             '/'.join([backup_s3_prefix, 'tar_partitions',
-                       'part_{volume}.tar.lzo'.format(
-                            volume=tpart.name)])])
+
+        s3_url = '/'.join([backup_s3_prefix, 'tar_partitions',
+                           'part_{number}.tar.lzo'
+                           .format(number=tpart.name)])
+
+        logger.info(
+            msg='begin uploading a base backup volume',
+            detail=('Uploading to "{s3_url}".')
+            .format(s3_url=s3_url))
+
+        clock_start = time.clock()
+        k = uri_put_file(s3_url, tf)
+        clock_finish = time.clock()
+
+        logger.info(
+            msg='finish uploading a base backup volume',
+            detail=('Uploading to "{s3_url}" complete at '
+                    '{kib_per_second:02g}KiB/s. ')
+            .format(s3_url=s3_url,
+                    kib_per_second=
+                    (k.size / 1024) / (clock_finish - clock_start)))
 
 
 def do_lzop_s3_put(s3_url, local_path):
@@ -136,21 +123,13 @@ def do_lzop_s3_put(s3_url, local_path):
                 'the file is at {path}'.format(path=path))
 
         tf.flush()
-        upload_size = os.path.getsize(tf.name)
+
+        logger.info(msg='begin archiving a file',
+                    detail=('Uploading "{local_path}" to "{s3_url}".'
+                            .format(**locals())))
 
         clock_start = time.clock()
-        logger.info(msg='begin archiving a file',
-                    detail=('Archived {upload_size} bytes to "{s3_url}" '
-                            'from the source file "{local_path}".')
-                    .format(**locals()))
-
-        # XXX: disable validation as a kludge to get around use of
-        # upper-case bucket names.
-        suri = boto.storage_uri(s3_url, validate=False)
-        k = suri.new_key()
-
-        tf.seek(0)
-        k.set_contents_from_file(tf)
+        k = uri_put_file(s3_url, tf)
         clock_finish = time.clock()
 
         logger.info(
@@ -159,60 +138,46 @@ def do_lzop_s3_put(s3_url, local_path):
                     '{kib_per_second:02g}KiB/s. ')
             .format(s3_url=s3_url,
                     kib_per_second=
-                    (upload_size / 1024) / (clock_finish - clock_start)))
+                    (k.size / 1024) / (clock_finish - clock_start)))
 
 
-def do_lzop_s3_get(s3_url, path, s3cmd_config_path):
+def do_lzop_s3_get(s3_url, path):
     """
     Get and decompress a S3 URL
 
-    This streams the s3cmd directly to lzop; the compressed version is
-    never stored on disk.
+    This streams the content directly to lzop; the compressed version
+    is never stored on disk.
 
     """
-    import wal_e.piper
-    wal_e.piper.BRUTAL_AVOID_NONBLOCK_HACK = True
-
     assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
 
-    with open(path, 'wb') as decomp_out:
-        popens = []
-
+    # XXX: Refactor: copied out of BackupFetcher, so that's a pity...
+    def _write_and_close(self, key, lzod):
         try:
-            popens = pipe(
-                dict(args=[S3CMD_BIN, '-c', s3cmd_config_path,
-                           'get', s3_url, '-'],
-                     bufsize=BUFSIZE_HT),
-                dict(args=[LZOP_BIN, '-d'], stdout=decomp_out,
-                     bufsize=BUFSIZE_HT))
-            pipe_wait(popens)
+            key.get_contents_to_file(lzod.input_fp)
+        finally:
+            lzod.input_fp.flush()
+            lzod.input_fp.close()
 
-            s3cmd_proc, lzop_proc = popens
+    with open(path, 'wb') as decomp_out:
+        suri = boto.storage_uri(s3_url, validate=False)
+        key = suri.get_key()
 
-            def check_exitcode(cmdname, popen):
-                if popen.returncode != 0:
-                    raise UserException(
-                        'downloading a wal file has failed',
-                        cmdname + ' terminated with exit code: ' +
-                        unicode(s3cmd_proc.returncode))
+        lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
+        g = gevent.spawn(self._write_and_close, key, lzod)
+        key.get_contents_to_file(lzod.input_fp)
 
-            check_exitcode('s3cmd', s3cmd_proc)
-            check_exitcode('lzop', lzop_proc)
+        # Raise any exceptions from self._write_and_close
+        g.get()
 
-            print >>sys.stderr, ('Got and decompressed file: '
-                                 '{s3_url} to {path}'
-                                 .format(**locals()))
-        except KeyboardInterrupt, keyboard_int:
-            for popen in popens:
-                try:
-                    popen.send_signal(signal.SIGINT)
-                    popen.wait()
-                except OSError, e:
-                    # ESRCH aka "no such process"
-                    if e.errno != errno.ESRCH:
-                        raise e
+        # Blocks on lzo exiting and raises an exception if the
+        # exit status it non-zero.
+        lzod.finish()
 
-            raise keyboard_int
+        logger.info(
+            msg='completed download and decompression',
+            detail='Downloaded and decompressed "{s3_url}" to "{path}"'
+            .format(s3_url=s3_url, path=path))
 
 
 def bucket_lister(bucket, retry_count, timeout_seconds,
@@ -246,13 +211,10 @@ def bucket_lister(bucket, retry_count, timeout_seconds,
 
 
 class StreamLzoDecompressionPipeline(object):
-    def __init__(self):
-        # NB: This strategy works semi-reasonably because popen_sp
-        # uses nonblocking pipes, and thus 'write' does not block and
-        # uses greenlet to yield.
+    def __init__(self, stdin=PIPE, stdout=PIPE):
         self._decompression_p = popen_sp(
             [LZOP_BIN, '-d', '--stdout', '-'],
-            stdin=PIPE, stdout=PIPE,
+            stdin=stdin, stdout=stdout,
             bufsize=BUFSIZE_HT)
 
     @property

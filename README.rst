@@ -208,22 +208,10 @@ TODO
 * Sane error messages, such as on Ctrl-C or during errors.
 * Pipeline-WAL-Segment Management: S3 ACK is long enough that a
   totally non-pipelined, non-parallel archive_command can fall behind.
-* Eliminate some copy-pasta from interrupt-processing with
-  multiprocessing pools
 * Eliminate copy-pasta in formatting URLs for getting/putting things
 * do_lzop_s3_get do_lzop_s3_push, do_partition_put, do_partition_get
   should probably share more code, since they take common arguments.
-* Write a new class to handle addressing paths of a WAL-E context: its
-  base backups and WAL segments.
 * Verify Tar paths instead of using tarfile.extractall()
-* Handle shrinking files gracefully (growing files are already handled
-  gracefully).  This is because the tarfile module's copyfileobj
-  procedure raises an exception if the file has been truncated.
-  Unfortunately the best solution I can see is to cook up a custom
-  tarfile.addfile() equivalent.
-* Handle unlinked-file race conditions gracefully
-* Consider replacing s3cmd with boto, as metadata checking
-  requirements become more elaborate.
 * For small databases, the --cluster-rate-limit feature will
   over-restrict the amount of disk bandwidth used: the number provided
   by the user is divided by the number of processes that can

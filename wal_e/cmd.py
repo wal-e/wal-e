@@ -31,7 +31,7 @@ from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
-from wal_e.worker.s3_worker import LZOP_BIN, S3CMD_BIN, MBUFFER_BIN
+from wal_e.worker.s3_worker import LZOP_BIN, MBUFFER_BIN
 
 # TODO: Make controllable from userland
 log_help.configure(
@@ -40,7 +40,7 @@ log_help.configure(
 logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
 def external_program_check(
-    to_check=frozenset([PSQL_BIN, LZOP_BIN, S3CMD_BIN, MBUFFER_BIN])):
+    to_check=frozenset([PSQL_BIN, LZOP_BIN, MBUFFER_BIN])):
     """
     Validates the existence and basic working-ness of other programs
 
@@ -249,7 +249,7 @@ def main(argv=None):
 
     try:
         if subcommand == 'backup-fetch':
-            external_program_check([S3CMD_BIN, LZOP_BIN])
+            external_program_check([LZOP_BIN])
             backup_cxt.database_s3_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
@@ -266,7 +266,7 @@ def main(argv=None):
                                    list_retry=args.list_retry,
                                    list_timeout=args.list_timeout)
         elif subcommand == 'backup-push':
-            external_program_check([S3CMD_BIN, LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
+            external_program_check([LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
             rate_limit = args.rate_limit
             if rate_limit is not None and rate_limit < 8192:
                 print >>sys.stderr, ('--cluster-read-rate-limit must be a '
@@ -277,14 +277,11 @@ def main(argv=None):
                 args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
-            external_program_check([S3CMD_BIN, LZOP_BIN])
+            external_program_check([LZOP_BIN])
             backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
         elif subcommand == 'wal-push':
-            external_program_check([S3CMD_BIN, LZOP_BIN])
+            external_program_check([LZOP_BIN])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
-        elif subcommand == 'wal-fark':
-            external_program_check([S3CMD_BIN, LZOP_BIN])
-            backup_cxt.wal_fark(args.PG_CLUSTER_DIRECTORY)
         else:
             print >>sys.stderr, ('Subcommand {0} not implemented!'
                                  .format(subcommand))
