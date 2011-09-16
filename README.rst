@@ -45,7 +45,17 @@ Dependencies
 * lzop
 * psql
 * mbuffer
-* python-argparse *or* Python 2.7
+
+This software is most frequently used with Python 2.6+, if anyone
+wants to figure out what would be necessary for Python 2.5 support,
+email daniel@heroku.com.
+
+This software also has Python dependencies; installing with setup.py
+will attempt to resolve them:
+
+* gevent>=0.13
+* boto>=2.0
+* argparse, if not on Python 2.7
 
 
 Examples
