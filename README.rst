@@ -108,7 +108,7 @@ archiving are related here::
 
   wal_level = archive # hot_standby in 9.0 is also acceptable
   archive_mode = on
-  archive_command = 'envdir /etc/wal-e.d/env python wal-e wal-push %p'
+  archive_command = 'envdir /etc/wal-e.d/env wal-e wal-push %p'
   archive_timeout = 60
 
 Every segment archived will be noted in the PostgreSQL log.
