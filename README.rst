@@ -54,14 +54,14 @@ Examples
 
 Pushing a base backup to S3::
 
-  $ AWS_SECRET_ACCESS_KEY=... python wal_e.py		\
+  $ AWS_SECRET_ACCESS_KEY=... wal-e			\
     -k AWS_ACCESS_KEY_ID				\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     backup-push /var/lib/my/database
 
 Sending a WAL segment to S3::
 
-  $ AWS_SECRET_ACCESS_KEY=... python wal_e.py		\
+  $ AWS_SECRET_ACCESS_KEY=... wal-e			\
     -k AWS_ACCESS_KEY_ID				\
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
@@ -97,8 +97,8 @@ After having done this preparation, it is possible to run WAL-E
 commands much more simply, with less risk of accidentally using
 incorrect values::
 
-  $ envdir /etc/wal-e.d/env python wal_e.py backup-push ...
-  $ envdir /etc/wal-e.d/env python wal_e.py wal-push ...
+  $ envdir /etc/wal-e.d/env wal-e backup-push ...
+  $ envdir /etc/wal-e.d/env wal-e wal-push ...
 
 envdir is conveniently combined with the archive_command functionality
 used by PostgreSQL to enable continuous archiving.  To enable
@@ -108,7 +108,7 @@ archiving are related here::
 
   wal_level = archive # hot_standby in 9.0 is also acceptable
   archive_mode = on
-  archive_command = 'envdir /etc/wal-e.d/env python /path/wal_e.py wal-push %p'
+  archive_command = 'envdir /etc/wal-e.d/env python wal-e wal-push %p'
   archive_timeout = 60
 
 Every segment archived will be noted in the PostgreSQL log.
@@ -165,9 +165,9 @@ All assets pushed to S3 are run through the program "lzop" which
 compresses the object using the very fast lzo compression algorithm.
 It takes roughly 2 CPU seconds to compress a gigabyte, which when
 sending things to S3 at about 25MB/s occupies about 5% CPU time.
-Compression ratios are expected to make file sizes 10%-30% of the
-original file size, making backups and restorations considerably
-faster.
+Compression ratios are expected to make file sizes 50% or less of the
+original file size in most cases, making backups and restorations
+considerably faster.
 
 Because S3 requires the Content-Length header of a stored object to be
 set up-front, it is necessary to completely finish compressing an
@@ -186,7 +186,7 @@ Controlling the I/O of a Base Backup
 ------------------------------------
 
 To reduce the read load on base backups, they are sent through the
-tool "mbuffer" first.  To use this rate-limited-read mode, use the
+tool ``mbuffer`` first.  To use this rate-limited-read mode, use the
 option --cluster-read-rate-limit as seen in ``wal-e backup-push``.
 
 
@@ -197,8 +197,7 @@ TODO
   hurt more.
 * WAL-E is expanding. A README is starting to get unwieldy.  A proper
   Sphinx manual should be written soon
-* The the retry logic in boto and the exceptions it raises are not
-  know to me, and may defeat WAL-E's retry logic.
+* Retry logic can use a lot of help.
 * Investigate pg_lesslog.  This tool strips the WAL file of full-page
   binary images, making it *much* smaller, but this also makes the
   recovery process more expensive (has to do more seeking to do
