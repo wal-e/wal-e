@@ -42,7 +42,6 @@ as long as the WALE_S3_PREFIX is set uniquely for each database.
 Dependencies
 ------------
 
-* s3cmd
 * lzop
 * psql
 * mbuffer
