@@ -144,8 +144,8 @@ Pulling a base backup from S3::
     backup-fetch /var/lib/my/database LATEST"
 
 This command makes use of the "LATEST" pseudo-name for a backup, which
-defaults to querying S3 to find the latest complete backup.
-Otherwise, a real name can be used::
+queries S3 to find the latest complete backup.  Otherwise, a real name
+can be used::
 
     $ sudo -u postgres bash -c                          \
     "envdir /etc/wal-e.d/pull-env wal-e			\
