@@ -177,15 +177,6 @@ def main(argv=None):
     subparsers.add_parser('wal-push', help='push a WAL file to S3',
                           parents=[wal_fetchpush_parent])
 
-    wal_fark_parser = subparsers.add_parser('wal-fark',
-                                            help='The FAke Arkiver')
-
-    # XXX: Partial copy paste, because no parallel archiving support
-    # is supported and to have the --pool option would be confusing.
-    wal_fark_parser.add_argument('PG_CLUSTER_DIRECTORY',
-                                 help="Postgres cluster path, "
-                                 "such as '/var/lib/database'")
-
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
