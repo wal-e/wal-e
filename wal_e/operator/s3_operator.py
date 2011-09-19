@@ -192,9 +192,13 @@ class S3Backup(object):
         total_size = 0
 
         # Make an attempt to upload extended version metadata
-        s3_worker.uri_put_file(backup_s3_prefix + '/extended_version.txt',
-                               StringIO(version),
+        extended_version_url = backup_s3_prefix + '/extended_version.txt'
+        logger.info(msg='start upload postgres version metadata',
+                    detail='Uploading to {extended_version_url}.',
+                    extended_version_url=extended_version_url)
+        s3_worker.uri_put_file(extended_version_url, StringIO(version),
                                content_encoding='text/plain')
+        logger.info(msg='postgres version metadata upload complete')
 
         pool = gevent.pool.Pool(size=pool_size)
 
