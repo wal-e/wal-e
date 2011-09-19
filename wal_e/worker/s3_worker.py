@@ -60,6 +60,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
     Synchronous version of the s3-upload wrapper
 
     """
+    logger.info(msg='beginning volume compression')
+
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf,
@@ -67,6 +69,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
         compression_p.stdin.flush()
         compression_p.stdin.close()
+        logger.info(msg='waiting for compression completion')
         compression_p.wait()
         if compression_p.returncode != 0:
             raise UserCritical(
