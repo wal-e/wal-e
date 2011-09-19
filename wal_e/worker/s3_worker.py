@@ -112,6 +112,10 @@ def do_lzop_s3_put(s3_url, local_path):
     :param local_path: a path to a file to be compressed
 
     """
+
+    assert not s3_url.endswith('.lzo')
+    s3_url += '.lzo'
+
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout', local_path], stdout=tf,
                                  bufsize=BUFSIZE_HT)
