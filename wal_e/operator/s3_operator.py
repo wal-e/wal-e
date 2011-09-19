@@ -194,8 +194,8 @@ class S3Backup(object):
         # Make an attempt to upload extended version metadata
         extended_version_url = backup_s3_prefix + '/extended_version.txt'
         logger.info(msg='start upload postgres version metadata',
-                    detail='Uploading to {extended_version_url}.',
-                    extended_version_url=extended_version_url)
+                    detail=('Uploading to {extended_version_url}.'
+                            .format(extended_version_url=extended_version_url)))
         s3_worker.uri_put_file(extended_version_url, StringIO(version),
                                content_encoding='text/plain')
         logger.info(msg='postgres version metadata upload complete')
