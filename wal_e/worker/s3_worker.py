@@ -168,7 +168,7 @@ def do_lzop_s3_get(s3_url, path):
     assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
 
     # XXX: Refactor: copied out of BackupFetcher, so that's a pity...
-    def _write_and_close(self, key, lzod):
+    def _write_and_close(key, lzod):
         try:
             key.get_contents_to_file(lzod.input_fp)
         finally:
@@ -180,10 +180,10 @@ def do_lzop_s3_get(s3_url, path):
         key = suri.get_key()
 
         lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
-        g = gevent.spawn(self._write_and_close, key, lzod)
+        g = gevent.spawn(_write_and_close, key, lzod)
         key.get_contents_to_file(lzod.input_fp)
 
-        # Raise any exceptions from self._write_and_close
+        # Raise any exceptions from _write_and_close
         g.get()
 
         # Blocks on lzo exiting and raises an exception if the
