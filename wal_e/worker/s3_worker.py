@@ -181,7 +181,6 @@ def do_lzop_s3_get(s3_url, path):
 
         lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
         g = gevent.spawn(_write_and_close, key, lzod)
-        key.get_contents_to_file(lzod.input_fp)
 
         # Raise any exceptions from _write_and_close
         g.get()
