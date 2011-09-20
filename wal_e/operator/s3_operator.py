@@ -53,8 +53,7 @@ class S3Backup(object):
 
         self.exceptions = []
 
-    def backup_list(self, query, detail, detail_retry, detail_timeout,
-                    list_retry, list_timeout):
+    def backup_list(self, query, detail):
         """
         Lists base backups and basic information about them
 
@@ -77,8 +76,7 @@ class S3Backup(object):
 
         bl = s3_worker.BackupList(s3_conn,
                                   s3_storage.StorageLayout(self.s3_prefix),
-                                  detail, detail_retry, detail_timeout,
-                                  list_retry, list_timeout)
+                                  detail)
 
         # If there is no query, return an exhaustive list, otherwise
         # find a backup instad.
@@ -235,9 +233,7 @@ class S3Backup(object):
 
         return wrapper
 
-    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size,
-                          list_retry, list_timeout,
-                          partition_retry, partition_timeout):
+    def database_s3_fetch(self, pg_cluster_dir, backup_name, pool_size):
 
         if os.path.exists(os.path.join(pg_cluster_dir, 'postmaster.pid')):
             raise UserException(
@@ -266,10 +262,7 @@ class S3Backup(object):
 
         bl = s3_worker.BackupList(s3_connections[0],
                                   s3_storage.StorageLayout(self.s3_prefix),
-                                  detail=False, detail_retry=None,
-                                  detail_timeout=None,
-                                  list_retry=list_retry,
-                                  list_timeout=list_timeout)
+                                  detail=False)
 
         # If there is no query, return an exhaustive list, otherwise
         # find a backup instad.
@@ -294,14 +287,13 @@ class S3Backup(object):
         layout.basebackup_tar_partition_directory(backup_info)
 
         partition_iter = s3_worker.TarPartitionLister(
-            s3_connections[0], layout, backup_info, list_retry, list_timeout)
+            s3_connections[0], layout, backup_info)
 
         assert len(s3_connections) == pool_size
         fetchers = []
         for i in xrange(pool_size):
             fetchers.append(s3_worker.BackupFetcher(
-                    s3_connections[i], layout, backup_info, pg_cluster_dir,
-                    partition_retry, partition_timeout))
+                    s3_connections[i], layout, backup_info, pg_cluster_dir))
         assert len(fetchers) == pool_size
 
         p = gevent.pool.Pool(size=pool_size)

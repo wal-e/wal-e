@@ -298,10 +298,8 @@ class TarPartitionLister(object):
         prefix = self.layout.basebackup_tar_partition_directory(
             self.backup_info)
 
-        def get_bucket():
-            return self.s3_conn.get_bucket(self.layout.bucket_name())
-
-        for key in bucket.bucket_lister(prefix=prefix):
+        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        for key in bucket.list(prefix=prefix):
             yield key.name.rsplit('/', 1)[-1]
 
 
@@ -416,9 +414,7 @@ class BackupList(object):
 
         matcher = re.compile(s3_storage.COMPLETE_BASE_BACKUP_REGEXP).match
 
-        # bucket_lister performs auto-pagination, which costs one web
-        # request per page.
-        for key in bucket.bucket_lister(prefix=self.layout.basebackups()):
+        for key in bucket.list(prefix=self.layout.basebackups()):
             # Use key depth vs. base and regexp matching to find
             # sentinel files.
             key_depth = key.name.count('/')

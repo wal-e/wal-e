@@ -142,13 +142,6 @@ def main(argv=None):
     # other commands use backup listing functionality in a way where
     # --detail is never required.
     backup_list_nodetail_parent = argparse.ArgumentParser(add_help=False)
-    backup_list_nodetail_parent.add_argument(
-        '--list-timeout', default=float(10), type=float, metavar='SECONDS',
-        help='how many seconds to wait before timing out an attempt to get '
-        'base backup list')
-    backup_list_nodetail_parent.add_argument(
-        '--list-retry', default=3, type=int, metavar='TIMES',
-        help='how many times to retry each pagination in listing backups')
 
     # Common arguments between wal-push and wal-fetch
     wal_fetchpush_parent = argparse.ArgumentParser(add_help=False)
@@ -180,15 +173,6 @@ def main(argv=None):
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
-    backup_fetch_parser.add_argument('--partition-retry', type=int,
-                                     metavar='TIMES', default=3,
-                                     help='the number of times to retry '
-                                     'getting one tar partition')
-    backup_fetch_parser.add_argument(
-        '--partition-timeout', default=float(10), type=float,
-        metavar='SECONDS', help='how many seconds to wait before '
-        'timing out an attempt to get one tar partition')
-
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -197,13 +181,6 @@ def main(argv=None):
     backup_list_parser.add_argument(
         '--detail', default=False, action='store_true',
         help='show more detailed information about every backup')
-    backup_list_parser.add_argument(
-        '--detail-timeout', default=float(10), type=float, metavar='SECONDS',
-        help='how many seconds to wait before timing out an attempt to get '
-        'base backup details')
-    backup_list_parser.add_argument(
-        '--detail-retry', default=3, type=int, metavar='TIMES',
-        help='how many times to retry getting details')
 
     # wal-push operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
@@ -244,18 +221,9 @@ def main(argv=None):
             backup_cxt.database_s3_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
-                pool_size=args.pool_size,
-                list_retry=args.list_retry,
-                list_timeout=args.list_timeout,
-                partition_retry=args.partition_retry,
-                partition_timeout=args.partition_timeout)
+                pool_size=args.pool_size)
         elif subcommand == 'backup-list':
-            backup_cxt.backup_list(query=args.QUERY,
-                                   detail=args.detail,
-                                   detail_retry=args.detail_retry,
-                                   detail_timeout=args.detail_timeout,
-                                   list_retry=args.list_retry,
-                                   list_timeout=args.list_timeout)
+            backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
             external_program_check([LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
             rate_limit = args.rate_limit
