@@ -254,6 +254,7 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
             yield current_partition
 
             # Prepare a fresh partition.
+            current_partition_number += 1
             partition_bytes = et_info.tarinfo.size
             current_partition = TarPartition(
                 current_partition_number, [et_info])
