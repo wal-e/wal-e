@@ -3,7 +3,14 @@ WAL-E Disaster Recovery
 
 WAL-E is a program designed to perform continuous archiving of PostgreSQL
 WAL files and manage the use of pg_start_backup and pg_stop_backup.
-It has four critical operators:
+
+To correspond on using WAL-E or to collaborate on its development, do
+not hesitate to send mail to the mailing list at
+wal-e@googlegroups.com.  Github issues are also currently being used
+to track known problems, so please feel free to submit those if you
+notice a glaring problem.
+
+WAL-E has four critical operators:
 
 * backup-fetch
 * backup-push
