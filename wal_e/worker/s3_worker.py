@@ -250,7 +250,7 @@ class StreamLzoDecompressionPipeline(object):
         assert self.output_fp is None or self.output_fp.closed
 
         if retcode != 0:
-            logger.info(
+            raise UserCritical(
                 msg='decompression process did not exit gracefully',
                 detail='"lzop" had terminated with the exit status {0}.'
                 .format(retcode))
