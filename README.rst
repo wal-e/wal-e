@@ -7,8 +7,7 @@ WAL files and manage the use of pg_start_backup and pg_stop_backup.
 To correspond on using WAL-E or to collaborate on its development, do
 not hesitate to send mail to the mailing list at
 wal-e@googlegroups.com.  Github issues are also currently being used
-to track known problems, so please feel free to submit those if you
-notice a glaring problem.
+to track known problems, so please feel free to submit those.
 
 WAL-E has four critical operators:
 
