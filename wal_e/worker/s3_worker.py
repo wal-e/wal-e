@@ -69,8 +69,17 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
         compression_p.stdin.flush()
         compression_p.stdin.close()
-        logger.info(msg='waiting for compression completion')
-        compression_p.wait()
+
+        # Poll for process completion, avoid .wait() as to allow other
+        # greenlets a chance to execute.  Calling .wait() will result
+        # in deadlock.
+        while True:
+            if compression_p.poll() is not None:
+                break
+            else:
+                # Give other stacks a chance to continue progress
+                gevent.sleep(0.1)
+
         if compression_p.returncode != 0:
             raise UserCritical(
                 'could not properly compress tar',
