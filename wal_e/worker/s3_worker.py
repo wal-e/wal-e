@@ -242,10 +242,13 @@ class StreamLzoDecompressionPipeline(object):
 
     def finish(self):
         retcode = self._decompression_p.wait()
-        self.output_fp.close()
 
-        assert self.input_fp.closed
-        assert self.output_fp.closed
+        if self.output_fp is not None:
+            self.output_fp.close()
+
+        assert self.input_fp is None or self.input_fp.closed
+        assert self.output_fp is None or self.output_fp.closed
+
         if retcode != 0:
             logger.info(
                 msg='decompression process did not exit gracefully',
