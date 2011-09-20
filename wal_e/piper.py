@@ -21,8 +21,10 @@ from cStringIO import StringIO
 
 class NonBlockPipeFileWrap(object):
     def __init__(self, fp):
-        # Make the file nonblocking
-        fcntl.fcntl(fp, fcntl.F_SETFL, os.O_NONBLOCK)
+        # Make the file nonblocking (but don't lose its previous flags)
+        flags = fcntl.fcntl(fp, fcntl.F_GETFL)
+        fcntl.fcntl(fp, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
         self._fp = fp
 
     def read(self, size=None):
