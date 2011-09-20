@@ -7,6 +7,7 @@ with the intention that they are used in forked worker processes.
 """
 import boto
 import errno
+import functools
 import gevent
 import json
 import logging
@@ -24,7 +25,6 @@ import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
 from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
-from wal_e.worker import retry_iter
 
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
@@ -39,6 +39,68 @@ MBUFFER_BIN = 'mbuffer'
 # This is set conservatively because small systems can end up being
 # unhappy with too much memory usage in buffers.
 BUFSIZE_HT = 128 * 8192
+
+
+def generic_exception_processor(exc_tup, **kwargs):
+    logger.warning(msg='retrying after encountering exception',
+                detail='Exception information dump: {0}'.format(exc_tup),
+                hint=('A better error message should be written to '
+                      'handle this exception.  Please report this output and, '
+                      'if possible, the situation under which it arises.'))
+    del exc_tup
+
+
+def retry(f, exception_processor=generic_exception_processor):
+    """
+    Generic retry decorator
+
+    Tries to call the decorated function.  Should no exception be
+    raised, the value is simply returned, otherwise, call an
+    exception_processor function with the exception (type, value,
+    traceback) tuple (with the intention that it could raise the
+    exception without losing the traceback) and the exception
+    processor's optionally usable context value (exc_processor_cxt).
+
+    It's recommended to delete all references to the traceback passed
+    to the exception_processor to speed up garbage collector via the
+    'del' operator.
+
+    This context value is passed to and returned from every invocation
+    of the exception processor.  This can be used to more conveniently
+    (vs. an object with __call__ defined) implement exception
+    processors that have some state, such as the 'number of attempts'.
+    The first invocation will pass None.
+
+    :param f: A function to be retried.
+    :type f: function
+
+    :param exception_processor: A function to process raised
+                                exceptions.
+    :type exception_processor: function
+
+    """
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        exc_processor_cxt = None
+
+        while True:
+            try:
+                return f(*args, **kwargs)
+            except Exception, e:
+                exception_info_tuple = None
+
+                try:
+                    exception_info_tuple = sys.exc_info()
+                    exc_processor_cxt = exception_processor(
+                        exception_info_tuple,
+                        exc_processor_cxt=exc_processor_cxt)
+                finally:
+                    # Although cycles are harmless long-term, help the
+                    # garbage collector.
+                    del exception_info_tuple
+
+    return wrapper
 
 
 def uri_put_file(s3_uri, fp, content_encoding=None):
@@ -195,36 +257,6 @@ def do_lzop_s3_get(s3_url, path):
             .format(s3_url=s3_url, path=path))
 
 
-def bucket_lister(bucket, retry_count, timeout_seconds,
-                  prefix='', delimiter='', marker='', headers=None):
-    """
-    A generator function for listing keys in a bucket.
-
-    Adapted from bucketlistresultset.py in Boto, but to use gevent
-    timeouts.
-    """
-    more_results = True
-    k = None
-    while more_results:
-        rs = None
-        for i in retry_iter(retry_count):
-            with gevent.Timeout(timeout_seconds, False):
-                rs = bucket.get_all_keys(prefix=prefix, marker=marker,
-                                         delimiter=delimiter, headers=headers)
-
-        if rs is None:
-            raise UserException(msg='attempt to list bucket timed out',
-                                hint='try raising the number of retries, '
-                                'the length of the timeout, or try again '
-                                'later')
-
-        for k in rs:
-            yield k
-        if k:
-            marker = k.name
-        more_results = rs.is_truncated
-
-
 class StreamLzoDecompressionPipeline(object):
     def __init__(self, stdin=PIPE, stdout=PIPE):
         self._decompression_p = popen_sp(
@@ -257,48 +289,29 @@ class StreamLzoDecompressionPipeline(object):
 
 
 class TarPartitionLister(object):
-    def __init__(self, s3_conn, layout, backup_info, list_retry, list_timeout):
+    def __init__(self, s3_conn, layout, backup_info):
         self.s3_conn = s3_conn
         self.layout = layout
         self.backup_info = backup_info
-        self.list_retry = list_retry
-        self.list_timeout = list_timeout
 
     def __iter__(self):
         prefix = self.layout.basebackup_tar_partition_directory(
             self.backup_info)
 
-        # XXX: seen elsewhere, factor this out
-        bucket = None
-        for i in retry_iter(self.list_retry):
-            with gevent.Timeout(self.list_timeout, False) as timeout:
-                bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        def get_bucket():
+            return self.s3_conn.get_bucket(self.layout.bucket_name())
 
-        for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
-                                 prefix=prefix):
+        for key in bucket.bucket_lister(prefix=prefix):
             yield key.name.rsplit('/', 1)[-1]
 
 
 class BackupFetcher(object):
-    def __init__(self, s3_conn, layout, backup_info, local_root,
-                 partition_retry, partition_timeout):
+    def __init__(self, s3_conn, layout, backup_info, local_root):
         self.s3_conn = s3_conn
         self.layout = layout
         self.local_root = local_root
         self.backup_info = backup_info
-        self.partition_retry = partition_retry
-        self.partition_timeout = partition_timeout
-
-        # XXX: seen elsewhere, factor this out
-        self.bucket = None
-        for i in retry_iter(self.partition_retry):
-            with gevent.Timeout(self.partition_timeout, False) as timeout:
-                self.bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
-            if self.bucket is not None:
-                break
-
-        if self.bucket is None:
-            raise UserException(msg='could not verify S3 bucket')
+        self.bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
 
     def _write_and_close(self, key, lzod):
         try:
@@ -311,71 +324,46 @@ class BackupFetcher(object):
         part_abs_name = self.layout.basebackup_tar_partition(
             self.backup_info, partition_name)
 
-        for i in retry_iter(self.partition_retry):
-            logger.info(
-                msg='beginning partition download',
-                detail='The partition being downloaded is {0}.'
-                .format(partition_name),
-                hint='The absolute S3 key is {0}.'.format(part_abs_name))
-            try:
-                with gevent.Timeout(self.partition_timeout) as timeout:
-                    key = self.bucket.get_key(part_abs_name)
-            except gevent.Timeout:
-                continue
+        logger.info(
+            msg='beginning partition download',
+            detail='The partition being downloaded is {0}.'
+            .format(partition_name),
+            hint='The absolute S3 key is {0}.'.format(part_abs_name))
 
-            if key is None:
-                raise UserCritical(
-                    msg='expected tar partition not found',
-                    detail='The tar partition "{0}" could '
-                    'not be located.'.format(part_abs_name))
+        key = self.bucket.get_key(part_abs_name)
 
-            good = False
-            try:
-                lzod = StreamLzoDecompressionPipeline()
-                g = gevent.spawn(self._write_and_close, key, lzod)
-                tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
+        good = False
+        try:
+            lzod = StreamLzoDecompressionPipeline()
+            g = gevent.spawn(self._write_and_close, key, lzod)
+            tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
 
-                # TODO: replace with per-member file handling,
-                # extractall very much warned against in the docs, and
-                # seems to have changed between Python 2.6 and Python
-                # 2.7.
-                tar.extractall(self.local_root)
-                tar.close()
+            # TODO: replace with per-member file handling,
+            # extractall very much warned against in the docs, and
+            # seems to have changed between Python 2.6 and Python
+            # 2.7.
+            tar.extractall(self.local_root)
+            tar.close()
 
-                # Raise any exceptions from self._write_and_close
-                g.get()
+            # Raise any exceptions from self._write_and_close
+            g.get()
 
-                # Blocks on lzo exiting and raises an exception if the
-                # exit status it non-zero.
-                lzod.finish()
-                good = True
-            finally:
-                if good:
-                    return
-                else:
-                    assert not good
-                    logger.info(
-                        msg='retrying partition download',
-                        detail='The partition being downloaded is {0}.'
-                        .format(partition_name))
-
-        raise UserCritical(msg='failed to download partition {0}'
-                           .format(partition_name))
+            # Blocks on lzo exiting and raises an exception if the
+            # exit status it non-zero.
+            lzod.finish()
+            good = True
+        finally:
+            if good:
+                return
+            else:
+                assert not good
 
 
 class BackupList(object):
-    def __init__(self, s3_conn, layout,
-
-                 # These can learn default values when necessary
-                 detail, detail_retry, detail_timeout, list_retry,
-                 list_timeout):
+    def __init__(self, s3_conn, layout, detail):
         self.s3_conn = s3_conn
         self.layout = layout
         self.detail = detail
-        self.detail_retry = detail_retry
-        self.detail_timeout = detail_timeout
-        self.list_retry = list_retry
-        self.list_timeout = list_timeout
 
     def find_all(self, query):
         """
@@ -396,52 +384,27 @@ class BackupList(object):
             for backup in iter(self):
                 if backup.name == query:
                     yield backup
-                    return
         elif query == 'LATEST':
             all_backups = list(iter(self))
 
-            if all_backups is None:
+            if not all_backups:
                 yield None
                 return
 
+            assert len(all_backups) > 0
+
             all_backups.sort()
             yield all_backups[-1]
-            return
         else:
             raise UserException(msg='invalid backup query submitted',
                                 detail='The submitted query operator was "{0}."'
                                 .format(query))
 
     def _backup_detail(self, key):
-        contents = None
-        for i in retry_iter(self.detail_retry):
-            with gevent.Timeout(self.detail_timeout, False) as timeout:
-                contents = key.get_contents_as_string()
-
-            logger.debug('Retrying backup detail attempt: #{0}'.format(i))
-
-        if contents is None:
-            # Abuse gevent timeout to raise some sort of exception to
-            # the caller
-            raise gevent.Timeout(self.detail_timeout)
-        else:
-            return contents
-
+        return key.get_contents_as_string()
 
     def __iter__(self):
-        # Abuse pagination timeouts to also verify the bucket.  Close
-        # enough.(?)
-        bucket = None
-        for i in retry_iter(self.list_retry):
-            with gevent.Timeout(self.list_timeout, False) as timeout:
-                bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
-
-        if bucket is None:
-            raise UserException(msg='could not verify bucket',
-                                detail='Could not verify bucket {0}.'
-                                .format(self.layout.s3_bucket_name()),
-                                hint='Consider raising the timeout, number '
-                                'of retries, or trying again later.')
+        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
 
         # Try to identify the sentinel file.  This is sort of a drag, the
         # storage format should be changed to put them in their own leaf
@@ -455,8 +418,7 @@ class BackupList(object):
 
         # bucket_lister performs auto-pagination, which costs one web
         # request per page.
-        for key in bucket_lister(bucket, self.list_retry, self.list_timeout,
-                                 prefix=self.layout.basebackups()):
+        for key in bucket.bucket_lister(prefix=self.layout.basebackups()):
             # Use key depth vs. base and regexp matching to find
             # sentinel files.
             key_depth = key.name.count('/')
