@@ -124,7 +124,10 @@ def popen_sp(*args, **kwargs):
     # to the gevent hub.
     for fp_symbol in ['stdin', 'stdout', 'stderr']:
         value = getattr(proc, fp_symbol)
+
         if value is not None:
+            # this branch is only taken if a descriptor is sent in
+            # with 'PIPE' mode.
             setattr(proc, fp_symbol, NonBlockPipeFileWrap(value))
 
     return proc
