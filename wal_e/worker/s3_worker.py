@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import tarfile
@@ -163,7 +164,40 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             .format(s3_url=s3_url))
 
         clock_start = time.clock()
-        k = uri_put_file(s3_url, tf)
+
+        def put_volume_exception_processor(exc_tup, exc_processor_cxt):
+            # Screen for certain kinds of known-errors to retry
+            # from
+
+            if isinstance(typ, socket.error):
+                # This branch is for conditions that are retry-able.
+
+                errno, string = value
+                if errno == errno.ECONNRESET:
+                    # "Connection reset by peer"
+                    if exc_processor_cxt is None:
+                        exc_processor_cxt = 1
+                    else:
+                        exc_processor_cxt += 1
+
+                    log.info(
+                        msg='Connection reset detected, retrying send',
+                        detail=('There have been {n} attempts to send the '
+                                'volume {name} so far.'
+                                .format(n=exc_processor_cxt,
+                                        name=tpart.name)))
+            else:
+                # This type of error is unrecognized as a
+                # retry-able condition, so propagate it, original
+                # stacktrace and all.
+                raise typ, value, tb
+
+        @retry(put_volume_exception_processor)
+        def put_file_helper():
+            return uri_put_file(s3_url, tf)
+
+        k = put_file_helper()
+
         clock_finish = time.clock()
 
         logger.info(
