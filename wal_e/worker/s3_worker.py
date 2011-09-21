@@ -47,7 +47,7 @@ def generic_exception_processor(exc_tup, **kwargs):
     logger.warning(
         msg='retrying after encountering exception',
         detail=('Exception information dump: \n{0}'
-                .format(traceback.format_exception(*exc_tup))),
+                .format(''.join(traceback.format_exception(*exc_tup)))),
         hint=('A better error message should be written to '
               'handle this exception.  Please report this output and, '
               'if possible, the situation under which it arises.'))
