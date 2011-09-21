@@ -54,7 +54,7 @@ def generic_exception_processor(exc_tup, **kwargs):
     del exc_tup
 
 
-def retry(f, exception_processor=generic_exception_processor):
+def retry(exception_processor=generic_exception_processor):
     """
     Generic retry decorator
 
@@ -84,27 +84,28 @@ def retry(f, exception_processor=generic_exception_processor):
 
     """
 
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        exc_processor_cxt = None
+    def wrap(f):
+        @functools.wraps(f)
+        def wrapped(*args, **kwargs):
+            exc_processor_cxt = None
 
-        while True:
-            try:
-                return f(*args, **kwargs)
-            except Exception, e:
-                exception_info_tuple = None
-
+            while True:
                 try:
-                    exception_info_tuple = sys.exc_info()
-                    exc_processor_cxt = exception_processor(
-                        exception_info_tuple,
-                        exc_processor_cxt=exc_processor_cxt)
-                finally:
-                    # Although cycles are harmless long-term, help the
-                    # garbage collector.
-                    del exception_info_tuple
+                    return f(*args, **kwargs)
+                except Exception, e:
+                    exception_info_tuple = None
 
-    return wrapper
+                    try:
+                        exception_info_tuple = sys.exc_info()
+                        exc_processor_cxt = exception_processor(
+                            exception_info_tuple,
+                            exc_processor_cxt=exc_processor_cxt)
+                    finally:
+                        # Although cycles are harmless long-term, help the
+                        # garbage collector.
+                        del exception_info_tuple
+        return wrapped
+    return wrap
 
 
 def uri_put_file(s3_uri, fp, content_encoding=None):
