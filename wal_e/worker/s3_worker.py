@@ -20,6 +20,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import traceback
 
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
@@ -43,11 +44,13 @@ BUFSIZE_HT = 128 * 8192
 
 
 def generic_exception_processor(exc_tup, **kwargs):
-    logger.warning(msg='retrying after encountering exception',
-                detail='Exception information dump: {0}'.format(exc_tup),
-                hint=('A better error message should be written to '
-                      'handle this exception.  Please report this output and, '
-                      'if possible, the situation under which it arises.'))
+    logger.warning(
+        msg='retrying after encountering exception',
+        detail=('Exception information dump: \n{0}'
+                .format(traceback.format_exception(*exc_tup))),
+        hint=('A better error message should be written to '
+              'handle this exception.  Please report this output and, '
+              'if possible, the situation under which it arises.'))
     del exc_tup
 
 
