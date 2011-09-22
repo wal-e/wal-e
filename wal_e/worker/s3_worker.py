@@ -172,7 +172,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
 
             # Screen for certain kinds of known-errors to retry
             # from
-            if isinstance(typ, socket.error):
+            if issubclass(typ, socket.error):
                 # This branch is for conditions that are retry-able.
 
                 errno, string = value
