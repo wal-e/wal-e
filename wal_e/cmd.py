@@ -207,7 +207,7 @@ def main(argv=None):
             print >>sys.stderr, ('Must define an AWS_ACCESS_KEY_ID, '
                                  'using environment variable or '
                                  '--aws_access_key_id')
-
+            sys.exit(1)
     else:
         aws_access_key_id = args.aws_access_key_id
 
