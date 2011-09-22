@@ -187,6 +187,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                                 'volume {name} so far.'
                                 .format(n=exc_processor_cxt,
                                         name=tpart.name)))
+
+                    return exc_processor_cxt
             else:
                 # This type of error is unrecognized as a
                 # retry-able condition, so propagate it, original
