@@ -167,8 +167,6 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             detail=('Uploading to "{s3_url}".')
             .format(s3_url=s3_url))
 
-        clock_start = time.clock()
-
         def put_volume_exception_processor(exc_tup, exc_processor_cxt):
             typ, value, tb = exc_tup
 
@@ -201,8 +199,10 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         def put_file_helper():
             return uri_put_file(s3_url, tf)
 
+        # Actually do work, retrying if necessary, and timing how long
+        # it takes.
+        clock_start = time.clock()
         k = put_file_helper()
-
         clock_finish = time.clock()
 
         logger.info(
