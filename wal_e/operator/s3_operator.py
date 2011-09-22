@@ -67,12 +67,7 @@ class S3Backup(object):
 
         s3_conn = S3Connection(self.aws_access_key_id,
                                self.aws_secret_access_key,
-                               calling_format=OrdinaryCallingFormat()
-                               # TODO: Add https_connection_factory
-                               # with timeouts.  This is less
-                               # necessary with Boto 2.0b5, which is
-                               # yet to be released...
-                               )
+                               calling_format=OrdinaryCallingFormat())
 
         bl = s3_worker.BackupList(s3_conn,
                                   s3_storage.StorageLayout(self.s3_prefix),
