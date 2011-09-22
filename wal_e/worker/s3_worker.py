@@ -181,7 +181,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                     else:
                         exc_processor_cxt += 1
 
-                    log.info(
+                    logger.info(
                         msg='Connection reset detected, retrying send',
                         detail=('There have been {n} attempts to send the '
                                 'volume {name} so far.'
