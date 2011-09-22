@@ -92,7 +92,7 @@ def retry(exception_processor=generic_exception_processor):
             while True:
                 try:
                     return f(*args, **kwargs)
-                except Exception, e:
+                except:
                     exception_info_tuple = None
 
                     try:
