@@ -42,6 +42,15 @@ MBUFFER_BIN = 'mbuffer'
 # unhappy with too much memory usage in buffers.
 BUFSIZE_HT = 128 * 8192
 
+# Set a timeout for boto HTTP operations should no timeout be set.
+# Yes, in the case the user *wanted* no timeouts, this would set one.
+# If that becomes a problem, someone should post a bug, although I am
+# having a hard time imagining why that behavior could ever be useful.
+if not boto.config.has_option('Boto', 'http_socket_timeout'):
+    if not boto.config.has_section('Boto'):
+        boto.config.add_section('Boto')
+
+    boto.config.set('Boto', 'http_socket_timeout', '5')
 
 def generic_exception_processor(exc_tup, **kwargs):
     logger.warning(
