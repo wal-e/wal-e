@@ -170,9 +170,10 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         clock_start = time.clock()
 
         def put_volume_exception_processor(exc_tup, exc_processor_cxt):
+            typ, value, tb = exc_tup
+
             # Screen for certain kinds of known-errors to retry
             # from
-
             if isinstance(typ, socket.error):
                 # This branch is for conditions that are retry-able.
 
