@@ -174,9 +174,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             # from
             if issubclass(typ, socket.error):
                 # This branch is for conditions that are retry-able.
-
-                errno, string = value
-                if errno == errno.ECONNRESET:
+                if value[0] == errno.ECONNRESET:
                     # "Connection reset by peer"
                     if exc_processor_cxt is None:
                         exc_processor_cxt = 1
