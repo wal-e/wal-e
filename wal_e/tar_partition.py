@@ -43,8 +43,8 @@ import os
 import sys
 import tarfile
 
-import piper
 import wal_e.log_help as log_help
+import wal_e.piper
 
 logger = log_help.WalELogger(__name__)
 
