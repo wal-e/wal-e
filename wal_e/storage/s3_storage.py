@@ -39,6 +39,7 @@ BackupInfo = collections.namedtuple('BackupInfo',
                                      'wal_segment_backup_stop',
                                      'wal_segment_offset_backup_stop'])
 
+
 class StorageLayout(object):
     """
     Encapsulates and defines S3 URL path manipulations for WAL-E

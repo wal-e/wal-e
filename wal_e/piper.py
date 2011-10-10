@@ -37,7 +37,7 @@ class NonBlockPipeFileWrap(object):
                     max_read = 4096
                 else:
                     max_read = min(4096, size - accum.tell())
-            
+
                 chunk = self._fp.read(max_read)
 
                 # End of the stream: leave the loop
@@ -146,7 +146,8 @@ def pipe(*args):
 
     """
     if len(args) < 2:
-        raise ValueError, "pipe needs at least 2 processes"
+        raise ValueError("pipe needs at least 2 processes")
+
     # Set stdout=PIPE in every subprocess except the last
     for i in args[:-1]:
         i["stdout"] = subprocess.PIPE

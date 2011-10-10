@@ -8,6 +8,7 @@ import logging
 import os
 import time
 
+
 class UTCFormatter(logging.Formatter):
 
     # Undocumented, seemingly still in 2.7 (see

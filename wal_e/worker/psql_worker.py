@@ -8,6 +8,7 @@ from wal_e.exception import UserException, UserCritical
 
 PSQL_BIN = 'psql'
 
+
 class UTC(datetime.tzinfo):
     """
     UTC timezone
@@ -27,6 +28,7 @@ class UTC(datetime.tzinfo):
 
     def dst(self, dt):
         return self.ZERO
+
 
 def psql_csv_run(sql_command, error_handler=None):
     """
@@ -61,6 +63,7 @@ def psql_csv_run(sql_command, error_handler=None):
     # Fake enough iterator interface to get a CSV Reader object
     # that works.
     return csv.reader(iter(stdout.strip().split('\n')))
+
 
 class PgBackupStatements(object):
     """

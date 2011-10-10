@@ -39,6 +39,7 @@ log_help.configure(
 
 logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
+
 def external_program_check(
     to_check=frozenset([PSQL_BIN, LZOP_BIN, MBUFFER_BIN])):
     """
@@ -80,7 +81,8 @@ def external_program_check(
                     else:
                         extra_args = []
 
-                    proc = popen_sp([program] + extra_args, stdout=nullf, stderr=nullf,
+                    proc = popen_sp([program] + extra_args,
+                                    stdout=nullf, stderr=nullf,
                                     stdin=subprocess.PIPE)
 
                     # Close stdin for processes that default to
@@ -93,9 +95,8 @@ def external_program_check(
 
     if could_not_run:
         error_msgs.append(
-                'Could not run the following programs, are they installed? ' +
-                ', '.join(could_not_run))
-
+            'Could not run the following programs, are they installed? ' +
+            ', '.join(could_not_run))
 
     if error_msgs:
         raise UserException(
@@ -114,8 +115,8 @@ def main(argv=None):
         description=__doc__)
 
     parser.add_argument('-k', '--aws-access-key-id',
-                        help='public AWS access key. Can also be defined in an '
-                        'environment variable. If both are defined, '
+                        help='public AWS access key. Can also be defined in '
+                        'an environment variable. If both are defined, '
                         'the one defined in the programs arguments takes '
                         'precedence.')
 
@@ -184,7 +185,7 @@ def main(argv=None):
 
     # wal-push operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
-                                 help='Path to download the WAL segment to')
+                                  help='Path to download the WAL segment to')
 
     args = parser.parse_args()
 

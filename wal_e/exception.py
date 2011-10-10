@@ -1,5 +1,6 @@
 from logging import ERROR, CRITICAL
 
+
 class UserException(Exception):
     """
     Superclass intended for user-visible errors

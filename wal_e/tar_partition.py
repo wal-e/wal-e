@@ -109,6 +109,7 @@ class TarBadPathError(Exception):
 ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
                                          'submitted_path tarinfo')
 
+
 class TarPartition(list):
 
     def __init__(self, name, *args, **kwargs):

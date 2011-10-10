@@ -52,6 +52,7 @@ if not boto.config.has_option('Boto', 'http_socket_timeout'):
 
     boto.config.set('Boto', 'http_socket_timeout', '5')
 
+
 def generic_exception_processor(exc_tup, **kwargs):
     logger.warning(
         msg='retrying after encountering exception',
@@ -165,7 +166,6 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                 .format(error_manifest=tpart.format_manifest(),
                         volume=tpart.name))
         tf.flush()
-
 
         s3_url = '/'.join([backup_s3_prefix, 'tar_partitions',
                            'part_{number}.tar.lzo'

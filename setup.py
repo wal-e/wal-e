@@ -24,20 +24,19 @@ if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
 
 setup(
-    name = "WAL-E",
-    version = VERSION,
-    packages = find_packages(),
+    name="WAL-E",
+    version=VERSION,
+    packages=find_packages(),
 
-    install_requires = install_requires,
+    install_requires=install_requires,
 
     # metadata for upload to PyPI
-    author = "Daniel Farina",
-    author_email = "daniel@heroku.com",
-    description = "PostgreSQL WAL-shipping for S3",
-    license = "BSD",
-    keywords = "postgresql database backup",
-    url = "https://github.com/heroku/wal-e",
+    author="Daniel Farina",
+    author_email="daniel@heroku.com",
+    description="PostgreSQL WAL-shipping for S3",
+    license="BSD",
+    keywords="postgresql database backup",
+    url="https://github.com/heroku/wal-e",
 
-    # install 
-    entry_points = {'console_scripts': ['wal-e = wal_e.cmd:main']}
-)
+    # install
+    entry_points={'console_scripts': ['wal-e=wal_e.cmd:main']})
