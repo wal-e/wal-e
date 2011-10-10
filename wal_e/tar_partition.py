@@ -44,6 +44,9 @@ import sys
 import tarfile
 
 import piper
+import wal_e.log_help as log_help
+
+logger = log_help.WalELogger(__name__)
 
 
 class StreamPadFileObj(object):
@@ -139,8 +142,9 @@ class TarPartition(list):
                 # log a NOTICE/INFO that the file was unlinked.
                 # Ostensibly harmless (such unlinks should be replayed
                 # in the WAL) but good to know.
-                print >>sys.stderr, 'skipping unlinked file'
-                print >>sys.stderr, 'unlinked path: ' + et_info.submitted_path
+                logger.debug(
+                    msg='tar member additions skipping an unlinked file',
+                    detail='Skipping {0}.'.format(et_info.submitted_path))
             else:
                 raise
 
@@ -224,8 +228,9 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
                     # log a NOTICE/INFO that the file was unlinked.
                     # Ostensibly harmless (such unlinks should be replayed
                     # in the WAL) but good to know.
-                    print >>sys.stderr, 'skipping unlinked file'
-                    print >>sys.stderr, 'unlinked path: ' + et_info.submitted_path
+                    logger.debug(
+                        msg='tar member additions skipping an unlinked file',
+                        detail='Skipping {0}.'.format(et_info.submitted_path))
                 else:
                     raise
     finally:

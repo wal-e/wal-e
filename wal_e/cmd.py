@@ -191,23 +191,27 @@ def main(argv=None):
 
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
-        print >>sys.stderr, ('Must define AWS_SECRET_ACCESS_KEY ask S3 to do '
-                             'anything')
+        logger.error(
+            msg='no AWS_SECRET_ACCESS_KEY defined',
+            hint='Define the environment variable AWS_SECRET_ACCESS_KEY.')
         sys.exit(1)
 
     s3_prefix = args.s3_prefix or os.getenv('WALE_S3_PREFIX')
 
     if s3_prefix is None:
-        print >>sys.stderr, ('Must pass --s3-prefix or define environment '
-                             'variable WALE_S3_PREFIX')
+        logger.error(
+            msg='no storage prefix defined',
+            hint=('Either set the --s3-prefix option or define the '
+                  'environment variable WALE_S3_PREFIX.'))
         sys.exit(1)
 
     if args.aws_access_key_id is None:
         aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
         if aws_access_key_id is None:
-            print >>sys.stderr, ('Must define an AWS_ACCESS_KEY_ID, '
-                                 'using environment variable or '
-                                 '--aws_access_key_id')
+            logger.error(
+                msg='no storage prefix defined',
+                hint=('Either set the --aws-access-key-id option or define '
+                      'the environment variable AWS_ACCESS_KEY_ID.'))
             sys.exit(1)
     else:
         aws_access_key_id = args.aws_access_key_id
@@ -229,8 +233,11 @@ def main(argv=None):
             external_program_check([LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
             rate_limit = args.rate_limit
             if rate_limit is not None and rate_limit < 8192:
-                print >>sys.stderr, ('--cluster-read-rate-limit must be a '
-                                     'positive integer over or equal to 8192')
+                logger.error(
+                    msg='bad rate limit passed',
+                    detail='The passed rate limit was {0}'.format(rate_limit),
+                    hint=('Pass a rate limit that is positive and equal or '
+                          'greater than 8192'))
                 sys.exit(1)
 
             backup_cxt.database_s3_backup(
@@ -243,8 +250,10 @@ def main(argv=None):
             external_program_check([LZOP_BIN])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
         else:
-            print >>sys.stderr, ('Subcommand {0} not implemented!'
-                                 .format(subcommand))
+            logger.error(msg='subcommand not implemented',
+                         detail=('The submitted subcommand was {0}.'
+                                 .format(subcommand)),
+                         hint='Check for typos or consult wal-e --help.')
             sys.exit(127)
 
         # Report on all encountered exceptions, and raise the last one
