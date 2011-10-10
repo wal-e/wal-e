@@ -42,6 +42,10 @@ MBUFFER_BIN = 'mbuffer'
 # unhappy with too much memory usage in buffers.
 BUFSIZE_HT = 128 * 8192
 
+generic_weird_key_hint_message = ('This means an unexpected key was found in a '
+                                  'WAL-E prefix.  It can be harmless, or the '
+                                  'result a bug or misconfiguration.')
+
 # Set a timeout for boto HTTP operations should no timeout be set.
 # Yes, in the case the user *wanted* no timeouts, this would set one.
 # If that becomes a problem, someone should post a bug, although I am
@@ -94,9 +98,8 @@ def retry(exception_processor=generic_exception_processor):
 
     """
 
-    def wrap(f):
-        @functools.wraps(f)
-        def wrapped(*args, **kwargs):
+    def yield_new_function_from(f):
+        def shim(*args, **kwargs):
             exc_processor_cxt = None
 
             while True:
@@ -114,8 +117,8 @@ def retry(exception_processor=generic_exception_processor):
                         # Although cycles are harmless long-term, help the
                         # garbage collector.
                         del exception_info_tuple
-        return wrapped
-    return wrap
+        return functools.wraps(f)(shim)
+    return yield_new_function_from
 
 
 def uri_put_file(s3_uri, fp, content_encoding=None):
@@ -130,6 +133,10 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
 
     k.set_contents_from_file(fp)
     return k
+
+
+def compute_kib_per_second(start, finish, amount_in_bytes):
+    return (amount_in_bytes / 1024) / (finish - start)
 
 
 def do_partition_put(backup_s3_prefix, tpart, rate_limit):
@@ -214,13 +221,12 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         k = put_file_helper()
         clock_finish = time.clock()
 
+        kib_per_second = compute_kib_per_second(start, finish, k.size)
         logger.info(
             msg='finish uploading a base backup volume',
             detail=('Uploading to "{s3_url}" complete at '
                     '{kib_per_second:02g}KiB/s. ')
-            .format(s3_url=s3_url,
-                    kib_per_second=
-                    (k.size / 1024) / (clock_finish - clock_start)))
+            .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
 def do_lzop_s3_put(s3_url, local_path):
@@ -258,13 +264,12 @@ def do_lzop_s3_put(s3_url, local_path):
         k = uri_put_file(s3_url, tf)
         clock_finish = time.clock()
 
+        kib_per_second = compute_kib_per_second(start, finish, k.size)
         logger.info(
             msg='completed archiving to a file ',
             detail=('Archiving to "{s3_url}" complete at '
                     '{kib_per_second:02g}KiB/s. ')
-            .format(s3_url=s3_url,
-                    kib_per_second=
-                    (k.size / 1024) / (clock_finish - clock_start)))
+            .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
 def do_lzop_s3_get(s3_url, path):
@@ -348,7 +353,18 @@ class TarPartitionLister(object):
 
         bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
         for key in bucket.list(prefix=prefix):
-            yield key.name.rsplit('/', 1)[-1]
+            url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                                name=key.name)
+            key_last_part = key.name.rsplit('/', 1)[-1]
+            match = re.match(s3_storage.VOLUME_REGEXP, key_last_part)
+            if match is None:
+                logger.warning(msg=('unexpected key found in tar volume '
+                                    'directory'),
+                               detail=('The unexpected key is stored at "{0}".'
+                                       .format(url)),
+                               hint=generic_weird_key_hint_message)
+            else:
+                yield key_last_part
 
 
 class BackupFetcher(object):
@@ -457,9 +473,7 @@ class BackupList(object):
         # directory.
         #
         # TODO: change storage format
-        base_depth = self.layout.basebackups().count('/')
-        sentinel_depth = base_depth + 1
-
+        sentinel_depth = self.layout.basebackups().count('/')
         matcher = re.compile(s3_storage.COMPLETE_BASE_BACKUP_REGEXP).match
 
         for key in bucket.list(prefix=self.layout.basebackups()):
@@ -498,10 +512,226 @@ class BackupList(object):
                                 detail_dict[k] = 'timeout'
 
                     info = s3_storage.BackupInfo(
-                        name='base_{segment}_{offset}'.format(**groups),
+                        name='base_{filename}_{offset}'.format(**groups),
                         last_modified=key.last_modified,
-                        wal_segment_backup_start=groups['segment'],
+                        wal_segment_backup_start=groups['filename'],
                         wal_segment_offset_backup_start=groups['offset'],
                         **detail_dict)
 
                     yield info
+
+
+class DeleteFromContext(object):
+    def __init__(self, s3_conn, layout, dry_run):
+        self.s3_conn = s3_conn
+        self.dry_run = dry_run
+        self.layout = layout
+
+        assert self.dry_run in (True, False)
+
+    @retry()
+    def _maybe_delete_key(self, key, type_of_thing):
+        url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                            name=key.name)
+        log_message = dict(
+            msg='deleting {0}'.format(type_of_thing),
+            detail='The key being deleted is {url}.'.format(url=url))
+
+        if self.dry_run is False:
+            logger.info(**log_message)
+            key.delete()
+        elif self.dry_run is True:
+            log_message['hint'] = ('This is only a dry run -- no actual data '
+                                   'is being deleted')
+            logger.info(**log_message)
+        else:
+            assert False
+
+    def delete_everything(self):
+        """
+        Delete everything in a storage layout
+
+        Named provocatively for a reason: can (and in fact intended
+        to) cause irrecoverable loss of data.  This can be used to:
+
+        * Completely obliterate data from old WAL-E versions
+          (i.e. layout.VERSION is an obsolete version)
+
+        * Completely obliterate all backups (from a decommissioned
+          database, for example)
+
+        """
+        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+
+        for key in bucket.list(prefix=self.layout.basebackups()):
+            self._maybe_delete_key(key, 'part of a base backup')
+
+        for key in bucket.list(prefix=self.layout.wal_directory()):
+            self._maybe_delete_key(key, 'part of wal logs')
+
+    def delete_before(self, segment_info):
+        """
+        Delete all base backups and WAL before a given segment
+
+        This is the most commonly-used deletion operator; to delete
+        old backups and WAL.
+
+        """
+        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+
+        base_backup_sentinel_depth = self.layout.basebackups().count('/') + 1
+        version_depth = base_backup_sentinel_depth + 1
+        volume_backup_depth = version_depth + 1
+
+        def groupdict_to_segment_number(d):
+            return s3_storage.SegmentNumber(log=d['log'], seg=d['seg'])
+
+        def delete_if_qualifies(delete_horizon_segment_number,
+                                scanned_segment_number,
+                                key, type_of_thing):
+            if scanned_sn.as_an_integer < segment_info.as_an_integer:
+                self._maybe_delete_key(key, type_of_thing)
+
+        # The base-backup sweep, deleting bulk data and metadata, but
+        # not any wal files.
+        for key in bucket.list(prefix=self.layout.basebackups()):
+            url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                                name=key.name)
+            key_parts = key.name.split('/')
+            key_depth = len(key_parts)
+
+            if key_depth not in (base_backup_sentinel_depth, version_depth,
+                                 volume_backup_depth):
+                # Check depth (in terms of number of
+                # slashes/delimiters in the key); if there exists a
+                # key with an unexpected depth relative to the
+                # context, complain a little bit and move on.
+                logger.warning(
+                    msg="skipping non-qualifying key in 'delete before'",
+                    detail=('The unexpected key is "{0}", and it appears to be '
+                            'at an unexpected depth.'.format(url)),
+                    hint=generic_weird_key_hint_message)
+            elif key_depth == base_backup_sentinel_depth:
+                # This is a key at the base-backup-sentinel file
+                # depth, so check to see if it matches the known form.
+                match = re.match(s3_storage.COMPLETE_BASE_BACKUP_REGEXP,
+                                 key_parts[-1])
+                if match is None:
+                    # This key was at the level for a base backup
+                    # sentinel, but doesn't match the known pattern.
+                    # Complain about this, and move on.
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the base-backup sentinel '
+                                'pattern.'.format(url)),
+                        hint=generic_weird_key_hint_message)
+                else:
+                    # This branch actually might delete some data: the
+                    # key is at the right level, and matches the right
+                    # form.  The last check is to make sure it's in
+                    # the range of things to delete, and if that is
+                    # the case, attempt deletion.
+                    assert match is not None
+                    scanned_sn = groupdict_to_segment_number(match.groupdict())
+                    delete_if_qualifies(segment_info, scanned_sn, key,
+                                        'a base backup sentinel file')
+            elif key_depth == version_depth:
+                match = re.match(
+                    s3_storage.BASE_BACKUP_REGEXP, key_parts[-2])
+
+                if match is None or key_parts[-1] != 'extended_version.txt':
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the extended-version backup '
+                                'pattern.'.format(url)),
+                        hint=generic_weird_key_hint_message)
+                else:
+                    assert match is not None
+                    scanned_sn = groupdict_to_segment_number(match.groupdict())
+                    delete_if_qualifies(segment_info, scanned_sn, key,
+                                        'a extended version metadata file')
+            elif key_depth == volume_backup_depth:
+                # This has the depth of a base-backup volume, so try
+                # to match the expected pattern and delete it if the
+                # pattern matches and the base backup part qualifies
+                # properly.
+                assert len(key_parts) >= 2, ('must be a logical result of the '
+                                             's3 storage layout')
+
+                match = re.match(
+                    s3_storage.BASE_BACKUP_REGEXP, key_parts[-3])
+
+                if match is None or key_parts[-2] != 'tar_partitions':
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the base-backup partition pattern.'
+                                .format(url)),
+                        hint=generic_weird_key_hint_message)
+                else:
+                    assert match is not None
+                    scanned_sn = groupdict_to_segment_number(match.groupdict())
+                    delete_if_qualifies(segment_info, scanned_sn, key,
+                                        'a base backup volume')
+            else:
+                assert False
+
+        # the WAL-file sweep, deleting only WAL files, and not any
+        # base-backup information.
+        wal_key_depth = self.layout.wal_directory().count('/') + 1
+        for key in bucket.list(prefix=self.layout.wal_directory()):
+            url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                                name=key.name)
+            key_parts = key.name.split('/')
+            key_depth = len(key_parts)
+            if key_depth != wal_key_depth:
+                logger.warning(
+                    msg="skipping non-qualifying key in 'delete before'",
+                    detail=('The unexpected key is "{0}", and it appears to be '
+                            'at an unexpected depth.'.format(url)),
+                    hint=generic_weird_key_hint_message)
+            elif key_depth == wal_key_depth:
+                segment_match = (re.match(s3_storage.SEGMENT_REGEXP + r'\.lzo',
+                                          key_parts[-1]))
+                label_match = (re.match(s3_storage.SEGMENT_REGEXP +
+                                        r'\.[A-F0-9]{8,8}.backup.lzo',
+                                        key_parts[-1]))
+                history_match = re.match(r'[A-F0-9]{8,8}\.history',
+                                         key_parts[-1])
+
+                all_matches = [segment_match, label_match, history_match]
+
+                non_matches = len(list(m for m in all_matches if m is None))
+
+                # These patterns are intended to be mutually
+                # exclusive, so either one should match or none should
+                # match.
+                assert non_matches in (len(all_matches) - 1, len(all_matches))
+                if non_matches == len(all_matches):
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the WAL file naming pattern.'
+                                .format(url)),
+                        hint=generic_weird_key_hint_message)
+                elif segment_match is not None:
+                    scanned_sn = groupdict_to_segment_number(
+                        segment_match.groupdict())
+                    delete_if_qualifies(segment_info, scanned_sn, key,
+                                        'a wal file')
+                elif label_match is not None:
+                    scanned_sn = groupdict_to_segment_number(
+                        label_match.groupdict())
+                    delete_if_qualifies(segment_info, scanned_sn, key,
+                                        'a backup history file')
+                elif history_match is not None:
+                    # History (timeline) files do not have any actual
+                    # WAL position information, so they are never
+                    # deleted.
+                    pass
+                else:
+                    assert False
+            else:
+                assert False

@@ -21,6 +21,7 @@ gevent_monkey()
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -106,6 +107,18 @@ def external_program_check(
     return None
 
 
+def extract_segment(text_with_extractable_segment):
+    from wal_e.storage.s3_storage import BASE_BACKUP_REGEXP
+    from wal_e.storage.s3_storage import SegmentNumber
+
+    match = re.match(BASE_BACKUP_REGEXP, text_with_extractable_segment)
+    if match is None:
+        return None
+    else:
+        groupdict = match.groupdict()
+        return SegmentNumber(log=groupdict['log'], seg=groupdict['seg'])
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv
@@ -149,6 +162,8 @@ def main(argv=None):
     wal_fetchpush_parent.add_argument('WAL_SEGMENT',
                                       help='Path to a WAL segment to upload')
 
+    backup_destroy_parser = subparsers.add_parser(
+        'backup-destroy', help='destroy old backups in S3')
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
         parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
@@ -187,8 +202,44 @@ def main(argv=None):
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
 
+    # delete subparser section
+    delete_parser = subparsers.add_parser(
+        'delete', help=('operators to destroy specified data in S3'))
+    delete_parser.add_argument('--dry-run', '-n', action='store_true',
+                               help=('Only print what would be deleted, '
+                                     'do not actually delete anything'))
+    delete_parser.add_argument('--force', '-f', action='store_true',
+                               help=('Actually delete data.  '
+                                     'By default, a dry run is performed.  '
+                                     'Overridden by --dry-run.'))
+    delete_subparsers = delete_parser.add_subparsers(
+        title='delete subcommands',
+        description=('All operators that may delete data are contained '
+                     'in this subcommand.'),
+        dest='delete_subcommand')
+
+    # delete 'before' operator
+    delete_before_parser = delete_subparsers.add_parser(
+        'before', help=('Delete all backups and WAL segments strictly before '
+                        'the given base backup name or WAL segment number.  '
+                        'The passed backup is *not* deleted.'))
+    delete_before_parser.add_argument(
+        'BEFORE_SEGMENT_EXCLUSIVE',
+        help='A WAL segment number or base backup name')
+
+    # delete old versions operator
+    delete_old_versions_parser = delete_subparsers.add_parser('old-versions')
+
+    # delete *everything* operator
+    delete_old_versions_parser = delete_subparsers.add_parser('everything')
+
+    # Okay, parse some arguments, finally
     args = parser.parse_args()
 
+    # Attempt to read a few key parameters from environment variables
+    # *or* the command line, enforcing a precedence order and
+    # complaining should the required parameter not be defined in
+    # either location.
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
         logger.error(
@@ -249,6 +300,41 @@ def main(argv=None):
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+        elif subcommand == 'delete':
+            # Set up pruning precedence, optimizing for *not* deleting data
+            print args
+
+            # Canonicalize the passed arguments into the value
+            # "is_dry_run_really"
+            if args.dry_run is False and args.force is True:
+                # Actually delete data *only* if there are *no* --dry-runs
+                # present and --force is present.
+                logger.info(msg='deleting data in S3')
+                is_dry_run_really = False
+            else:
+                logger.info(msg='performing dry run of S3 data deletion')
+                is_dry_run_really = True
+
+                import boto.s3.key
+
+                # This is not necessary, but "just in case" to find bugs.
+                def just_error(*args, **kwargs):
+                    assert False, ('About to delete something in '
+                                   'dry-run mode.  Please report a bug.')
+
+                boto.s3.key.Key.delete = just_error
+
+            # Handle the subcommands and route them to the right
+            # implementations.
+            if args.delete_subcommand == 'old-versions':
+                backup_cxt.delete_old_versions(is_dry_run_really)
+            elif args.delete_subcommand == 'everything':
+                backup_cxt.delete_all(is_dry_run_really)
+            elif args.delete_subcommand == 'before':
+                segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
+                backup_cxt.delete_before(is_dry_run_really, segment_info)
+            else:
+                assert False, 'Should be rejected by argument parsing.'
         else:
             logger.error(msg='subcommand not implemented',
                          detail=('The submitted subcommand was {0}.'

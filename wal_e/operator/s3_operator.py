@@ -34,7 +34,7 @@ logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 # Provides guidence in object names as to the version of the file
 # structure.
-FILE_STRUCTURE_VERSION = s3_storage.StorageLayout.VERSION
+FILE_STRUCTURE_VERSION = s3_storage.CURRENT_VERSION
 
 
 class S3Backup(object):
@@ -53,6 +53,14 @@ class S3Backup(object):
 
         self.exceptions = []
 
+    def new_connection(self):
+        from boto.s3.connection import OrdinaryCallingFormat
+        from boto.s3.connection import S3Connection
+
+        return S3Connection(self.aws_access_key_id,
+                            self.aws_secret_access_key,
+                            calling_format=OrdinaryCallingFormat())
+
     def backup_list(self, query, detail):
         """
         Lists base backups and basic information about them
@@ -65,9 +73,7 @@ class S3Backup(object):
 
         from wal_e.storage.s3_storage import BackupInfo
 
-        s3_conn = S3Connection(self.aws_access_key_id,
-                               self.aws_secret_access_key,
-                               calling_format=OrdinaryCallingFormat())
+        s3_conn = self.new_connection()
 
         bl = s3_worker.BackupList(s3_conn,
                                   s3_storage.StorageLayout(self.s3_prefix),
@@ -150,11 +156,10 @@ class S3Backup(object):
             if not filenames:
                 matches.append(root)
 
-
         backup_s3_prefix = ('{0}/basebackups_{1}/'
-                               'base_{file_name}_{file_offset}'
-                               .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
-                                       **start_backup_info))
+                            'base_{file_name}_{file_offset}'
+                            .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
+                                    **start_backup_info))
 
         # absolute upload paths are used for telling lzop what to compress
         local_abspaths = [os.path.abspath(match) for match in matches]
@@ -238,22 +243,11 @@ class S3Backup(object):
                 'then remove it after being very sure postgres is not '
                 'running.')
 
-        from boto.s3.connection import OrdinaryCallingFormat
-        from boto.s3.connection import S3Connection
-
         layout = s3_storage.StorageLayout(self.s3_prefix)
 
         s3_connections = []
         for i in xrange(pool_size):
-            s3_connections.append(S3Connection(
-                    self.aws_access_key_id,
-                    self.aws_secret_access_key,
-                    calling_format=OrdinaryCallingFormat(),
-                    # TODO: Add https_connection_factory
-                    # with timeouts.  This is less
-                    # necessary with Boto 2.0b5, which is
-                    # yet to be released...
-                    ))
+            s3_connections.append(self.new_connection())
 
         bl = s3_worker.BackupList(s3_connections[0],
                                   s3_storage.StorageLayout(self.s3_prefix),
@@ -319,10 +313,8 @@ class S3Backup(object):
         try:
             start_backup_info = PgBackupStatements.run_start_backup()
             version = PgBackupStatements.pg_version()['version']
-            uploaded_to, expanded_size_bytes = \
-                self._s3_upload_pg_cluster_dir(
-                start_backup_info, version=version,
-                *args, **kwargs)
+            uploaded_to, expanded_size_bytes = self._s3_upload_pg_cluster_dir(
+                start_backup_info, version=version, *args, **kwargs)
             upload_good = True
         finally:
             if not upload_good:
@@ -407,3 +399,26 @@ class S3Backup(object):
                                          FILE_STRUCTURE_VERSION,
                                          wal_name),
             wal_destination)
+
+    def delete_old_versions(self, dry_run):
+        obsolete_versions = ('004', '003', '002', '001', '000')
+        assert s3_storage.CURRENT_VERSION not in obsolete_versions
+
+        for obsolete_version in obsolete_versions:
+            layout = s3_storage.StorageLayout(self.s3_prefix,
+                                              version=obsolete_version)
+            self.delete_all(dry_run, layout)
+
+    def delete_all(self, dry_run, layout=None):
+        if layout is None:
+            layout = s3_storage.StorageLayout(self.s3_prefix)
+
+        s3_conn = self.new_connection()
+        delete_cxt = s3_worker.DeleteFromContext(s3_conn, layout, dry_run)
+        delete_cxt.delete_everything()
+
+    def delete_before(self, dry_run, segment_info):
+        layout = s3_storage.StorageLayout(self.s3_prefix)
+        s3_conn = self.new_connection()
+        delete_cxt = s3_worker.DeleteFromContext(s3_conn, layout, dry_run)
+        delete_cxt.delete_before(segment_info)
