@@ -162,8 +162,6 @@ def main(argv=None):
     wal_fetchpush_parent.add_argument('WAL_SEGMENT',
                                       help='Path to a WAL segment to upload')
 
-    backup_destroy_parser = subparsers.add_parser(
-        'backup-destroy', help='destroy old backups in S3')
     backup_fetch_parser = subparsers.add_parser(
         'backup-fetch', help='fetch a hot backup from S3',
         parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
