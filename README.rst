@@ -254,6 +254,63 @@ wal_segment_offset_backup_stop    The offset in the last WAL segment
    backups or so) than ``backup-list``, and often (but not always) the
    information in the regular ``backup-list`` is all one needs.
 
+
+delete
+''''''
+
+``delete`` contains additional subcommands that are used for deleting
+data from S3 for various reasons.  These commands are organized
+separately because the ``delete`` subcommand itself takes options that
+apply to any subcommand that does deletion, such as ``--force``.
+
+All deletions are designed to be reentrant and idempotent: there are
+no negative consequences if one runs several deletions at once or if
+one resubmits the same deletion command several times, with or without
+canceling other deletions that may be concurrent.
+
+These commands have a ``dry-run`` mode that is the default.  The
+command is basically optimize to not delete data except in a very
+specific circumstance to avoid operator error.  Should a dry-run be
+performed, ``wal-e`` will instead simply report every key it would
+otherwise delete if it was not running in dry-run mode, along with
+prominent HINT-lines for every key noting that nothing was actually
+deleted from S3.
+
+To *actually* delete any data, one must pass ``--force`` or the
+shorthand ``-f`` to ``wal-e delete``.  If one passes both
+``--dry-run`` and ``--force``, a dry run will be performed, regardless
+of the order of options passed.
+
+Currently, these kinds of deletions are supported.  Examples omit
+environment variable configuration for clarity:
+
+* ``before``: Delete all backups and wal segment files before the
+  given base-backup name.  This does not include the base backup
+  passed: it will remain a viable backup.
+
+  Example::
+
+    $ wal-e delete [--force] before base_00000004000002DF000000A6_03626144
+
+* ``old-versions``: Delete all backups and wal file segments with an
+  older format.  This is only intended to be run after a major WAL-E
+  version upgrade and the subsequent base-backup.  If no base backup
+  is successfully performed first, one is more exposed to data loss
+  until one does perform a base backup.
+
+  Example::
+
+    $ wal-e delete [--force] old-versions
+
+* ``everything``: Delete all backups and wal file segments in the
+  context.  This is appropriate if one is decommissioning a database
+  and has no need for its archives.
+
+  Example::
+
+    $ wal-e delete [--force] everything
+
+
 Compression and Temporary Files
 -------------------------------
 
