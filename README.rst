@@ -176,9 +176,14 @@ file like this::
 Auxiliary Commands
 ------------------
 
-These are commands that are not used expressly for backup pushing and
-fetching, but are important to the monitoring or maintenance of WAL-E
-archived databases.
+These are commands that are not used expressly for backup or WAL
+pushing and fetching, but are important to the monitoring or
+maintenance of WAL-E archived databases.  Unlike the critical four
+operators for taking and restoring backups (``backup-push``,
+``backup-fetch``, ``wal-push``, ``wal-fetch``) that must reside on the
+database machine, these commands can be productively run from any
+computer with ``WALE_S3_PREFIX`` and the necessary credentials to
+manipulate or read data there.
 
 
 backup-list
