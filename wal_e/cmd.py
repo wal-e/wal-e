@@ -302,8 +302,7 @@ def main(argv=None):
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data
-            print args
-
+            #
             # Canonicalize the passed arguments into the value
             # "is_dry_run_really"
             if args.dry_run is False and args.force is True:
