@@ -188,7 +188,7 @@ backup-list is useful for listing base backups that are complete for a
 given WAL-E context.  Its output is subject to change, but currently
 it's a CSV with a one-line prepended header.  Some fields are only
 filled in when the ``--detail`` option is passed to ``backup-list``
-[#why-detail-flag].
+[#why-detail-flag]_.
 
 .. NOTE::
    Some ``--detail`` only fields are not strictly to the right of
