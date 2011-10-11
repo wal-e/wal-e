@@ -226,10 +226,18 @@ def main(argv=None):
         help='A WAL segment number or base backup name')
 
     # delete old versions operator
-    delete_old_versions_parser = delete_subparsers.add_parser('old-versions')
+    delete_old_versions_parser = delete_subparsers.add_parser(
+        'old-versions',
+        help=('Delete all old versions of WAL-E backup files.  One probably '
+              'wants to ensure that they take a new backup with the new format '
+              'first.  This is useful after a WAL-E major release upgrade.'))
 
     # delete *everything* operator
-    delete_old_versions_parser = delete_subparsers.add_parser('everything')
+    delete_old_versions_parser = delete_subparsers.add_parser(
+        'everything',
+        help=('Delete all data in the current WAL-E context.  '
+              'Typically this is only appropriate when decommissioning an '
+              'entire WAL-E archive.'))
 
     # Okay, parse some arguments, finally
     args = parser.parse_args()
