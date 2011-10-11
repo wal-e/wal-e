@@ -173,6 +173,82 @@ file like this::
     restore_command = 'envdir /etc/wal-e.d/env wal-e wal-fetch "%f" "%p"'
 
 
+Auxiliary Commands
+------------------
+
+These are commands that are not used expressly for backup pushing and
+fetching, but are important to the monitoring or maintenance of WAL-E
+archived databases.
+
+
+backup-list
+'''''''''''
+
+backup-list is useful for listing base backups that are complete for a
+given WAL-E context.  Its output is subject to change, but currently
+it's a CSV with a one-line prepended header.  Some fields are only
+filled in when the ``--detail`` option is passed to ``backup-list``
+[#why-detail-flag].
+
+.. NOTE::
+   Some ``--detail`` only fields are not strictly to the right of
+   fields that do not require ``--detail`` be passed.  This is not a
+   problem if one uses any CSV parsing library (as two tab-delimiters
+   will be emitted) to signify the empty column, but if one is hoping
+   to use string mangling to extract fields, exhibit care.
+
+Firstly, the fields that are filled in regardless of if ``--detail``
+is passed or not:
+
+================================  ====================================
+        Header in CSV                           Meaning
+================================  ====================================
+name                              The name of the backup, which can be
+                                  passed to the ``delete`` and
+                                  ``backup-fetch`` commands.
+
+last_modified                     The date and time the backup was
+				  completed and uploaded, rendered in
+				  an ISO-compatible format with
+				  timezone information.
+
+wal_segment_backup_start          The wal segment number.  It is a
+                                  24-character hexadecimal number.
+                                  This information identifies the
+				  timeline and relative ordering of
+				  various backups.
+
+wal_segment_offset_backup_start   The offset in the WAL segment that
+				  this backup starts at.  This is
+				  mostly to avoid ambiguity in event
+				  of backups that may start in the
+				  same WAL segment.
+================================  ====================================
+
+Secondly, the fields that are filled in only when ``--detail`` is
+passed:
+
+================================  ====================================
+        Header in CSV                           Meaning
+================================  ====================================
+expanded_size_bytes               The decompressed size of the backup
+				  in bytes.
+
+wal_segment_backup_stop           The last WAL segment file required
+				  to bring this backup into a
+				  consistent state, and thus available
+				  for hot-standby.
+
+wal_segment_offset_backup_stop    The offset in the last WAL segment
+				  file required to bring this backup
+				  into a consistent state.
+================================  ====================================
+
+.. [#why-detail-flag] ``backup-list --detail`` is slower (one web
+   request per backup, rather than one web request per thousand
+   backups or so) than ``backup-list``, and often (but not always) the
+   information in the regular ``backup-list`` is all one needs.
+
 Compression and Temporary Files
 -------------------------------
 
