@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-
 import os.path
+import sys
 
 # Version file managment scheme and graceful degredation for
 # setuptools borrowed and adapted from GitPython.
@@ -11,12 +11,12 @@ except ImportError:
     use_setuptools()
     from setuptools import setup, find_packages
 
+if sys.version_info < (2, 6):
+    raise RuntimeError('Python versions < 2.6 are not supported.')
+
 v = open(os.path.join(os.path.dirname(__file__), 'VERSION'))
 VERSION = v.readline().strip()
 v.close()
-
-import sys
-
 
 install_requires = ['gevent>=0.13.0', 'boto>=2.0']
 
