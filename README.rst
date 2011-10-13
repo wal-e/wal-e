@@ -273,7 +273,7 @@ delete
 ``delete`` contains additional subcommands that are used for deleting
 data from S3 for various reasons.  These commands are organized
 separately because the ``delete`` subcommand itself takes options that
-apply to any subcommand that does deletion, such as ``--force``.
+apply to any subcommand that does deletion, such as ``--confirm``.
 
 All deletions are designed to be reentrant and idempotent: there are
 no negative consequences if one runs several deletions at once or if
@@ -288,10 +288,9 @@ otherwise delete if it was not running in dry-run mode, along with
 prominent HINT-lines for every key noting that nothing was actually
 deleted from S3.
 
-To *actually* delete any data, one must pass ``--force`` or the
-shorthand ``-f`` to ``wal-e delete``.  If one passes both
-``--dry-run`` and ``--force``, a dry run will be performed, regardless
-of the order of options passed.
+To *actually* delete any data, one must pass ``--confirm`` to ``wal-e
+delete``.  If one passes both ``--dry-run`` and ``--confirm``, a dry
+run will be performed, regardless of the order of options passed.
 
 Currently, these kinds of deletions are supported.  Examples omit
 environment variable configuration for clarity:
@@ -302,7 +301,7 @@ environment variable configuration for clarity:
 
   Example::
 
-    $ wal-e delete [--force] before base_00000004000002DF000000A6_03626144
+    $ wal-e delete [--confirm] before base_00000004000002DF000000A6_03626144
 
 * ``old-versions``: Delete all backups and wal file segments with an
   older format.  This is only intended to be run after a major WAL-E
@@ -312,7 +311,7 @@ environment variable configuration for clarity:
 
   Example::
 
-    $ wal-e delete [--force] old-versions
+    $ wal-e delete [--confirm] old-versions
 
 * ``everything``: Delete all backups and wal file segments in the
   context.  This is appropriate if one is decommissioning a database
@@ -320,7 +319,7 @@ environment variable configuration for clarity:
 
   Example::
 
-    $ wal-e delete [--force] everything
+    $ wal-e delete [--confirm] everything
 
 
 Compression and Temporary Files

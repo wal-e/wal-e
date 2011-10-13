@@ -206,7 +206,7 @@ def main(argv=None):
     delete_parser.add_argument('--dry-run', '-n', action='store_true',
                                help=('Only print what would be deleted, '
                                      'do not actually delete anything'))
-    delete_parser.add_argument('--force', '-f', action='store_true',
+    delete_parser.add_argument('--confirm', action='store_true',
                                help=('Actually delete data.  '
                                      'By default, a dry run is performed.  '
                                      'Overridden by --dry-run.'))
@@ -311,9 +311,9 @@ def main(argv=None):
             #
             # Canonicalize the passed arguments into the value
             # "is_dry_run_really"
-            if args.dry_run is False and args.force is True:
+            if args.dry_run is False and args.confirm is True:
                 # Actually delete data *only* if there are *no* --dry-runs
-                # present and --force is present.
+                # present and --confirm is present.
                 logger.info(msg='deleting data in S3')
                 is_dry_run_really = False
             else:
