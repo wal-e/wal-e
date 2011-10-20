@@ -74,7 +74,14 @@ class StorageLayout(object):
         self._url_tup = url_tup
 
         # S3 api requests absolutely cannot contain a leading slash.
-        self._s3_api_prefix = url_tup.path.lstrip('/')
+        s3_api_prefix = url_tup.path.lstrip('/')
+
+        # Also canonicalize a trailing slash onto the prefix, should
+        # none already exist.
+        if s3_api_prefix[-1] != '/':
+            self._s3_api_prefix = s3_api_prefix + '/'
+        else:
+            self.s3_api_prefix = s3_api_prefix
 
     def _error_on_unexpected_version(self):
         if self.VERSION != '005':
@@ -82,12 +89,12 @@ class StorageLayout(object):
                              'operator is not implemented')
 
     def basebackups(self):
-        return self._s3_api_prefix + '/basebackups_' + self.VERSION + '/'
+        return self._s3_api_prefix + 'basebackups_' + self.VERSION + '/'
 
     def basebackup_directory(self, backup_info):
         self._error_on_unexpected_version()
         return (self.basebackups() +
-                '/base_{0}_{1}'.format(
+                'base_{0}_{1}/'.format(
                 backup_info.wal_segment_backup_start,
                 backup_info.wal_segment_offset_backup_start))
 
@@ -99,15 +106,15 @@ class StorageLayout(object):
     def basebackup_tar_partition_directory(self, backup_info):
         self._error_on_unexpected_version()
         return (self.basebackup_directory(backup_info) +
-                '/tar_partitions')
+                'tar_partitions/')
 
     def basebackup_tar_partition(self, backup_info, part_name):
         self._error_on_unexpected_version()
         return (self.basebackup_tar_partition_directory(backup_info) +
-                '/' + part_name)
+                part_name)
 
     def wal_directory(self):
-        return self._s3_api_prefix + '/wal_' + self.VERSION + '/'
+        return self._s3_api_prefix + 'wal_' + self.VERSION + '/'
 
     def wal_path(self, wal_file_name):
         self._error_on_unexpected_version()
