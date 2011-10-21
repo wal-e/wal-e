@@ -382,6 +382,7 @@ class BackupFetcher(object):
             lzod.input_fp.flush()
             lzod.input_fp.close()
 
+    @retry()
     def fetch_partition(self, partition_name):
         part_abs_name = self.layout.basebackup_tar_partition(
             self.backup_info, partition_name)
