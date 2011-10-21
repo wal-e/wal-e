@@ -112,6 +112,10 @@ class WalELogger(object):
     # could abuse dynamism to generate these bindings in a loop, but
     # one day I hope to run with PyPy and tricks like that tend to
     # lobotomize an optimizer something fierce.
+
+    def debug(self, *args, **kwargs):
+        self.log(logging.DEBUG, *args, **kwargs)
+
     def info(self, *args, **kwargs):
         self.log(logging.INFO, *args, **kwargs)
 
