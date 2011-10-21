@@ -394,33 +394,23 @@ class BackupFetcher(object):
             hint='The absolute S3 key is {0}.'.format(part_abs_name))
 
         key = self.bucket.get_key(part_abs_name)
+        lzod = StreamLzoDecompressionPipeline()
+        g = gevent.spawn(self._write_and_close, key, lzod)
+        tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
 
-        good = False
-        try:
-            lzod = StreamLzoDecompressionPipeline()
-            g = gevent.spawn(self._write_and_close, key, lzod)
-            tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
+        # TODO: replace with per-member file handling,
+        # extractall very much warned against in the docs, and
+        # seems to have changed between Python 2.6 and Python
+        # 2.7.
+        tar.extractall(self.local_root)
+        tar.close()
 
-            # TODO: replace with per-member file handling,
-            # extractall very much warned against in the docs, and
-            # seems to have changed between Python 2.6 and Python
-            # 2.7.
-            tar.extractall(self.local_root)
-            tar.close()
+        # Raise any exceptions from self._write_and_close
+        g.get()
 
-            # Raise any exceptions from self._write_and_close
-            g.get()
-
-            # Blocks on lzo exiting and raises an exception if the
-            # exit status it non-zero.
-            lzod.finish()
-            good = True
-        finally:
-            if good:
-                return
-            else:
-                assert not good
-
+        # Blocks on lzo exiting and raises an exception if the
+        # exit status it non-zero.
+        lzod.finish()
 
 class BackupList(object):
     def __init__(self, s3_conn, layout, detail):
