@@ -221,7 +221,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         k = put_file_helper()
         clock_finish = time.clock()
 
-        kib_per_second = compute_kib_per_second(start, finish, k.size)
+        kib_per_second = compute_kib_per_second(clock_start, clock_finish,
+                                                k.size)
         logger.info(
             msg='finish uploading a base backup volume',
             detail=('Uploading to "{s3_url}" complete at '
@@ -264,7 +265,8 @@ def do_lzop_s3_put(s3_url, local_path):
         k = uri_put_file(s3_url, tf)
         clock_finish = time.clock()
 
-        kib_per_second = compute_kib_per_second(start, finish, k.size)
+        kib_per_second = compute_kib_per_second(clock_start, clock_finish,
+                                                k.size)
         logger.info(
             msg='completed archiving to a file ',
             detail=('Archiving to "{s3_url}" complete at '
