@@ -253,7 +253,7 @@ def do_lzop_s3_put(s3_url, local_path):
         if compression_p.returncode != 0:
             raise UserCritical(
                 'could not properly compress file',
-                'the file is at {path}'.format(path=path))
+                'the file is at {path}'.format(path=local_path))
 
         tf.flush()
 

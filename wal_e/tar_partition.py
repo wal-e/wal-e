@@ -124,9 +124,9 @@ class TarPartition(list):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
                 if rate_limit is not None:
-                    mbuffer = piper.popen_sp(
+                    mbuffer = wal_e.piper.popen_sp(
                         ['mbuffer', '-r', unicode(int(rate_limit))],
-                        stdin=raw_file, stdout=piper.PIPE)
+                        stdin=raw_file, stdout=wal_e.piper.PIPE)
 
                     with StreamPadFileObj(mbuffer.stdout,
                                           et_info.tarinfo.size) as f:
