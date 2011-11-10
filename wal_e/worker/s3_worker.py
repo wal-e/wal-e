@@ -144,7 +144,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
     Synchronous version of the s3-upload wrapper
 
     """
-    logger.info(msg='beginning volume compression')
+    logger.info(msg='beginning volume compression',
+                detail='Building volume {name}.'.format(name=tpart.name))
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         compression_p = popen_sp([LZOP_BIN, '--stdout'],
