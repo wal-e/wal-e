@@ -135,8 +135,11 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
     return k
 
 
-def compute_kib_per_second(start, finish, amount_in_bytes):
-    return (amount_in_bytes / 1024) / (finish - start)
+def format_kib_per_second(start, finish, amount_in_bytes):
+    try:
+        return '{0:02g}'.format((amount_in_bytes / 1024) / (finish - start))
+    except ZeroDivisionError:
+        return 'NaN'
 
 
 def do_partition_put(backup_s3_prefix, tpart, rate_limit):
@@ -227,12 +230,12 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
         k = put_file_helper()
         clock_finish = time.clock()
 
-        kib_per_second = compute_kib_per_second(clock_start, clock_finish,
-                                                k.size)
+        kib_per_second = format_kib_per_second(clock_start, clock_finish,
+                                               k.size)
         logger.info(
             msg='finish uploading a base backup volume',
             detail=('Uploading to "{s3_url}" complete at '
-                    '{kib_per_second:02g}KiB/s. ')
+                    '{kib_per_second}KiB/s. ')
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
@@ -271,12 +274,12 @@ def do_lzop_s3_put(s3_url, local_path):
         k = uri_put_file(s3_url, tf)
         clock_finish = time.clock()
 
-        kib_per_second = compute_kib_per_second(clock_start, clock_finish,
-                                                k.size)
+        kib_per_second = format_kib_per_second(clock_start, clock_finish,
+                                               k.size)
         logger.info(
             msg='completed archiving to a file ',
             detail=('Archiving to "{s3_url}" complete at '
-                    '{kib_per_second:02g}KiB/s. ')
+                    '{kib_per_second}KiB/s. ')
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
