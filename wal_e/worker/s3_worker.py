@@ -185,27 +185,32 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             .format(s3_url=s3_url))
 
         def put_volume_exception_processor(exc_tup, exc_processor_cxt):
+            def standard_detail_message():
+                return ('There have been {n} attempts to send the '
+                        'volume {name} so far.'.format(n=exc_processor_cxt,
+                                                       name=tpart.name))
+
+            def increment_context(exc_processor_cxt):
+                return ((exc_processor_cxt is None and 1) or
+                        exc_processor_cxt + 1)
+
             typ, value, tb = exc_tup
 
-            # Screen for certain kinds of known-errors to retry
-            # from
-            if issubclass(typ, socket.error):
-                # This branch is for conditions that are retry-able.
-                if value[0] == errno.ECONNRESET:
-                    # "Connection reset by peer"
-                    if exc_processor_cxt is None:
-                        exc_processor_cxt = 1
-                    else:
-                        exc_processor_cxt += 1
+            if exc_processor_cxt is None:
+                exc_processor_cxt = increment_context(exc_processor_cxt)
 
-                    logger.info(
-                        msg='Connection reset detected, retrying send',
-                        detail=('There have been {n} attempts to send the '
-                                'volume {name} so far.'
-                                .format(n=exc_processor_cxt,
-                                        name=tpart.name)))
+            # Screen for certain kinds of known-errors to retry from
+            if issubclass(typ, socket.error) and value[0] == errno.ECONNRESET:
+                logger.info(msg='Connection reset detected, retrying send',
+                            detail=standard_detail_message())
 
-                    return exc_processor_cxt
+                return increment_context(exc_processor_cxt)
+            elif (issubclass(typ, boto.exception.S3ResponseError) and
+                  value.error_code == 'RequestTimeTooSkewed'):
+                logger.info(msg='Request Time too Skewed, retrying send',
+                            detail=standard_detail_message())
+
+                return increment_context(exc_processor_cxt)
             else:
                 # This type of error is unrecognized as a
                 # retry-able condition, so propagate it, original
