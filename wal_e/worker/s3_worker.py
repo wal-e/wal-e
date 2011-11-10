@@ -188,8 +188,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             .format(s3_url=s3_url))
 
         def put_volume_exception_processor(exc_tup, exc_processor_cxt):
-            def standard_detail_message():
-                return ('There have been {n} attempts to send the '
+            def standard_detail_message(prefix=''):
+                return (prefix + '  There have been {n} attempts to send the '
                         'volume {name} so far.'.format(n=exc_processor_cxt,
                                                        name=tpart.name))
 
@@ -203,14 +203,16 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                 exc_processor_cxt = increment_context(exc_processor_cxt)
 
             # Screen for certain kinds of known-errors to retry from
-            if issubclass(typ, socket.error) and value[0] == errno.ECONNRESET:
-                logger.info(msg='Connection reset detected, retrying send',
-                            detail=standard_detail_message())
+            if issubclass(typ, socket.error):
+                socketmsg = value[1] if isinstance(value, tuple) else value
 
+                logger.info(msg='Retrying send because of a socket error',
+                            detail=standard_detail_message(
+                        "The socket error's message is '{0}'.".format(socketmsg)))
                 return increment_context(exc_processor_cxt)
             elif (issubclass(typ, boto.exception.S3ResponseError) and
                   value.error_code == 'RequestTimeTooSkewed'):
-                logger.info(msg='Request Time too Skewed, retrying send',
+                logger.info(msg='Retrying send because of a Request Skew time',
                             detail=standard_detail_message())
 
                 return increment_context(exc_processor_cxt)
