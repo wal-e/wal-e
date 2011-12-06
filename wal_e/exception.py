@@ -1,4 +1,6 @@
 from logging import ERROR, CRITICAL
+from logging import getLevelName
+from wal_e.log_help import WalELogger
 
 
 class UserException(Exception):
@@ -13,6 +15,18 @@ class UserException(Exception):
 
     If it is necessary to trap these exceptions. use a subclass.
 
+    >>> raise UserException(msg='foo', detail='bar')
+    Traceback (most recent call last):
+        ...
+    UserException: ERROR: MSG: foo
+    DETAIL: bar
+
+    >>> raise UserException(msg='foo', detail='bar', hint='hello')
+    Traceback (most recent call last):
+        ...
+    UserException: ERROR: MSG: foo
+    DETAIL: bar
+    HINT: hello
     """
 
     def __init__(self, msg=None, detail=None, hint=None):
@@ -24,6 +38,10 @@ class UserException(Exception):
         self.detail = detail
         self.hint = hint
         self.severity = ERROR
+
+    def __str__(self):
+        return "{0}: {1}".format(getLevelName(self.severity),
+                WalELogger.fmt_logline(self.msg, self.detail, self.hint))
 
 
 class UserCritical(UserException):
