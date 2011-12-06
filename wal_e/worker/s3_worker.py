@@ -42,9 +42,9 @@ MBUFFER_BIN = 'mbuffer'
 # unhappy with too much memory usage in buffers.
 BUFSIZE_HT = 128 * 8192
 
-generic_weird_key_hint_message = ('This means an unexpected key was found in a '
-                                  'WAL-E prefix.  It can be harmless, or the '
-                                  'result a bug or misconfiguration.')
+generic_weird_key_hint_message = ('This means an unexpected key was found in '
+                                  'a WAL-E prefix.  It can be harmless, or '
+                                  'the result a bug or misconfiguration.')
 
 # Set a timeout for boto HTTP operations should no timeout be set.
 # Yes, in the case the user *wanted* no timeouts, this would set one.
@@ -121,6 +121,36 @@ def retry(exception_processor=generic_exception_processor):
     return yield_new_function_from
 
 
+def retry_with_count(side_effect_func):
+    def internal(exc_tup, exc_processor_cxt):
+        """
+        An exception processor that counts how many times it has retried
+
+        :param exc_processor_cxt: The context counting how many times
+                                  retries have been attempted.
+
+        :type exception_cxt: integer
+
+        :param side_effect_func: A function to perform side effects in
+                                 response to the exception, such as
+                                 logging.
+
+        :type side_effect_func: function
+        """
+        def increment_context(exc_processor_cxt):
+            return ((exc_processor_cxt is None and 1) or
+                    exc_processor_cxt + 1)
+
+        if exc_processor_cxt is None:
+            exc_processor_cxt = increment_context(exc_processor_cxt)
+
+        side_effect_func(exc_tup, exc_processor_cxt)
+
+        return increment_context(exc_processor_cxt)
+
+    return functools.wraps(internal)
+
+
 def uri_put_file(s3_uri, fp, content_encoding=None):
 
     # XXX: disable validation as a kludge to get around use of
@@ -187,42 +217,37 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             detail=('Uploading to "{s3_url}".')
             .format(s3_url=s3_url))
 
-        def put_volume_exception_processor(exc_tup, exc_processor_cxt):
+        def log_volume_failures_on_error(exc_tup, exc_processor_cxt):
             def standard_detail_message(prefix=''):
                 return (prefix + '  There have been {n} attempts to send the '
                         'volume {name} so far.'.format(n=exc_processor_cxt,
                                                        name=tpart.name))
 
-            def increment_context(exc_processor_cxt):
-                return ((exc_processor_cxt is None and 1) or
-                        exc_processor_cxt + 1)
-
             typ, value, tb = exc_tup
-
-            if exc_processor_cxt is None:
-                exc_processor_cxt = increment_context(exc_processor_cxt)
+            del tb
+            del exc_tup
 
             # Screen for certain kinds of known-errors to retry from
             if issubclass(typ, socket.error):
                 socketmsg = value[1] if isinstance(value, tuple) else value
 
-                logger.info(msg='Retrying send because of a socket error',
-                            detail=standard_detail_message(
-                        "The socket error's message is '{0}'.".format(socketmsg)))
-                return increment_context(exc_processor_cxt)
+                logger.info(
+                    msg='Retrying send because of a socket error',
+                    detail=standard_detail_message(
+                        "The socket error's message is '{0}'."
+                        .format(socketmsg)))
             elif (issubclass(typ, boto.exception.S3ResponseError) and
                   value.error_code == 'RequestTimeTooSkewed'):
                 logger.info(msg='Retrying send because of a Request Skew time',
                             detail=standard_detail_message())
 
-                return increment_context(exc_processor_cxt)
             else:
-                # This type of error is unrecognized as a
-                # retry-able condition, so propagate it, original
-                # stacktrace and all.
-                raise typ, value, tb
+                # This type of error is unrecognized as a retry-able
+                # condition, so propagate it, original stacktrace and
+                # all.
+                raise exc_tup[0], exc_tup[1], exc_tup[2]
 
-        @retry(put_volume_exception_processor)
+        @retry(retry_with_count(log_volume_failures_on_error))
         def put_file_helper():
             return uri_put_file(s3_url, tf)
 
@@ -303,24 +328,62 @@ def do_lzop_s3_get(s3_url, path):
             lzod.input_fp.flush()
             lzod.input_fp.close()
 
-    with open(path, 'wb') as decomp_out:
-        suri = boto.storage_uri(s3_url, validate=False)
-        key = suri.get_key()
+    def log_wal_fetch_failures_on_error(exc_tup, exc_processor_cxt):
+        def standard_detail_message(prefix=''):
+            return (prefix + '  There have been {n} attempts to fetch '
+                    'wal file {url} so far.'.format(n=exc_processor_cxt,
+                                                    ul=s3_url))
+        typ, value, tb = exc_tup
+        del tb
+        del exc_tup
 
-        lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
-        g = gevent.spawn(_write_and_close, key, lzod)
+        # Screen for certain kinds of known-errors to retry from
+        if issubclass(typ, socket.error):
+            socketmsg = value[1] if isinstance(value, tuple) else value
 
-        # Raise any exceptions from _write_and_close
-        g.get()
+            logger.info(
+                msg='Retrying fetch because of a socket error',
+                detail=standard_detail_message(
+                    "The socket error's message is '{0}'."
+                    .format(socketmsg)))
+        elif (issubclass(typ, boto.exception.S3ResponseError) and
+              value.error_code == 'RequestTimeTooSkewed'):
+            logger.info(msg='Retrying fetch because of a Request Skew time',
+                        detail=standard_detail_message())
 
-        # Blocks on lzo exiting and raises an exception if the
-        # exit status it non-zero.
-        lzod.finish()
+        else:
+            # No matter how bad things get, keep retrying, but
+            # report it as a warning -- all exceptions that can be
+            # justified should be treated and have error messages
+            # listed.
+            logger.warning(
+                msg='Retrying WAL file fetch from unexpected exception',
+                detail=standard_detail_message(
+                    'The exception type is {etype} and its value is '
+                    '{evalue}'.format(etype=typ, evalue=value)))
 
-        logger.info(
-            msg='completed download and decompression',
-            detail='Downloaded and decompressed "{s3_url}" to "{path}"'
-            .format(s3_url=s3_url, path=path))
+    @retry(retry_with_count(log_wal_fetch_failures_on_error))
+    def download():
+        with open(path, 'wb') as decomp_out:
+            suri = boto.storage_uri(s3_url, validate=False)
+            key = suri.get_key()
+
+            lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
+            g = gevent.spawn(_write_and_close, key, lzod)
+
+            # Raise any exceptions from _write_and_close
+            g.get()
+
+            # Blocks on lzo exiting and raises an exception if the
+            # exit status it non-zero.
+            lzod.finish()
+
+            logger.info(
+                msg='completed download and decompression',
+                detail='Downloaded and decompressed "{s3_url}" to "{path}"'
+                .format(s3_url=s3_url, path=path))
+
+    download()
 
 
 class StreamLzoDecompressionPipeline(object):
@@ -425,6 +488,7 @@ class BackupFetcher(object):
         # exit status it non-zero.
         lzod.finish()
 
+
 class BackupList(object):
     def __init__(self, s3_conn, layout, detail):
         self.s3_conn = s3_conn
@@ -462,9 +526,10 @@ class BackupList(object):
             all_backups.sort()
             yield all_backups[-1]
         else:
-            raise UserException(msg='invalid backup query submitted',
-                                detail='The submitted query operator was "{0}."'
-                                .format(query))
+            raise UserException(
+                msg='invalid backup query submitted',
+                detail='The submitted query operator was "{0}."'
+                .format(query))
 
     def _backup_detail(self, key):
         return key.get_contents_as_string()
@@ -612,8 +677,9 @@ class DeleteFromContext(object):
                 # context, complain a little bit and move on.
                 logger.warning(
                     msg="skipping non-qualifying key in 'delete before'",
-                    detail=('The unexpected key is "{0}", and it appears to be '
-                            'at an unexpected depth.'.format(url)),
+                    detail=(
+                        'The unexpected key is "{0}", and it appears to be '
+                        'at an unexpected depth.'.format(url)),
                     hint=generic_weird_key_hint_message)
             elif key_depth == base_backup_sentinel_depth:
                 # This is a key at the base-backup-sentinel file
@@ -670,9 +736,10 @@ class DeleteFromContext(object):
                 if match is None or key_parts[-2] != 'tar_partitions':
                     logger.warning(
                         msg="skipping non-qualifying key in 'delete before'",
-                        detail=('The unexpected key is "{0}", and it appears '
-                                'not to match the base-backup partition pattern.'
-                                .format(url)),
+                        detail=(
+                            'The unexpected key is "{0}", and it appears '
+                            'not to match the base-backup partition pattern.'
+                            .format(url)),
                         hint=generic_weird_key_hint_message)
                 else:
                     assert match is not None
@@ -693,8 +760,9 @@ class DeleteFromContext(object):
             if key_depth != wal_key_depth:
                 logger.warning(
                     msg="skipping non-qualifying key in 'delete before'",
-                    detail=('The unexpected key is "{0}", and it appears to be '
-                            'at an unexpected depth.'.format(url)),
+                    detail=(
+                        'The unexpected key is "{0}", and it appears to be '
+                        'at an unexpected depth.'.format(url)),
                     hint=generic_weird_key_hint_message)
             elif key_depth == wal_key_depth:
                 segment_match = (re.match(s3_storage.SEGMENT_REGEXP + r'\.lzo',
