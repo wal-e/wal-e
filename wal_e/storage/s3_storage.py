@@ -58,6 +58,24 @@ class StorageLayout(object):
     """
     Encapsulates and defines S3 URL path manipulations for WAL-E
 
+    Without a trailing slash
+    >>> sl = StorageLayout('s3://foo/bar')
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.bucket_name()
+    'foo'
+
+    With a trailing slash
+    >>> sl = StorageLayout('s3://foo/bar/')
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.bucket_name()
+    'foo'
+
     """
 
     def __init__(self, prefix, version=CURRENT_VERSION):
@@ -81,7 +99,7 @@ class StorageLayout(object):
         if s3_api_prefix[-1] != '/':
             self._s3_api_prefix = s3_api_prefix + '/'
         else:
-            self.s3_api_prefix = s3_api_prefix
+            self._s3_api_prefix = s3_api_prefix
 
     def _error_on_unexpected_version(self):
         if self.VERSION != '005':
