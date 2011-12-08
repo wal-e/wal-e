@@ -122,7 +122,7 @@ def retry(exception_processor=generic_exception_processor):
 
 
 def retry_with_count(side_effect_func):
-    def internal(exc_tup, exc_processor_cxt):
+    def retry_with_count_internal(exc_tup, exc_processor_cxt):
         """
         An exception processor that counts how many times it has retried
 
@@ -148,7 +148,7 @@ def retry_with_count(side_effect_func):
 
         return increment_context(exc_processor_cxt)
 
-    return functools.wraps(internal)
+    return retry_with_count_internal
 
 
 def uri_put_file(s3_uri, fp, content_encoding=None):
