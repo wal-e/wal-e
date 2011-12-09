@@ -332,7 +332,7 @@ def do_lzop_s3_get(s3_url, path):
         def standard_detail_message(prefix=''):
             return (prefix + '  There have been {n} attempts to fetch '
                     'wal file {url} so far.'.format(n=exc_processor_cxt,
-                                                    ul=s3_url))
+                                                    url=s3_url))
         typ, value, tb = exc_tup
         del tb
         del exc_tup
