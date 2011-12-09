@@ -3,8 +3,9 @@ A module to assist with using the Python logging module
 
 """
 
-
+import errno
 import logging
+import logging.handlers
 import os
 import time
 
@@ -55,22 +56,45 @@ def configure(*args, **kwargs):
 
     Uses the UTCFormatter instead of the regular Formatter
 
+    Also, opts you into syslogging.
+
     """
+
+    syslog_address = kwargs.setdefault('syslog_address', '/dev/log')
+    handlers = []
 
     if len(logging.root.handlers) == 0:
         filename = kwargs.get("filename")
         if filename:
             mode = kwargs.get("filemode", 'a')
-            hdlr = logging.FileHandler(filename, mode)
+            handlers.append(logging.FileHandler(filename, mode))
         else:
             stream = kwargs.get("stream")
-            hdlr = logging.StreamHandler(stream)
+            handlers.append(logging.StreamHandler(stream))
+
+        try:
+            # Nobody can escape syslog, for now, and this default only
+            # works on Linux.  See:
+            #
+            # http://docs.python.org/library/logging.handlers.html#sysloghandler
+            handlers.append(logging.handlers.SysLogHandler(syslog_address))
+        except EnvironmentError, e:
+            if e.errno == errno.ENOENT:
+                # Silently do-not-write to syslog if the socket cannot
+                # be found at all.
+                pass
+            else:
+                raise
+
         fs = kwargs.get("format", logging.BASIC_FORMAT)
         dfs = kwargs.get("datefmt", None)
         style = kwargs.get("style", '%')
         fmt = UTCFormatter(fs, dfs)
-        hdlr.setFormatter(fmt)
-        logging.root.addHandler(hdlr)
+
+        for handler in handlers:
+            handler.setFormatter(fmt)
+            logging.root.addHandler(handler)
+
         level = kwargs.get("level")
         if level is not None:
             logging.root.setLevel(level)
