@@ -3,7 +3,7 @@ import datetime
 
 from subprocess import PIPE
 
-from wal_e.piper import popen_sp
+from wal_e.piper import popen_nonblock
 from wal_e.exception import UserException, UserCritical
 
 PSQL_BIN = 'psql'
@@ -41,7 +41,7 @@ def psql_csv_run(sql_command, error_handler=None):
     csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
                  .format(query=sql_command))
 
-    psql_proc = popen_sp([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
+    psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
                          stdout=PIPE)
     stdout = psql_proc.communicate()[0]
 

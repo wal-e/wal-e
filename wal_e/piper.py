@@ -120,6 +120,18 @@ def popen_sp(*args, **kwargs):
     kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
     proc = subprocess.Popen(*args, **kwargs)
 
+    return proc
+
+
+def popen_nonblock(*args, **kwargs):
+    """
+    Create a process in the same way as popen_sp, but patch the file
+    descriptors so they can can be accessed from Python/gevent
+    in a non-blocking manner.
+    """
+
+    proc = popen_sp(*args, **kwargs)
+
     # Patch up the process object to use non-blocking I/O that yields
     # to the gevent hub.
     for fp_symbol in ['stdin', 'stdout', 'stderr']:

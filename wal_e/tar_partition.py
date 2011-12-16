@@ -124,7 +124,7 @@ class TarPartition(list):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
                 if rate_limit is not None:
-                    mbuffer = wal_e.piper.popen_sp(
+                    mbuffer = wal_e.piper.popen_nonblock(
                         ['mbuffer', '-r', str(int(rate_limit)), '-q'],
                         stdin=raw_file, stdout=wal_e.piper.PIPE)
 

@@ -181,7 +181,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                 detail='Building volume {name}.'.format(name=tpart.name))
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout'],
+        compression_p = popen_nonblock([LZOP_BIN, '--stdout'],
                                  stdin=subprocess.PIPE, stdout=tf,
                                  bufsize=BUFSIZE_HT)
         tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
@@ -403,7 +403,7 @@ def do_lzop_s3_get(s3_url, path):
 
 class StreamLzoDecompressionPipeline(object):
     def __init__(self, stdin=PIPE, stdout=PIPE):
-        self._decompression_p = popen_sp(
+        self._decompression_p = popen_nonblock(
             [LZOP_BIN, '-d', '--stdout', '-'],
             stdin=stdin, stdout=stdout,
             bufsize=BUFSIZE_HT)
