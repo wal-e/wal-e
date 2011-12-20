@@ -26,8 +26,7 @@ import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.pipeline import (Pipeline, LZOCompressionFilter, LZODecompressionFilter,
-                                GPGEncryptionFilter, GPGDecryptionFilter)
+from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
 from wal_e.piper import PIPE
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
@@ -161,28 +160,6 @@ def format_kib_per_second(start, finish, amount_in_bytes):
         return '{0:02g}'.format((amount_in_bytes / 1024) / (finish - start))
     except ZeroDivisionError:
         return 'NaN'
-
-def get_upload_pipeline(in_fd, out_fd, gpg_key=None):
-    """ Assemble a UNIX pipeline to process a file for uploading.
-        (Compress, and optionally encrypt) """
-    if gpg_key is not None:
-        compress = LZOCompressionFilter(stdin=in_fd)
-        encrypt = GPGEncryptionFilter(gpg_key, stdin=compress.stdout, stdout=out_fd)
-        commands = [compress, encrypt]
-    else:
-        commands = [LZOCompressionFilter(stdin=in_fd, stdout=out_fd)]
-
-    return Pipeline(commands)
-
-def get_download_pipeline(in_fd, out_fd, gpg=False):
-    if gpg == True:
-        decrypt = GPGDecryptionFilter(stdin=in_fd)
-        decompress = LZODecompressionFilter(stdin=decrypt.stdout, stdout=out_fd)
-        commands = [decrypt, decompress]
-    else:
-        commands = [LZODecompressionFilter(stdin=in_fd, stdout=out_fd)]
-
-    return Pipeline(commands)
 
 def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
     """

@@ -1,3 +1,4 @@
+""" Primitives to manage and construct pipelines for compression/encryption. """
 from gevent import sleep
 
 from wal_e.exception import UserCritical
@@ -13,6 +14,31 @@ LZOP_BIN = 'lzop'
 # unhappy with too much memory usage in buffers.
 
 BUFSIZE_HT = 128 * 8192
+
+def get_upload_pipeline(in_fd, out_fd, gpg_key=None):
+    """ Create a UNIX pipeline to process a file for uploading.
+        (Compress, and optionally encrypt) """
+    if gpg_key is not None:
+        compress = LZOCompressionFilter(stdin=in_fd)
+        encrypt = GPGEncryptionFilter(gpg_key, stdin=compress.stdout, stdout=out_fd)
+        commands = [compress, encrypt]
+    else:
+        commands = [LZOCompressionFilter(stdin=in_fd, stdout=out_fd)]
+
+    return Pipeline(commands)
+
+def get_download_pipeline(in_fd, out_fd, gpg=False):
+    """ Create a pipeline to process a file after downloading.
+        (Optionally decrypt, then decompress) """
+    if gpg == True:
+        decrypt = GPGDecryptionFilter(stdin=in_fd)
+        decompress = LZODecompressionFilter(stdin=decrypt.stdout, stdout=out_fd)
+        commands = [decrypt, decompress]
+    else:
+        commands = [LZODecompressionFilter(stdin=in_fd, stdout=out_fd)]
+
+    return Pipeline(commands)
+
 
 class Pipeline(object):
     """ Represent a pipeline of commands.
@@ -34,6 +60,11 @@ class Pipeline(object):
 
 
 class PipelineCommand(object):
+    """ A pipeline command. Stdin and stdout are *blocking* because you
+        want them to be if you're piping them to another command.
+
+        (If you need a gevent-compatible stdin/out, wrap it in NonBlockPipeFileWrap.)
+    """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         pass
 
@@ -77,20 +108,24 @@ class PipelineCommand(object):
 
 
 class LZOCompressionFilter(PipelineCommand):
+    """ Compress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         self.start([LZOP_BIN, '--stdout'], stdin, stdout)
 
 
 class LZODecompressionFilter(PipelineCommand):
+    """ Decompress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         self.start([LZOP_BIN, '-d', '--stdout', '-'], stdin, stdout)
 
 
 class GPGEncryptionFilter(PipelineCommand):
+    """ Encrypt using GPG, using the provided public key ID. """
     def __init__(self, key, stdin=PIPE, stdout=PIPE):
         self.start([GPG_BIN, '-e', '-z', '0', '-r', key], stdin, stdout)
 
 
 class GPGDecryptionFilter(PipelineCommand):
+    """ Decrypt using GPG (the private key must exist and be unpassworded). """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         self.start([GPG_BIN, '-d', '-q'], stdin, stdout)
