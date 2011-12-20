@@ -44,9 +44,10 @@ class S3Backup(object):
     """
 
     def __init__(self,
-                 aws_access_key_id, aws_secret_access_key, s3_prefix):
+                 aws_access_key_id, aws_secret_access_key, s3_prefix, gpg_key_id):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
+        self.gpg_key_id = gpg_key_id
 
         # Canonicalize the s3 prefix by stripping any trailing slash
         self.s3_prefix = s3_prefix.rstrip('/')
@@ -206,7 +207,7 @@ class S3Backup(object):
                 total_size += tpart.total_member_size
                 uploads.append(pool.apply_async(
                         s3_worker.do_partition_put,
-                        [backup_s3_prefix, tpart, per_process_limit]))
+                        [backup_s3_prefix, tpart, per_process_limit, self.gpg_key_id]))
         finally:
             while uploads:
                 uploads.pop().get()
@@ -282,7 +283,8 @@ class S3Backup(object):
         fetchers = []
         for i in xrange(pool_size):
             fetchers.append(s3_worker.BackupFetcher(
-                    s3_connections[i], layout, backup_info, pg_cluster_dir))
+                    s3_connections[i], layout, backup_info, pg_cluster_dir,
+                    (self.gpg_key_id is not None)))
         assert len(fetchers) == pool_size
 
         p = gevent.pool.Pool(size=pool_size)
@@ -381,7 +383,7 @@ class S3Backup(object):
             '{0}/wal_{1}/{2}'.format(self.s3_prefix,
                                      FILE_STRUCTURE_VERSION,
                                      wal_file_name),
-            wal_path)
+            wal_path, self.gpg_key_id)
 
     def wal_s3_restore(self, wal_name, wal_destination):
         """
@@ -398,7 +400,7 @@ class S3Backup(object):
             '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
                                          FILE_STRUCTURE_VERSION,
                                          wal_name),
-            wal_destination)
+            wal_destination, (self.gpg_key_id is not None))
 
     def delete_old_versions(self, dry_run):
         obsolete_versions = ('004', '003', '002', '001', '000')

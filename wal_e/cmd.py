@@ -32,7 +32,7 @@ from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
-from wal_e.worker.s3_worker import LZOP_BIN, MBUFFER_BIN
+from wal_e.pipeline import LZOP_BIN, MBUFFER_BIN
 
 # TODO: Make controllable from userland
 log_help.configure(
@@ -137,6 +137,12 @@ def main(argv=None):
                         help='S3 prefix to run all commands against.  '
                         'Can also be defined via environment variable '
                         'WALE_S3_PREFIX')
+
+    parser.add_argument('--gpg-key-id',
+                        help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
+                        'Can also be defined via environment variable '
+                        'WALE_GPG_KEY_ID')
+
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -273,7 +279,10 @@ def main(argv=None):
     else:
         aws_access_key_id = args.aws_access_key_id
 
-    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix)
+    # This will be None if we're not encrypting
+    gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
+
+    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix, gpg_key_id)
 
     subcommand = args.subcommand
 

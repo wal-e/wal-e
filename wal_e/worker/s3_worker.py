@@ -26,21 +26,12 @@ import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
-
+from wal_e.pipeline import (Pipeline, LZOCompressionFilter, LZODecompressionFilter,
+                                GPGEncryptionFilter, GPGDecryptionFilter)
+from wal_e.piper import PIPE
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
 
-
-LZOP_BIN = 'lzop'
-MBUFFER_BIN = 'mbuffer'
-
-
-# BUFSIZE_HT: Buffer Size, High Throughput
-#
-# This is set conservatively because small systems can end up being
-# unhappy with too much memory usage in buffers.
-BUFSIZE_HT = 128 * 8192
 
 generic_weird_key_hint_message = ('This means an unexpected key was found in '
                                   'a WAL-E prefix.  It can be harmless, or '
@@ -171,8 +162,29 @@ def format_kib_per_second(start, finish, amount_in_bytes):
     except ZeroDivisionError:
         return 'NaN'
 
+def get_upload_pipeline(in_fd, out_fd, gpg_key=None):
+    """ Assemble a UNIX pipeline to process a file for uploading.
+        (Compress, and optionally encrypt) """
+    if gpg_key is not None:
+        compress = LZOCompressionFilter(stdin=in_fd)
+        encrypt = GPGEncryptionFilter(gpg_key, stdin=compress.stdout, stdout=out_fd)
+        commands = [compress, encrypt]
+    else:
+        commands = [LZOCompressionFilter(stdin=in_fd, stdout=out_fd)]
 
-def do_partition_put(backup_s3_prefix, tpart, rate_limit):
+    return Pipeline(commands)
+
+def get_download_pipeline(in_fd, out_fd, gpg=False):
+    if gpg == True:
+        decrypt = GPGDecryptionFilter(stdin=in_fd)
+        decompress = LZODecompressionFilter(stdin=decrypt.stdout, stdout=out_fd)
+        commands = [decrypt, decompress]
+    else:
+        commands = [LZODecompressionFilter(stdin=in_fd, stdout=out_fd)]
+
+    return Pipeline(commands)
+
+def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -181,31 +193,12 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                 detail='Building volume {name}.'.format(name=tpart.name))
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        compression_p = popen_nonblock([LZOP_BIN, '--stdout'],
-                                 stdin=subprocess.PIPE, stdout=tf,
-                                 bufsize=BUFSIZE_HT)
-        tpart.tarfile_write(compression_p.stdin, rate_limit=rate_limit)
-        compression_p.stdin.flush()
-        compression_p.stdin.close()
+        pipeline = get_upload_pipeline(PIPE, tf, gpg_key=gpg_key)
+        tpart.tarfile_write(pipeline.stdin, rate_limit=rate_limit)
+        pipeline.stdin.flush()
+        pipeline.stdin.close()
+        pipeline.finish()
 
-        # Poll for process completion, avoid .wait() as to allow other
-        # greenlets a chance to execute.  Calling .wait() will result
-        # in deadlock.
-        while True:
-            if compression_p.poll() is not None:
-                break
-            else:
-                # Give other stacks a chance to continue progress
-                gevent.sleep(0.1)
-
-        if compression_p.returncode != 0:
-            raise UserCritical(
-                'could not properly compress tar',
-                'The volume that failed is {volume}.  '
-                'It has the following manifest:\n  '
-                '{error_manifest}'
-                .format(error_manifest=tpart.format_manifest(),
-                        volume=tpart.name))
         tf.flush()
 
         s3_url = '/'.join([backup_s3_prefix, 'tar_partitions',
@@ -266,7 +259,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
-def do_lzop_s3_put(s3_url, local_path):
+
+def do_lzop_s3_put(s3_url, local_path, gpg_key):
     """
     Compress and upload a given local path.
 
@@ -282,14 +276,8 @@ def do_lzop_s3_put(s3_url, local_path):
     s3_url += '.lzo'
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        compression_p = popen_sp([LZOP_BIN, '--stdout', local_path], stdout=tf,
-                                 bufsize=BUFSIZE_HT)
-        compression_p.wait()
-
-        if compression_p.returncode != 0:
-            raise UserCritical(
-                'could not properly compress file',
-                'the file is at {path}'.format(path=local_path))
+        pipeline = get_upload_pipeline(file(local_path, 'r'), tf, gpg_key=gpg_key)
+        pipeline.finish()
 
         tf.flush()
 
@@ -309,8 +297,14 @@ def do_lzop_s3_put(s3_url, local_path):
                     '{kib_per_second}KiB/s. ')
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
+def write_and_close_thread(key, stream):
+    try:
+        key.get_contents_to_file(stream)
+    finally:
+        stream.flush()
+        stream.close()
 
-def do_lzop_s3_get(s3_url, path):
+def do_lzop_s3_get(s3_url, path, decrypt):
     """
     Get and decompress a S3 URL
 
@@ -319,14 +313,6 @@ def do_lzop_s3_get(s3_url, path):
 
     """
     assert s3_url.endswith('.lzo'), 'Expect an lzop-compressed file'
-
-    # XXX: Refactor: copied out of BackupFetcher, so that's a pity...
-    def _write_and_close(key, lzod):
-        try:
-            key.get_contents_to_file(lzod.input_fp)
-        finally:
-            lzod.input_fp.flush()
-            lzod.input_fp.close()
 
     def log_wal_fetch_failures_on_error(exc_tup, exc_processor_cxt):
         def standard_detail_message(prefix=''):
@@ -382,15 +368,13 @@ def do_lzop_s3_get(s3_url, path):
                           'restoration.'))
                 return False
 
-            lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
-            g = gevent.spawn(_write_and_close, key, lzod)
+            pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
+            g = gevent.spawn(write_and_close_thread, key, pipeline.stdin)
 
             # Raise any exceptions from _write_and_close
             g.get()
 
-            # Blocks on lzo exiting and raises an exception if the
-            # exit status it non-zero.
-            lzod.finish()
+            pipeline.finish()
 
             logger.info(
                 msg='completed download and decompression',
@@ -399,37 +383,6 @@ def do_lzop_s3_get(s3_url, path):
         return True
 
     return download()
-
-
-class StreamLzoDecompressionPipeline(object):
-    def __init__(self, stdin=PIPE, stdout=PIPE):
-        self._decompression_p = popen_nonblock(
-            [LZOP_BIN, '-d', '--stdout', '-'],
-            stdin=stdin, stdout=stdout,
-            bufsize=BUFSIZE_HT)
-
-    @property
-    def input_fp(self):
-        return self._decompression_p.stdin
-
-    @property
-    def output_fp(self):
-        return self._decompression_p.stdout
-
-    def finish(self):
-        retcode = self._decompression_p.wait()
-
-        if self.output_fp is not None:
-            self.output_fp.close()
-
-        assert self.input_fp is None or self.input_fp.closed
-        assert self.output_fp is None or self.output_fp.closed
-
-        if retcode != 0:
-            raise UserCritical(
-                msg='decompression process did not exit gracefully',
-                detail='"lzop" had terminated with the exit status {0}.'
-                .format(retcode))
 
 
 class TarPartitionLister(object):
@@ -459,19 +412,13 @@ class TarPartitionLister(object):
 
 
 class BackupFetcher(object):
-    def __init__(self, s3_conn, layout, backup_info, local_root):
+    def __init__(self, s3_conn, layout, backup_info, local_root, decrypt):
         self.s3_conn = s3_conn
         self.layout = layout
         self.local_root = local_root
         self.backup_info = backup_info
         self.bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
-
-    def _write_and_close(self, key, lzod):
-        try:
-            key.get_contents_to_file(lzod.input_fp)
-        finally:
-            lzod.input_fp.flush()
-            lzod.input_fp.close()
+        self.decrypt = decrypt
 
     @retry()
     def fetch_partition(self, partition_name):
@@ -485,9 +432,9 @@ class BackupFetcher(object):
             hint='The absolute S3 key is {0}.'.format(part_abs_name))
 
         key = self.bucket.get_key(part_abs_name)
-        lzod = StreamLzoDecompressionPipeline()
-        g = gevent.spawn(self._write_and_close, key, lzod)
-        tar = tarfile.open(mode='r|', fileobj=lzod.output_fp)
+        pipeline = get_download_pipeline(PIPE, PIPE, self.decrypt)
+        g = gevent.spawn(write_and_close_thread, key, pipeline.stdin)
+        tar = tarfile.open(mode='r|', fileobj=pipeline.stdout)
 
         # TODO: replace with per-member file handling,
         # extractall very much warned against in the docs, and
@@ -499,9 +446,7 @@ class BackupFetcher(object):
         # Raise any exceptions from self._write_and_close
         g.get()
 
-        # Blocks on lzo exiting and raises an exception if the
-        # exit status it non-zero.
-        lzod.finish()
+        pipeline.finish()
 
 
 class BackupList(object):
