@@ -32,7 +32,7 @@ from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
-from wal_e.pipeline import LZOP_BIN, MBUFFER_BIN
+from wal_e.pipeline import LZOP_BIN, MBUFFER_BIN, GPG_BIN
 
 # TODO: Make controllable from userland
 log_help.configure(
@@ -285,6 +285,9 @@ def main(argv=None):
     backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix, gpg_key_id)
 
     subcommand = args.subcommand
+
+    if gpg_key_id is not None:
+        external_program_check([GPG_BIN])
 
     try:
         if subcommand == 'backup-fetch':
