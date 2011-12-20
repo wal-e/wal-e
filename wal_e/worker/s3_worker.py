@@ -366,7 +366,11 @@ def do_lzop_s3_get(s3_url, path):
     def download():
         with open(path, 'wb') as decomp_out:
             suri = boto.storage_uri(s3_url, validate=False)
-            key = suri.get_key()
+            try:
+                key = suri.get_key()
+            except boto.exception.InvalidUriError:
+                logger.warning(msg="file not found: %s" % suri)
+                return False
 
             lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
             g = gevent.spawn(_write_and_close, key, lzod)
@@ -382,8 +386,9 @@ def do_lzop_s3_get(s3_url, path):
                 msg='completed download and decompression',
                 detail='Downloaded and decompressed "{s3_url}" to "{path}"'
                 .format(s3_url=s3_url, path=path))
+        return True
 
-    download()
+    return download()
 
 
 class StreamLzoDecompressionPipeline(object):

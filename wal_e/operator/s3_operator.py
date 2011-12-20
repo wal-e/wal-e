@@ -394,7 +394,7 @@ class S3Backup(object):
         basename(wal_path), so both are required.
 
         """
-        s3_worker.do_lzop_s3_get(
+        return s3_worker.do_lzop_s3_get(
             '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
                                          FILE_STRUCTURE_VERSION,
                                          wal_name),

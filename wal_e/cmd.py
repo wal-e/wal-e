@@ -301,7 +301,9 @@ def main(argv=None):
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
-            backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
+            res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
+            if not res:
+                sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
