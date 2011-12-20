@@ -346,6 +346,20 @@ overhead.  This has the effect of making base backups and restores
 much faster when many small relations and ancillary files are
 involved.
 
+
+Encryption
+----------
+
+To encrypt backups as well as compress them, first generate a key
+pair using ``gpg --gen-key``. You don't need the private key on the
+machine to back up, but you will need it to restore. It'll need to
+have no passphrase.
+
+Once this is done, just set the ``WALE_GPG_KEY_ID`` environment
+variable or the ``--gpg-key-id`` command line option to the ID of
+the secret key for backup and restore commands.
+
+
 Controlling the I/O of a Base Backup
 ------------------------------------
 
