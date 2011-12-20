@@ -1,2 +1,53 @@
-*.pyc
-.*.swp
+# Python common gitignores
+#
+# https://github.com/github/gitignore/blob/e1f0a713c47dada10b2f818a6650198816badd7c/Python.gitignore
+
+*.py[co]
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+
+#Translations
+*.mo
+
+#Mr Developer
+.mr.developer.cfg
+
+
+# emacs gitignores
+#
+# https://github.com/github/gitignore/blob/4c9fba7b1e942141a3bf5345a8c3b91b3d77d241/Global/Emacs.gitignore
+
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+.elc
+auto-save-list
+tramp
+.\#*
+
+
+# vim gitignores
+#
+# https://github.com/github/gitignore/blob/4c9fba7b1e942141a3bf5345a8c3b91b3d77d241/Global/vim.gitignore
+.*.sw[a-z]
+*.un~
+Session.vim
