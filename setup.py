@@ -23,7 +23,7 @@ v.close()
 
 install_requires = ['gevent>=0.13.0', 'boto>=2.0']
 extras_require = {
-    'test':  ["pytest>=2.2.1", 'pytest-xdist>=1.8']
+    'test':  ["pytest>=2.2.1", "pytest-xdist>=1.8", "pytest-capturelog>=0.7"]
     }
 
 if sys.version_info < (2, 7):
