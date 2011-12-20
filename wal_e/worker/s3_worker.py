@@ -366,10 +366,17 @@ def do_lzop_s3_get(s3_url, path):
     def download():
         with open(path, 'wb') as decomp_out:
             suri = boto.storage_uri(s3_url, validate=False)
-            try:
-                key = suri.get_key()
-            except boto.exception.InvalidUriError:
-                logger.warning(msg="file not found: %s" % suri)
+            bucket = suri.get_bucket()
+            key = bucket.get_key(suri.object_name)
+
+            if key is None:
+                logger.info(
+                    msg='could not locate object while performing wal restore',
+                    detail=('The absolute URI that could not be located '
+                            'is {url}.'.format(url=s3_url)),
+                    hint=('This can be normal when Postgres is trying to '
+                          'detect what timelines are available during '
+                          'restoration.'))
                 return False
 
             lzod = StreamLzoDecompressionPipeline(stdout=decomp_out)
