@@ -24,6 +24,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import traceback
 
 import wal_e.log_help as log_help
 
@@ -363,6 +364,11 @@ def main(argv=None):
                    msg=log_help.WalELogger
                    .fmt_logline(e.msg, e.detail, e.hint))
         sys.exit(1)
+    except Exception, e:
+        logger.critical(
+            msg='An unprocessed exception has avoided all error handling',
+            detail=''.join(traceback.format_exception(*sys.exc_info())))
+        sys.exit(2)
 
 if __name__ == "__main__":
     sys.exit(main())
