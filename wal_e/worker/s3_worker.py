@@ -334,7 +334,6 @@ def do_lzop_s3_get(s3_url, path):
                     'wal file {url} so far.'.format(n=exc_processor_cxt,
                                                     url=s3_url))
         typ, value, tb = exc_tup
-        del tb
         del exc_tup
 
         # Screen for certain kinds of known-errors to retry from
@@ -350,17 +349,21 @@ def do_lzop_s3_get(s3_url, path):
               value.error_code == 'RequestTimeTooSkewed'):
             logger.info(msg='Retrying fetch because of a Request Skew time',
                         detail=standard_detail_message())
-
         else:
-            # No matter how bad things get, keep retrying, but
-            # report it as a warning -- all exceptions that can be
+            # For all otherwise untreated exceptions, report them as a
+            # warning and retry anyway -- all exceptions that can be
             # justified should be treated and have error messages
             # listed.
             logger.warning(
-                msg='Retrying WAL file fetch from unexpected exception',
+                msg='retrying WAL file fetch from unexpected exception',
                 detail=standard_detail_message(
                     'The exception type is {etype} and its value is '
-                    '{evalue}'.format(etype=typ, evalue=value)))
+                    '{evalue} and its traceback is {etraceback}'
+                    .format(etype=typ, evalue=value,
+                            etraceback=''.join(traceback.format_tb(tb)))))
+
+        # Help Python GC by resolving possible cycles
+        del tb
 
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
