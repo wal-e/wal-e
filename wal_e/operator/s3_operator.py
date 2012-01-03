@@ -403,10 +403,9 @@ class S3Backup(object):
             wal_destination, (self.gpg_key_id is not None))
 
     def delete_old_versions(self, dry_run):
-        obsolete_versions = ('004', '003', '002', '001', '000')
-        assert s3_storage.CURRENT_VERSION not in obsolete_versions
+        assert s3_storage.CURRENT_VERSION not in s3_storage.OBSOLETE_VERSIONS
 
-        for obsolete_version in obsolete_versions:
+        for obsolete_version in s3_storage.OBSOLETE_VERSIONS:
             layout = s3_storage.StorageLayout(self.s3_prefix,
                                               version=obsolete_version)
             self.delete_all(dry_run, layout)

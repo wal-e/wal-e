@@ -53,6 +53,7 @@ BackupInfo = collections.namedtuple('BackupInfo',
                                      'wal_segment_backup_stop',
                                      'wal_segment_offset_backup_stop'])
 
+OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
 
 class StorageLayout(object):
     """
