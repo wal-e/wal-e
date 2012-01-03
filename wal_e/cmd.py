@@ -32,7 +32,7 @@ from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
-from wal_e.pipeline import LZOP_BIN, MBUFFER_BIN, GPG_BIN
+from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 
 # TODO: Make controllable from userland
 log_help.configure(
@@ -42,7 +42,7 @@ logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
 
 def external_program_check(
-    to_check=frozenset([PSQL_BIN, LZOP_BIN, MBUFFER_BIN])):
+    to_check=frozenset([PSQL_BIN, LZOP_BIN, PV_BIN])):
     """
     Validates the existence and basic working-ness of other programs
 
@@ -74,11 +74,8 @@ def external_program_check(
                 if program is PSQL_BIN:
                     psql_csv_run('SELECT 1', error_handler=psql_err_handler)
                 else:
-                    if program is MBUFFER_BIN:
-                        # Prevent noise on the TTY, as mbuffer writes
-                        # text there: suppressing stdout/stderr
-                        # doesn't seem to work.
-                        extra_args = ['-q']
+                    if program is PV_BIN:
+                        extra_args = ['--quiet']
                     else:
                         extra_args = []
 
@@ -299,15 +296,8 @@ def main(argv=None):
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
-            external_program_check([LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
+            external_program_check([LZOP_BIN, PSQL_BIN, PV_BIN])
             rate_limit = args.rate_limit
-            if rate_limit is not None and rate_limit < 8192:
-                logger.error(
-                    msg='bad rate limit passed',
-                    detail='The passed rate limit was {0}'.format(rate_limit),
-                    hint=('Pass a rate limit that is positive and equal or '
-                          'greater than 8192'))
-                sys.exit(1)
 
             backup_cxt.database_s3_backup(
                 args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,

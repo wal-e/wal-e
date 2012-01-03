@@ -4,7 +4,7 @@ from gevent import sleep
 from wal_e.exception import UserCritical
 from wal_e.piper import popen_sp, NonBlockPipeFileWrap, PIPE
 
-MBUFFER_BIN = 'mbuffer'
+PV_BIN = 'pv'
 GPG_BIN = 'gpg'
 LZOP_BIN = 'lzop'
 
@@ -105,6 +105,13 @@ class PipelineCommand(object):
                 msg='pipeline process did not exit gracefully',
                 detail='"{0}" had terminated with the exit status {1}.'
                 .format(" ".join(self._command), retcode))
+
+
+class PipeViwerRateLimitFilter(PipelineCommand):
+    """ Limit the rate of transfer through a pipe using pv """
+    def __init__(self, rate_limit, stdin=PIPE, stdout=PIPE):
+        self.start([PV_BIN, '--rate-limit=' + unicode(rate_limit)],
+                   stdin, stdout)
 
 
 class LZOCompressionFilter(PipelineCommand):

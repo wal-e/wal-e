@@ -44,7 +44,7 @@ import sys
 import tarfile
 
 import wal_e.log_help as log_help
-import wal_e.piper
+import wal_e.pipeline
 
 logger = log_help.WalELogger(__name__)
 
@@ -124,11 +124,9 @@ class TarPartition(list):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
                 if rate_limit is not None:
-                    mbuffer = wal_e.piper.popen_nonblock(
-                        ['mbuffer', '-r', str(int(rate_limit)), '-q'],
-                        stdin=raw_file, stdout=wal_e.piper.PIPE)
+                    pv = wal_e.pipeline.PipeViwerRateLimitFilter(rate_limit, stdin=raw_file)
 
-                    with StreamPadFileObj(mbuffer.stdout,
+                    with StreamPadFileObj(pv.stdout,
                                           et_info.tarinfo.size) as f:
                         tar.addfile(et_info.tarinfo, f)
                 else:
