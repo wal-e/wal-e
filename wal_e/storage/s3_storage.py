@@ -14,7 +14,7 @@ import wal_e.exception
 from urlparse import urlparse
 
 
-CURRENT_VERSION = '005'
+CURRENT_VERSION = 'dev-version'
 
 SEGMENT_REGEXP = (r'(?P<filename>(?P<tli>[0-9A-F]{8,8})(?P<log>[0-9A-F]{8,8})'
                   '(?P<seg>[0-9A-F]{8,8}))')
@@ -61,18 +61,18 @@ class StorageLayout(object):
     Without a trailing slash
     >>> sl = StorageLayout('s3://foo/bar')
     >>> sl.basebackups()
-    'bar/basebackups_005/'
+    'bar/basebackups_dev-version/'
     >>> sl.wal_directory()
-    'bar/wal_005/'
+    'bar/wal_dev-version/'
     >>> sl.bucket_name()
     'foo'
 
     With a trailing slash
     >>> sl = StorageLayout('s3://foo/bar/')
     >>> sl.basebackups()
-    'bar/basebackups_005/'
+    'bar/basebackups_dev-version/'
     >>> sl.wal_directory()
-    'bar/wal_005/'
+    'bar/wal_dev-version/'
     >>> sl.bucket_name()
     'foo'
 
@@ -102,7 +102,7 @@ class StorageLayout(object):
             self._s3_api_prefix = s3_api_prefix
 
     def _error_on_unexpected_version(self):
-        if self.VERSION != '005':
+        if self.VERSION != CURRENT_VERSION:
             raise ValueError('Backwards compatibility of this '
                              'operator is not implemented')
 
