@@ -142,6 +142,15 @@ def retry_with_count(side_effect_func):
 
 
 def uri_put_file(s3_uri, fp, content_encoding=None):
+    # Per Boto 2.2.2, which will only read from the current file
+    # position to the end.  This manifests as successfully uploaded
+    # *empty* keys in S3 instead of the intended data because of how
+    # tempfiles are used (create, fill, submit to boto).
+    #
+    # It is presumed it is the caller's responsibility to rewind the
+    # file position, and since the whole program was written with this
+    # in mind, assert it as a precondition for using this procedure.
+    assert fp.tell() == 0
 
     # XXX: disable validation as a kludge to get around use of
     # upper-case bucket names.
@@ -219,6 +228,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
 
         @retry(retry_with_count(log_volume_failures_on_error))
         def put_file_helper():
+            tf.seek(0)
             return uri_put_file(s3_url, tf)
 
         # Actually do work, retrying if necessary, and timing how long
@@ -263,6 +273,7 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
                             .format(**locals())))
 
         clock_start = time.clock()
+        tf.seek(0)
         k = uri_put_file(s3_url, tf)
         clock_finish = time.clock()
 
