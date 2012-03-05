@@ -349,6 +349,7 @@ class S3Backup(object):
                 # XXX: distinguish sentinels by *PREFIX* not suffix,
                 # which makes searching harder. (For the next version
                 # bump).
+                sentinel_content.seek(0)
                 s3_worker.uri_put_file(
                     uploaded_to + '_backup_stop_sentinel.json',
                     sentinel_content, content_encoding='application/json')
@@ -357,10 +358,6 @@ class S3Backup(object):
                 # Specially re-raise exception on SIGINT to allow
                 # propagation.
                 raise
-            except:
-                # Failing to upload the sentinel is not strictly
-                # lethal, so ignore any (other) exception.
-                pass
         else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
