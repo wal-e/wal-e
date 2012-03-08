@@ -329,35 +329,34 @@ class S3Backup(object):
             stop_backup_info = PgBackupStatements.run_stop_backup()
             backup_stop_good = True
 
+        # XXX: Ugly, this is more of a 'worker' task because it might
+        # involve retries and error messages, something that is not
+        # treated by the "operator" category of modules.  So
+        # basically, if this small upload fails, the whole upload
+        # fails!
         if upload_good and backup_stop_good:
-            # Make a best-effort attempt to write a sentinel file to
-            # the cluster backup directory that indicates that the
-            # base backup upload has definitely run its course (it may
-            # have, even without this file, though) and also
-            # communicates what WAL segments are needed to get to
-            # consistency.
-            try:
-                sentinel_content = StringIO()
-                json.dump(
-                    {'wal_segment_backup_stop':
-                         stop_backup_info['file_name'],
-                     'wal_segment_offset_backup_stop':
-                         stop_backup_info['file_offset'],
-                     'expanded_size_bytes': expanded_size_bytes},
-                    sentinel_content)
+            # Try to write a sentinel file to the cluster backup
+            # directory that indicates that the base backup upload has
+            # definitely run its course and also communicates what WAL
+            # segments are needed to get to consistency.
+            sentinel_content = StringIO()
+            json.dump(
+                {'wal_segment_backup_stop':
+                     stop_backup_info['file_name'],
+                 'wal_segment_offset_backup_stop':
+                     stop_backup_info['file_offset'],
+                 'expanded_size_bytes': expanded_size_bytes},
+                sentinel_content)
 
-                # XXX: distinguish sentinels by *PREFIX* not suffix,
-                # which makes searching harder. (For the next version
-                # bump).
-                sentinel_content.seek(0)
-                s3_worker.uri_put_file(
-                    uploaded_to + '_backup_stop_sentinel.json',
-                    sentinel_content, content_encoding='application/json')
-
-            except KeyboardInterrupt, e:
-                # Specially re-raise exception on SIGINT to allow
-                # propagation.
-                raise
+            # XXX: should use the storage.s3_storage operators.
+            #
+            # XXX: distinguish sentinels by *PREFIX* not suffix,
+            # which makes searching harder. (For the next version
+            # bump).
+            sentinel_content.seek(0)
+            s3_worker.uri_put_file(
+                uploaded_to + '_backup_stop_sentinel.json',
+                sentinel_content, content_encoding='application/json')
         else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
