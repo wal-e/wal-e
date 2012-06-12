@@ -96,8 +96,10 @@ class StorageLayout(object):
         s3_api_prefix = url_tup.path.lstrip('/')
 
         # Also canonicalize a trailing slash onto the prefix, should
-        # none already exist.
-        if s3_api_prefix[-1] != '/':
+        # none already exist. This only applies if we actually have a
+        # prefix, i.e., our objects are not being created in the bucket's
+        # root.
+        if s3_api_prefix and s3_api_prefix[-1] != '/':
             self._s3_api_prefix = s3_api_prefix + '/'
         else:
             self._s3_api_prefix = s3_api_prefix
