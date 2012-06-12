@@ -352,34 +352,3 @@ Controlling the I/O of a Base Backup
 To reduce the read load on base backups, they are sent through the
 tool ``mbuffer`` first.  To use this rate-limited-read mode, use the
 option --cluster-read-rate-limit as seen in ``wal-e backup-push``.
-
-
-TODO
-----
-
-* WAL-E is expanding.  The lack of a testing strategy is starting to
-  hurt more.
-* WAL-E is expanding. A README is starting to get unwieldy.  A proper
-  Sphinx manual should be written soon
-* Retry logic can use a lot of help.
-* Investigate pg_lesslog.  This tool strips the WAL file of full-page
-  binary images, making it *much* smaller, but this also makes the
-  recovery process more expensive (has to do more seeking to do
-  recovery).  The question is: is the increased speed of fetching a
-  WAL segment dominated by recovery time, or vice-versa?
-* Ask pgsql-hackers about a pg_cancel_backup() function
-* Sane error messages, such as on Ctrl-C or during errors.
-* Pipeline-WAL-Segment Management: S3 ACK is long enough that a
-  totally non-pipelined, non-parallel archive_command can fall behind.
-* Eliminate copy-pasta in formatting URLs for getting/putting things
-* do_lzop_s3_get do_lzop_s3_push, do_partition_put, do_partition_get
-  should probably share more code, since they take common arguments.
-* Verify Tar paths instead of using tarfile.extractall()
-* For small databases, the --cluster-rate-limit feature will
-  over-restrict the amount of disk bandwidth used: the number provided
-  by the user is divided by the number of processes that can
-  theoretically send data, but for small databases only one process
-  will ever be scheduled, so the result is the actual limit may be
-  only (limit / pool-size) -- much smaller than indicated.  Fix this
-  by increasing the rate limit when there are few processes that are
-  scheduled to run.
