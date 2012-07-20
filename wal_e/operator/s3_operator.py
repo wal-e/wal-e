@@ -27,6 +27,7 @@ from wal_e.exception import UserException, UserCritical
 from wal_e.piper import popen_sp
 from wal_e.storage import s3_storage
 from wal_e.worker.psql_worker import PSQL_BIN, PgBackupStatements
+from wal_e.worker.pg_controldata_worker import PgControlDataParser
 
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
@@ -295,7 +296,8 @@ class S3Backup(object):
 
         p.join(raise_error=True)
 
-    def database_s3_backup(self, *args, **kwargs):
+
+    def database_s3_backup(self, data_directory, *args, **kwargs):
         """
         Uploads a PostgreSQL file cluster to S3
 
@@ -309,12 +311,29 @@ class S3Backup(object):
 
         upload_good = False
         backup_stop_good = False
+        while_offline = False
+        start_backup_info = None
+        if 'while_offline' in kwargs:
+            while_offline = kwargs.pop('while_offline')
 
         try:
-            start_backup_info = PgBackupStatements.run_start_backup()
-            version = PgBackupStatements.pg_version()['version']
+            if not while_offline:
+                start_backup_info = PgBackupStatements.run_start_backup()
+                version = PgBackupStatements.pg_version()['version']
+            else:
+                if os.path.exists(os.path.join(data_directory, 'postmaster.pid')):
+                    raise UserException(
+                        msg='while_offline set, but pg looks to be running',
+                        detail='Found a postmaster.pid lockfile, and aborting',
+                        hint='Shut down postgres. If there is a stale lockfile, '
+                        'then remove it after being very sure postgres is not '
+                        'running.')
+
+                controldata = PgControlDataParser(data_directory)
+                start_backup_info = controldata.last_xlog_file_name_and_offset()
+                version = controldata.pg_version()
             uploaded_to, expanded_size_bytes = self._s3_upload_pg_cluster_dir(
-                start_backup_info, version=version, *args, **kwargs)
+                start_backup_info, data_directory, version=version, *args, **kwargs)
             upload_good = True
         finally:
             if not upload_good:
@@ -324,7 +343,10 @@ class S3Backup(object):
                             'but we have to wait anyway.  '
                             'See README: TODO about pg_cancel_backup'))
 
-            stop_backup_info = PgBackupStatements.run_stop_backup()
+            if not while_offline:
+                stop_backup_info = PgBackupStatements.run_stop_backup()
+            else:
+                stop_backup_info = start_backup_info
             backup_stop_good = True
 
         # XXX: Ugly, this is more of a 'worker' task because it might

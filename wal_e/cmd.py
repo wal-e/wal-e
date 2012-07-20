@@ -33,6 +33,7 @@ from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
 from wal_e.worker.s3_worker import LZOP_BIN, MBUFFER_BIN
+from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 
 # TODO: Make controllable from userland
 log_help.configure(
@@ -177,6 +178,13 @@ def main(argv=None):
         'tunable number of bytes per second', dest='rate_limit',
         metavar='BYTES_PER_SECOND',
         type=int, default=None)
+    backup_push_parser.add_argument(
+        '--while-offline',
+        help='Set to true if backing up a PG cluster that is in a stopped state '
+        '(for example, a replica that you stop/start when taking a backup)',
+        dest='while_offline',
+        metavar='WHILE_OFFLINE',
+        type=bool, default=False)
 
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
@@ -287,7 +295,19 @@ def main(argv=None):
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
-            external_program_check([LZOP_BIN, PSQL_BIN, MBUFFER_BIN])
+            if args.while_offline:
+                # we need to query pg_config first for the
+                # pg_controldata's bin location
+                external_program_check([CONFIG_BIN])
+                parser = PgControlDataParser(args.PG_CLUSTER_DIRECTORY)
+                controldata_bin = parser.controldata_bin()
+                external_programs = [
+                    LZOP_BIN,
+                    MBUFFER_BIN,
+                    controldata_bin]
+            else:
+                external_programs = [LZOP_BIN, PSQL_BIN, MBUFFER_BIN]
+            external_program_check(external_programs)
             rate_limit = args.rate_limit
             if rate_limit is not None and rate_limit < 8192:
                 logger.error(
@@ -297,8 +317,11 @@ def main(argv=None):
                           'greater than 8192'))
                 sys.exit(1)
 
+            while_offline = args.while_offline
             backup_cxt.database_s3_backup(
-                args.PG_CLUSTER_DIRECTORY, rate_limit=rate_limit,
+                args.PG_CLUSTER_DIRECTORY,
+                rate_limit=rate_limit,
+                while_offline=while_offline,
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
