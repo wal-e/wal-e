@@ -6,14 +6,11 @@ with the intention that they are used in forked worker processes.
 
 """
 import boto
-import errno
 import functools
 import gevent
 import json
 import logging
-import os
 import re
-import signal
 import socket
 import subprocess
 import sys
