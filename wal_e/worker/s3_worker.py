@@ -230,7 +230,6 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                                                        name=tpart.name))
 
             typ, value, tb = exc_tup
-            del tb
             del exc_tup
 
             # Screen for certain kinds of known-errors to retry from
@@ -251,7 +250,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit):
                 # This type of error is unrecognized as a retry-able
                 # condition, so propagate it, original stacktrace and
                 # all.
-                raise exc_tup[0], exc_tup[1], exc_tup[2]
+                raise typ, value, tb
 
         @retry(retry_with_count(log_volume_failures_on_error))
         def put_file_helper():
