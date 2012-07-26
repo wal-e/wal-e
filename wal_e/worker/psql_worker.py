@@ -4,7 +4,7 @@ import datetime
 from subprocess import PIPE
 
 from wal_e.piper import popen_sp
-from wal_e.exception import UserException, UserCritical
+from wal_e.exception import UserException
 
 PSQL_BIN = 'psql'
 

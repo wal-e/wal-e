@@ -6,14 +6,11 @@ with the intention that they are used in forked worker processes.
 
 """
 import boto
-import errno
 import functools
 import gevent
 import json
 import logging
-import os
 import re
-import signal
 import socket
 import subprocess
 import sys
@@ -26,7 +23,7 @@ import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.piper import pipe, pipe_wait, popen_sp, PIPE
+from wal_e.piper import popen_sp, PIPE
 
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
