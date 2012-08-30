@@ -180,11 +180,12 @@ def main(argv=None):
         type=int, default=None)
     backup_push_parser.add_argument(
         '--while-offline',
-        help='Set to true if backing up a PG cluster that is in a stopped state '
-        '(for example, a replica that you stop/start when taking a backup)',
+        help=('Backup a Postgres cluster that is in a stopped state '
+              '(for example, a replica that you stop and restart '
+              'when taking a backup)'),
         dest='while_offline',
-        metavar='WHILE_OFFLINE',
-        type=bool, default=False)
+        action='store_true',
+        default=False)
 
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
