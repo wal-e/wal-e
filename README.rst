@@ -1,4 +1,3 @@
-
 WAL-E Disaster Recovery
 =======================
 
@@ -364,5 +363,5 @@ Controlling the I/O of a Base Backup
 ------------------------------------
 
 To reduce the read load on base backups, they are sent through the
-tool ``pv` first.  To use this rate-limited-read mode, use the option
+tool ``pv`` first.  To use this rate-limited-read mode, use the option
 --cluster-read-rate-limit as seen in ``wal-e backup-push``.
