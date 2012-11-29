@@ -66,8 +66,8 @@ def external_program_check(
                 'note that superuser access is required'))
 
         # Bogus error message that is re-caught and re-raised
-        raise Exception('INTERNAL: Had problems running psql '
-                        'from external_program_check')
+        raise EnvironmentError('INTERNAL: Had problems running psql '
+                               'from external_program_check')
 
     with open(os.devnull, 'w') as nullf:
         for program in to_check:
