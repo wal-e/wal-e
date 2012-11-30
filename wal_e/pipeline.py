@@ -15,37 +15,53 @@ LZOP_BIN = 'lzop'
 
 BUFSIZE_HT = 128 * 8192
 
-def get_upload_pipeline(in_fd, out_fd, gpg_key=None):
+def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
+                        gpg_key=None):
     """ Create a UNIX pipeline to process a file for uploading.
         (Compress, and optionally encrypt) """
-    if gpg_key is not None:
-        compress = LZOCompressionFilter(stdin=in_fd)
-        encrypt = GPGEncryptionFilter(gpg_key, stdin=compress.stdout, stdout=out_fd)
-        commands = [compress, encrypt]
-    else:
-        commands = [LZOCompressionFilter(stdin=in_fd, stdout=out_fd)]
+    commands = []
+    if rate_limit is not None:
+        commands.append(PipeViwerRateLimitFilter(rate_limit))
+    commands.append(LZOCompressionFilter())
 
-    return Pipeline(commands)
+    if gpg_key is not None:
+        commands.append(GPGEncryptionFilter(gpg_key))
+
+    return Pipeline(commands, in_fd, out_fd)
 
 def get_download_pipeline(in_fd, out_fd, gpg=False):
     """ Create a pipeline to process a file after downloading.
         (Optionally decrypt, then decompress) """
-    if gpg == True:
-        decrypt = GPGDecryptionFilter(stdin=in_fd)
-        decompress = LZODecompressionFilter(stdin=decrypt.stdout, stdout=out_fd)
-        commands = [decrypt, decompress]
-    else:
-        commands = [LZODecompressionFilter(stdin=in_fd, stdout=out_fd)]
+    commands = []
+    if gpg:
+        commands.append(GPGDecryptionFilter())
+    commands.append(LZODecompressionFilter())
 
-    return Pipeline(commands)
+    return Pipeline(commands, in_fd, out_fd)
 
 
 class Pipeline(object):
     """ Represent a pipeline of commands.
         stdin and stdout are wrapped to be non-blocking. """
 
-    def __init__(self, commands):
+    def __init__(self, commands, in_fd, out_fd):
         self.commands = commands
+
+        # Teach the first command to take input specially
+        commands[0].stdin = in_fd
+        last_command = commands[0]
+
+        # Connect all interior commands to one another via stdin/stdout
+        for command in commands[1:]:
+            last_command.start()
+            command.stdin = last_command.stdout
+            last_command = command
+
+        # Teach the last command to spill output to out_fd rather than to
+        # its default, which is typically stdout.
+        assert last_command is commands[-1]
+        last_command.stdout = out_fd
+        last_command.start()
 
     @property
     def stdin(self):
@@ -56,7 +72,8 @@ class Pipeline(object):
         return NonBlockPipeFileWrap(self.commands[-1].stdout)
 
     def finish(self):
-        [command.finish() for command in self.commands]
+        for command in self.commands:
+            command.finish()
 
 
 class PipelineCommand(object):
@@ -65,25 +82,54 @@ class PipelineCommand(object):
 
         (If you need a gevent-compatible stdin/out, wrap it in NonBlockPipeFileWrap.)
     """
-    def __init__(self, stdin=PIPE, stdout=PIPE):
-        pass
-
-    def start(self, command, stdin, stdout):
+    def __init__(self, command, stdin=PIPE, stdout=PIPE):
         self._command = command
-        self._process = popen_sp(command, stdin=stdin, stdout=stdout,
-            bufsize=BUFSIZE_HT, close_fds=True)
+        self._stdin = stdin
+        self._stdout = stdout
+
+        self._process = None
+
+    def start(self):
+        if self._process is not None:
+            raise StandardError(
+                'BUG: Tried to .start on a PipelineCommand twice')
+
+        self._process = popen_sp(self._command,
+                                 stdin=self._stdin, stdout=self._stdout,
+                                 bufsize=BUFSIZE_HT, close_fds=True)
 
     @property
     def stdin(self):
         return self._process.stdin
 
+    @stdin.setter
+    def stdin(self, value):
+        if self._process is not None:
+            raise StandardError(
+                'BUG: Trying to set stdin on PipelineCommand '
+                'after it has already been .start-ed')
+
+        self._stdin = value
+
     @property
     def stdout(self):
         return self._process.stdout
 
+    @stdout.setter
+    def stdout(self, value):
+        if self._process is not None:
+            raise StandardError(
+                'BUG: Trying to set stdout on PipelineCommand '
+                'after it has already been .start-ed')
+
+        self._stdout = value
+
     @property
     def returncode(self):
-        return self._process.returncode
+        if self._process is None:
+            return None
+        else:
+            return self._process.returncode
 
     def finish(self):
         while True:
@@ -110,29 +156,34 @@ class PipelineCommand(object):
 class PipeViwerRateLimitFilter(PipelineCommand):
     """ Limit the rate of transfer through a pipe using pv """
     def __init__(self, rate_limit, stdin=PIPE, stdout=PIPE):
-        self.start([PV_BIN, '--rate-limit=' + unicode(rate_limit)],
-                   stdin, stdout)
+        PipelineCommand.__init__(
+            self,
+            [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
 
 
 class LZOCompressionFilter(PipelineCommand):
     """ Compress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
-        self.start([LZOP_BIN, '--stdout'], stdin, stdout)
+        PipelineCommand.__init__(
+            self, [LZOP_BIN, '--stdout'], stdin, stdout)
 
 
 class LZODecompressionFilter(PipelineCommand):
     """ Decompress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
-        self.start([LZOP_BIN, '-d', '--stdout', '-'], stdin, stdout)
+        PipelineCommand.__init__(
+                self, [LZOP_BIN, '-d', '--stdout', '-'], stdin, stdout)
 
 
 class GPGEncryptionFilter(PipelineCommand):
     """ Encrypt using GPG, using the provided public key ID. """
     def __init__(self, key, stdin=PIPE, stdout=PIPE):
-        self.start([GPG_BIN, '-e', '-z', '0', '-r', key], stdin, stdout)
+        PipelineCommand.__init__(
+                self, [GPG_BIN, '-e', '-z', '0', '-r', key], stdin, stdout)
 
 
 class GPGDecryptionFilter(PipelineCommand):
     """ Decrypt using GPG (the private key must exist and be unpassworded). """
     def __init__(self, stdin=PIPE, stdout=PIPE):
-        self.start([GPG_BIN, '-d', '-q'], stdin, stdout)
+        PipelineCommand.__init__(
+                self, [GPG_BIN, '-d', '-q'], stdin, stdout)

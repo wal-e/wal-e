@@ -176,8 +176,9 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
                 detail='Building volume {name}.'.format(name=tpart.name))
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        pipeline = get_upload_pipeline(PIPE, tf, gpg_key=gpg_key)
-        tpart.tarfile_write(pipeline.stdin, rate_limit=rate_limit)
+        pipeline = get_upload_pipeline(PIPE, tf,
+                                       rate_limit=rate_limit, gpg_key=gpg_key)
+        tpart.tarfile_write(pipeline.stdin)
         pipeline.stdin.flush()
         pipeline.stdin.close()
         pipeline.finish()

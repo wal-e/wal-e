@@ -40,7 +40,6 @@ process considerably more complicated.
 import collections
 import errno
 import os
-import sys
 import tarfile
 
 import wal_e.log_help as log_help
@@ -120,19 +119,12 @@ class TarPartition(list):
         list.__init__(self, *args, **kwargs)
 
     @staticmethod
-    def _padded_tar_add(tar, et_info, rate_limit=None):
+    def _padded_tar_add(tar, et_info):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
-                if rate_limit is not None:
-                    pv = wal_e.pipeline.PipeViwerRateLimitFilter(rate_limit, stdin=raw_file)
-
-                    with StreamPadFileObj(pv.stdout,
-                                          et_info.tarinfo.size) as f:
-                        tar.addfile(et_info.tarinfo, f)
-                else:
-                    with StreamPadFileObj(raw_file,
-                                          et_info.tarinfo.size) as f:
-                        tar.addfile(et_info.tarinfo, f)
+                with StreamPadFileObj(raw_file,
+                                      et_info.tarinfo.size) as f:
+                    tar.addfile(et_info.tarinfo, f)
 
         except EnvironmentError, e:
             if (e.errno == errno.ENOENT and
@@ -146,7 +138,7 @@ class TarPartition(list):
             else:
                 raise
 
-    def tarfile_write(self, fileobj, rate_limit=None):
+    def tarfile_write(self, fileobj):
         tar = None
         try:
             tar = tarfile.open(fileobj=fileobj, mode='w|')
@@ -155,7 +147,7 @@ class TarPartition(list):
                 # Treat files specially because they may grow, shrink,
                 # or may be unlinked in the meanwhile.
                 if et_info.tarinfo.isfile():
-                    self._padded_tar_add(tar, et_info, rate_limit=rate_limit)
+                    self._padded_tar_add(tar, et_info)
                 else:
                     tar.addfile(et_info.tarinfo)
         finally:
