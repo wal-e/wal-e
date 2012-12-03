@@ -12,7 +12,6 @@ import json
 import logging
 import re
 import socket
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -22,7 +21,7 @@ import traceback
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
 
-from wal_e.exception import UserException, UserCritical
+from wal_e.exception import UserException
 from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
 from wal_e.piper import PIPE
 

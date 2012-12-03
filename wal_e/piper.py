@@ -15,9 +15,12 @@ import signal
 import subprocess
 import sys
 
-from subprocess import PIPE
 from cStringIO import StringIO
+from subprocess import PIPE
 
+# This is not used in this module, but is imported by dependent
+# modules, so do this to quiet pyflakes.
+assert PIPE
 
 class NonBlockPipeFileWrap(object):
     def __init__(self, fp):

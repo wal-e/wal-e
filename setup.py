@@ -6,6 +6,10 @@ import sys
 # setuptools borrowed and adapted from GitPython.
 try:
     from setuptools import setup, find_packages
+
+    # Silence pyflakes
+    assert setup
+    assert find_packages
 except ImportError:
     from ez_setup import use_setuptools
     use_setuptools()

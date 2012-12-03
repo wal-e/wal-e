@@ -1,8 +1,4 @@
-import pytest
-import wal_e.tar_partition as tar_partition
-
-from wal_e.pipeline import *
-
+import wal_e.pipeline as pipeline
 
 def create_bogus_payload(dirname):
     payload = 'abcd' *  1048576
@@ -14,8 +10,8 @@ def create_bogus_payload(dirname):
 def test_rate_limit(tmpdir):
     payload, payload_file = create_bogus_payload(tmpdir)
 
-    pl = PipeViwerRateLimitFilter(1048576 * 100,
-                                  stdin=payload_file.open())
+    pl = pipeline.PipeViwerRateLimitFilter(1048576 * 100,
+                                           stdin=payload_file.open())
     pl.start()
     round_trip = pl.stdout.read()
     pl.finish()
@@ -29,7 +25,8 @@ def test_upload_download_pipeline(tmpdir, rate_limit):
     test_upload = tmpdir.join('upload')
     with open(unicode(test_upload), 'w') as upload:
         with open(unicode(payload_file)) as inp:
-            pl = get_upload_pipeline(inp, upload, rate_limit=rate_limit)
+            pl = pipeline.get_upload_pipeline(
+                inp, upload, rate_limit=rate_limit)
             pl.finish()
 
     with open(unicode(test_upload)) as completed:
@@ -39,7 +36,7 @@ def test_upload_download_pipeline(tmpdir, rate_limit):
     test_download = tmpdir.join('download')
     with open(unicode(test_upload)) as upload:
         with open(unicode(test_download), 'w') as download:
-            pl = get_download_pipeline(upload, download)
+            pl = pipeline.get_download_pipeline(upload, download)
             pl.finish()
 
     with open(unicode(test_download)) as completed:

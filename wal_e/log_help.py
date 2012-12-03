@@ -88,7 +88,6 @@ def configure(*args, **kwargs):
 
         fs = kwargs.get("format", logging.BASIC_FORMAT)
         dfs = kwargs.get("datefmt", None)
-        style = kwargs.get("style", '%')
         fmt = UTCFormatter(fs, dfs)
 
         for handler in handlers:

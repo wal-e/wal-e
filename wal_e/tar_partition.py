@@ -43,7 +43,6 @@ import os
 import tarfile
 
 import wal_e.log_help as log_help
-import wal_e.pipeline
 
 logger = log_help.WalELogger(__name__)
 

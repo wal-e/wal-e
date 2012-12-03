@@ -1,21 +1,10 @@
-import argparse
-import contextlib
-import csv
-import datetime
-import errno
 import functools
 import gevent.pool
-import glob
 import itertools
 import json
 import logging
 import os
-import re
-import signal
-import subprocess
 import sys
-import tempfile
-import textwrap
 
 import wal_e.worker.s3_worker as s3_worker
 import wal_e.tar_partition as tar_partition
@@ -24,9 +13,8 @@ import wal_e.log_help as log_help
 from cStringIO import StringIO
 
 from wal_e.exception import UserException, UserCritical
-from wal_e.piper import popen_sp
 from wal_e.storage import s3_storage
-from wal_e.worker.psql_worker import PSQL_BIN, PgBackupStatements
+from wal_e.worker.psql_worker import PgBackupStatements
 from wal_e.worker.pg_controldata_worker import PgControlDataParser
 
 
@@ -69,9 +57,6 @@ class S3Backup(object):
 
         """
         import csv
-
-        from boto.s3.connection import OrdinaryCallingFormat
-        from boto.s3.connection import S3Connection
 
         from wal_e.storage.s3_storage import BackupInfo
 

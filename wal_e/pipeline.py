@@ -48,19 +48,19 @@ class Pipeline(object):
         self.commands = commands
 
         # Teach the first command to take input specially
-        commands[0].stdin = in_fd
+        commands[0].stdinSet = in_fd
         last_command = commands[0]
 
         # Connect all interior commands to one another via stdin/stdout
         for command in commands[1:]:
             last_command.start()
-            command.stdin = last_command.stdout
+            command.stdinSet = last_command.stdout
             last_command = command
 
         # Teach the last command to spill output to out_fd rather than to
         # its default, which is typically stdout.
         assert last_command is commands[-1]
-        last_command.stdout = out_fd
+        last_command.stdoutSet = out_fd
         last_command.start()
 
     @property
@@ -103,7 +103,8 @@ class PipelineCommand(object):
         return self._process.stdin
 
     @stdin.setter
-    def stdin(self, value):
+    def stdinSet(self, value):
+        # Use the grotesque name 'stdinSet' to suppress pyflakes.
         if self._process is not None:
             raise StandardError(
                 'BUG: Trying to set stdin on PipelineCommand '
@@ -116,7 +117,8 @@ class PipelineCommand(object):
         return self._process.stdout
 
     @stdout.setter
-    def stdout(self, value):
+    def stdoutSet(self, value):
+        # Use the grotesque name 'stdoutSet' to suppress pyflakes.
         if self._process is not None:
             raise StandardError(
                 'BUG: Trying to set stdout on PipelineCommand '
