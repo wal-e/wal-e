@@ -113,23 +113,33 @@ class WalELogger(object):
             self._logger.setLevel(level)
 
     @staticmethod
-    def fmt_logline(msg, detail=None, hint=None):
+    def _fmt_structured(d):
+        """Formats '{k1:v1, k2:v2}' => 'k1=v1 k2=v2'"""
+        return ' '.join(sorted('='.join([unicode(k), unicode(v)])
+                               for (k, v) in d.items()))
+
+    @staticmethod
+    def fmt_logline(msg, detail=None, hint=None, structured=None):
         msg_parts = ['MSG: ' + msg]
 
         if detail is not None:
             msg_parts.append('DETAIL: ' + detail)
         if hint is not None:
             msg_parts.append('HINT: ' + hint)
+        if structured is not None:
+            msg_parts.append('STRUCTURED: ' +
+                             WalELogger._fmt_structured(structured))
 
         return '\n'.join(msg_parts)
 
     def log(self, level, msg, *args, **kwargs):
         detail = kwargs.pop('detail', None)
         hint = kwargs.pop('hint', None)
+        structured = kwargs.pop('structured', None)
 
         self._logger.log(
             level,
-            self.fmt_logline(msg, detail, hint),
+            self.fmt_logline(msg, detail, hint, structured),
             *args, **kwargs)
 
     # Boilerplate convenience shims to different logging levels.  One
