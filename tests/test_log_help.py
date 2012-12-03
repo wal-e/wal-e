@@ -1,9 +1,11 @@
 import wal_e.log_help as log_help
 
+
 def test_nonexisting_socket(tmpdir):
     # Must not raise an exception, silently failing is preferred for
     # now.
     log_help.configure(syslog_address=tmpdir.join('bogus'))
+
 
 def test_format_structured_info():
     zero = {}, ''
@@ -14,7 +16,6 @@ def test_format_structured_info():
 
     for d, expect in [zero, one, many, otherTyps]:
         result = log_help.WalELogger._fmt_structured(d)
-        print repr(result)
         assert result == expect
 
 

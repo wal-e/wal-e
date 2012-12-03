@@ -1,4 +1,7 @@
-""" Primitives to manage and construct pipelines for compression/encryption. """
+"""Primitives to manage and construct pipelines for
+compression/encryption.
+"""
+
 from gevent import sleep
 
 from wal_e.exception import UserCritical
@@ -15,6 +18,7 @@ LZOP_BIN = 'lzop'
 
 BUFSIZE_HT = 128 * 8192
 
+
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
                         gpg_key=None):
     """ Create a UNIX pipeline to process a file for uploading.
@@ -28,6 +32,7 @@ def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
         commands.append(GPGEncryptionFilter(gpg_key))
 
     return Pipeline(commands, in_fd, out_fd)
+
 
 def get_download_pipeline(in_fd, out_fd, gpg=False):
     """ Create a pipeline to process a file after downloading.
@@ -77,10 +82,13 @@ class Pipeline(object):
 
 
 class PipelineCommand(object):
-    """ A pipeline command. Stdin and stdout are *blocking* because you
-        want them to be if you're piping them to another command.
+    """A pipeline command
 
-        (If you need a gevent-compatible stdin/out, wrap it in NonBlockPipeFileWrap.)
+    Stdin and stdout are *blocking*, as tools that want to use
+    non-blocking pipes will set that on their own.
+
+    If one needs a gevent-compatible stdin/out, wrap it in
+    NonBlockPipeFileWrap.
     """
     def __init__(self, command, stdin=PIPE, stdout=PIPE):
         self._command = command

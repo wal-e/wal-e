@@ -22,6 +22,7 @@ from subprocess import PIPE
 # modules, so do this to quiet pyflakes.
 assert PIPE
 
+
 class NonBlockPipeFileWrap(object):
     def __init__(self, fp):
         # Make the file nonblocking (but don't lose its previous flags)
@@ -96,7 +97,6 @@ def subprocess_setup(f=None):
     then restores SIGPIPE to what most Unix processes expect.
 
     http://bugs.python.org/issue1652
-    http://www.chiark.greenend.org.uk/ucgi/~cjwatson/blosxom/2009-07-02-python-sigpipe.html
 
     """
 

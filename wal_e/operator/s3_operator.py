@@ -33,7 +33,8 @@ class S3Backup(object):
     """
 
     def __init__(self,
-                 aws_access_key_id, aws_secret_access_key, s3_prefix, gpg_key_id):
+                 aws_access_key_id, aws_secret_access_key, s3_prefix,
+                 gpg_key_id):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.gpg_key_id = gpg_key_id
@@ -178,9 +179,10 @@ class S3Backup(object):
 
         # Make an attempt to upload extended version metadata
         extended_version_url = backup_s3_prefix + '/extended_version.txt'
-        logger.info(msg='start upload postgres version metadata',
-                    detail=('Uploading to {extended_version_url}.'
-                            .format(extended_version_url=extended_version_url)))
+        logger.info(
+            msg='start upload postgres version metadata',
+            detail=('Uploading to {extended_version_url}.'
+                    .format(extended_version_url=extended_version_url)))
         s3_worker.uri_put_file(extended_version_url, StringIO(version),
                                content_encoding='text/plain')
         logger.info(msg='postgres version metadata upload complete')
@@ -193,7 +195,8 @@ class S3Backup(object):
                 total_size += tpart.total_member_size
                 uploads.append(pool.apply_async(
                         s3_worker.do_partition_put,
-                        [backup_s3_prefix, tpart, per_process_limit, self.gpg_key_id]))
+                        [backup_s3_prefix, tpart, per_process_limit,
+                         self.gpg_key_id]))
         finally:
             while uploads:
                 uploads.pop().get()
@@ -283,19 +286,15 @@ class S3Backup(object):
 
         p.join(raise_error=True)
 
-
     def database_s3_backup(self, data_directory, *args, **kwargs):
-        """
-        Uploads a PostgreSQL file cluster to S3
+        """Uploads a PostgreSQL file cluster to S3
 
         Mechanism: just wraps _s3_upload_pg_cluster_dir with
         start/stop backup actions with exception handling.
 
         In particular there is a 'finally' block to stop the backup in
         most situations.
-
         """
-
         upload_good = False
         backup_stop_good = False
         while_offline = False
@@ -308,19 +307,24 @@ class S3Backup(object):
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
-                if os.path.exists(os.path.join(data_directory, 'postmaster.pid')):
+                if os.path.exists(os.path.join(data_directory,
+                                               'postmaster.pid')):
+                    hint = ('Shut down postgres.  '
+                            'If there is a stale lockfile, '
+                            'then remove it after being very sure postgres '
+                            'is not running.')
                     raise UserException(
                         msg='while_offline set, but pg looks to be running',
                         detail='Found a postmaster.pid lockfile, and aborting',
-                        hint='Shut down postgres. If there is a stale lockfile, '
-                        'then remove it after being very sure postgres is not '
-                        'running.')
+                        hint=hint)
 
                 controldata = PgControlDataParser(data_directory)
-                start_backup_info = controldata.last_xlog_file_name_and_offset()
+                start_backup_info = \
+                    controldata.last_xlog_file_name_and_offset()
                 version = controldata.pg_version()
             uploaded_to, expanded_size_bytes = self._s3_upload_pg_cluster_dir(
-                start_backup_info, data_directory, version=version, *args, **kwargs)
+                start_backup_info, data_directory, version=version,
+                *args, **kwargs)
             upload_good = True
         finally:
             if not upload_good:

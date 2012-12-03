@@ -74,9 +74,7 @@ def configure(*args, **kwargs):
 
         try:
             # Nobody can escape syslog, for now, and this default only
-            # works on Linux.  See:
-            #
-            # http://docs.python.org/library/logging.handlers.html#sysloghandler
+            # works on Linux.
             handlers.append(logging.handlers.SysLogHandler(syslog_address))
         except EnvironmentError, e:
             if e.errno == errno.ENOENT:

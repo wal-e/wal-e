@@ -166,6 +166,7 @@ def format_kib_per_second(start, finish, amount_in_bytes):
     except ZeroDivisionError:
         return 'NaN'
 
+
 def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
     """
     Synchronous version of the s3-upload wrapper
@@ -242,7 +243,6 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
-
 def do_lzop_s3_put(s3_url, local_path, gpg_key):
     """
     Compress and upload a given local path.
@@ -259,7 +259,8 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
     s3_url += '.lzo'
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        pipeline = get_upload_pipeline(file(local_path, 'r'), tf, gpg_key=gpg_key)
+        pipeline = get_upload_pipeline(
+            open(local_path, 'r'), tf, gpg_key=gpg_key)
         pipeline.finish()
 
         tf.flush()
@@ -281,12 +282,14 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
                     '{kib_per_second}KiB/s. ')
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
+
 def write_and_close_thread(key, stream):
     try:
         key.get_contents_to_file(stream)
     finally:
         stream.flush()
         stream.close()
+
 
 def do_lzop_s3_get(s3_url, path, decrypt):
     """

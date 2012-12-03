@@ -1,7 +1,8 @@
 import wal_e.pipeline as pipeline
 
+
 def create_bogus_payload(dirname):
-    payload = 'abcd' *  1048576
+    payload = 'abcd' * 1048576
     payload_file = dirname.join('payload')
     payload_file.write(payload)
     return payload, payload_file
@@ -49,4 +50,4 @@ def pytest_generate_tests(metafunc):
     # Test both with and without rate limiting if there is rate_limit
     # parameter.
     if "rate_limit" in metafunc.funcargnames:
-        metafunc.parametrize("rate_limit", [None, int(2**25)])
+        metafunc.parametrize("rate_limit", [None, int(2 ** 25)])

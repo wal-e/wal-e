@@ -27,10 +27,12 @@ COMPLETE_BASE_BACKUP_REGEXP = (
 
 VOLUME_REGEXP = (r'part_(\d+)\.tar\.lzo')
 
+
 # A representation of a log number and segment, naive of timeline.
 # This number always increases, even when diverging into two
 # timelines, so it's useful for conservative garbage collection.
-class SegmentNumber(collections.namedtuple('SegmentNumber', ['log', 'seg'])):
+class SegmentNumber(collections.namedtuple('SegmentNumber',
+                                           ['log', 'seg'])):
 
     @property
     def as_an_integer(self):
@@ -54,6 +56,7 @@ BackupInfo = collections.namedtuple('BackupInfo',
                                      'wal_segment_offset_backup_stop'])
 
 OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
+
 
 class StorageLayout(object):
     """

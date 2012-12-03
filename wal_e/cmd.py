@@ -136,11 +136,11 @@ def main(argv=None):
                         'Can also be defined via environment variable '
                         'WALE_S3_PREFIX')
 
-    parser.add_argument('--gpg-key-id',
-                        help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
-                        'Can also be defined via environment variable '
-                        'WALE_GPG_KEY_ID')
-
+    parser.add_argument(
+        '--gpg-key-id',
+        help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
+        'Can also be defined via environment variable '
+        'WALE_GPG_KEY_ID')
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -241,8 +241,9 @@ def main(argv=None):
     delete_subparsers.add_parser(
         'old-versions',
         help=('Delete all old versions of WAL-E backup files.  One probably '
-              'wants to ensure that they take a new backup with the new format '
-              'first.  This is useful after a WAL-E major release upgrade.'))
+              'wants to ensure that they take a new backup with the new '
+              'format first.  '
+              'This is useful after a WAL-E major release upgrade.'))
 
     # delete *everything* operator
     delete_subparsers.add_parser(
@@ -288,7 +289,8 @@ def main(argv=None):
     # This will be None if we're not encrypting
     gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
 
-    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix, gpg_key_id)
+    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix,
+                                      gpg_key_id)
 
     subcommand = args.subcommand
 
@@ -329,7 +331,8 @@ def main(argv=None):
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
-            res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT, args.WAL_DESTINATION)
+            res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT,
+                                            args.WAL_DESTINATION)
             if not res:
                 sys.exit(1)
         elif subcommand == 'wal-push':

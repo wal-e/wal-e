@@ -5,6 +5,7 @@ from wal_e.piper import popen_sp
 CONTROLDATA_BIN = 'pg_controldata'
 CONFIG_BIN = 'pg_config'
 
+
 class PgControlDataParser(object):
     """
     When we're backing up a PG cluster that is not
@@ -33,8 +34,8 @@ class PgControlDataParser(object):
                 self._pg_version = val
 
     def _read_controldata(self):
-        controldata_proc = popen_sp([self._controldata_bin, self.data_directory],
-                             stdout=PIPE)
+        controldata_proc = popen_sp(
+            [self._controldata_bin, self.data_directory], stdout=PIPE)
         stdout = controldata_proc.communicate()[0]
         controldata = {}
         for line in stdout.split('\n'):
@@ -52,7 +53,8 @@ class PgControlDataParser(object):
 
     def last_xlog_file_name_and_offset(self):
         controldata = self._read_controldata()
-        last_checkpoint_offset = controldata["Latest checkpoint's REDO location"]
+        last_checkpoint_offset = \
+            controldata["Latest checkpoint's REDO location"]
         current_timeline = controldata["Latest checkpoint's TimeLineID"]
         x, offset = last_checkpoint_offset.split('/')
         timeline = current_timeline.zfill(8)
