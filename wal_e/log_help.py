@@ -51,6 +51,29 @@ class UTCFormatter(logging.Formatter):
 
 
 def configure(*args, **kwargs):
+    """Guards configuring logging to enable retry
+
+    Logging is rather important to start up properly, so try very hard
+    to make this happen: without it is difficult to report sane and
+    well-formatted error messages to the log.
+    """
+    def terrible_log_output(s):
+        import sys
+
+        print >>sys.stderr, s
+
+    while True:
+        try:
+            return configure_guts(*args, **kwargs)
+        except EnvironmentError, e:
+            if e.errno == errno.EACCES:
+                terrible_log_output('wal-e: Could not set up logger because'
+                                    'of EACCESS, connection refused issue: '
+                                    'retrying')
+                time.sleep(1)
+
+
+def configure_guts(*args, **kwargs):
     """
     Borrowed from logging.basicConfig
 
