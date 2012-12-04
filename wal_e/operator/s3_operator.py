@@ -380,17 +380,35 @@ class S3Backup(object):
 
         This code is intended to typically be called from Postgres's
         archive_command feature.
-
         """
         wal_file_name = os.path.basename(wal_path)
+        s3_url = '{0}/wal_{1}/{2}'.format(
+            self.s3_prefix, FILE_STRUCTURE_VERSION, wal_file_name)
 
-        # It's okay-ish for this to blow up in event of problems:
-        # Postgres will retry archiving *forever*
-        s3_worker.do_lzop_s3_put(
-            '{0}/wal_{1}/{2}'.format(self.s3_prefix,
-                                     FILE_STRUCTURE_VERSION,
-                                     wal_file_name),
-            wal_path, self.gpg_key_id)
+        logger.info(msg='begin archiving a file',
+                    detail=('Uploading "{wal_path}" to "{s3_url}".'
+                            .format(wal_path=wal_path, s3_url=s3_url)),
+                    structured={'action': 'push-wal',
+                                'key': s3_url,
+                                'seg': wal_file_name,
+                                'prefix': self.s3_prefix,
+                                'state': 'begin'})
+
+        # Upload and record the rate at which it happened.
+        kib_per_second = s3_worker.do_lzop_s3_put(s3_url, wal_path,
+                                                  self.gpg_key_id)
+
+        logger.info(
+            msg='completed archiving to a file ',
+            detail=('Archiving to "{s3_url}" complete at '
+                    '{kib_per_second}KiB/s. ')
+            .format(s3_url=s3_url, kib_per_second=kib_per_second),
+                    structured={'action': 'push-wal',
+                                'key': s3_url,
+                                'rate': kib_per_second,
+                                'seg': wal_file_name,
+                                'prefix': self.s3_prefix,
+                                'state': 'complete'})
 
     def wal_s3_restore(self, wal_name, wal_destination):
         """
@@ -403,11 +421,30 @@ class S3Backup(object):
         basename(wal_path), so both are required.
 
         """
-        return s3_worker.do_lzop_s3_get(
-            '{0}/wal_{1}/{2}.lzo'.format(self.s3_prefix,
-                                         FILE_STRUCTURE_VERSION,
-                                         wal_name),
-            wal_destination, (self.gpg_key_id is not None))
+
+        s3_url = '{0}/wal_{1}/{2}.lzo'.format(
+            self.s3_prefix, FILE_STRUCTURE_VERSION, wal_name)
+
+        logger.info(
+            msg='begin wal restore',
+            structured={'action': 'wal-fetch',
+                        'key': s3_url,
+                        'seg': wal_name,
+                        'prefix': self.s3_prefix,
+                        'state': 'begin'})
+
+        ret = s3_worker.do_lzop_s3_get(
+            s3_url, wal_destination, self.gpg_key_id is not None)
+
+        logger.info(
+            msg='complete wal restore',
+            structured={'action': 'wal-fetch',
+                        'key': s3_url,
+                        'seg': wal_name,
+                        'prefix': self.s3_prefix,
+                        'state': 'complete'})
+
+        return ret
 
     def delete_old_versions(self, dry_run):
         assert s3_storage.CURRENT_VERSION not in s3_storage.OBSOLETE_VERSIONS

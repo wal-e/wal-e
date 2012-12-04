@@ -265,10 +265,6 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
 
         tf.flush()
 
-        logger.info(msg='begin archiving a file',
-                    detail=('Uploading "{local_path}" to "{s3_url}".'
-                            .format(**locals())))
-
         clock_start = time.clock()
         tf.seek(0)
         k = uri_put_file(s3_url, tf)
@@ -276,11 +272,8 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
 
         kib_per_second = format_kib_per_second(clock_start, clock_finish,
                                                k.size)
-        logger.info(
-            msg='completed archiving to a file ',
-            detail=('Archiving to "{s3_url}" complete at '
-                    '{kib_per_second}KiB/s. ')
-            .format(s3_url=s3_url, kib_per_second=kib_per_second))
+
+        return kib_per_second
 
 
 def write_and_close_thread(key, stream):
