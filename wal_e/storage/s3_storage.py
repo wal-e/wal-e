@@ -14,7 +14,7 @@ import wal_e.exception
 from urlparse import urlparse
 
 
-CURRENT_VERSION = 'dev-version'
+CURRENT_VERSION = '005'
 
 SEGMENT_REGEXP = (r'(?P<filename>(?P<tli>[0-9A-F]{8,8})(?P<log>[0-9A-F]{8,8})'
                   '(?P<seg>[0-9A-F]{8,8}))')
@@ -65,18 +65,18 @@ class StorageLayout(object):
     Without a trailing slash
     >>> sl = StorageLayout('s3://foo/bar')
     >>> sl.basebackups()
-    'bar/basebackups_dev-version/'
+    'bar/basebackups_005/'
     >>> sl.wal_directory()
-    'bar/wal_dev-version/'
+    'bar/wal_005/'
     >>> sl.bucket_name()
     'foo'
 
     With a trailing slash
     >>> sl = StorageLayout('s3://foo/bar/')
     >>> sl.basebackups()
-    'bar/basebackups_dev-version/'
+    'bar/basebackups_005/'
     >>> sl.wal_directory()
-    'bar/wal_dev-version/'
+    'bar/wal_005/'
     >>> sl.bucket_name()
     'foo'
 
