@@ -13,20 +13,21 @@ class UserException(Exception):
 
     http://developer.postgresql.org/pgdocs/postgres/error-style-guide.html
 
-    If it is necessary to trap these exceptions. use a subclass.
+    If it is necessary to trap these exceptions, use a subclass.
 
     >>> raise UserException(msg='foo', detail='bar')
     Traceback (most recent call last):
         ...
     UserException: ERROR: MSG: foo
     DETAIL: bar
-
+    STRUCTURED: time=... pid=...
     >>> raise UserException(msg='foo', detail='bar', hint='hello')
     Traceback (most recent call last):
         ...
     UserException: ERROR: MSG: foo
     DETAIL: bar
     HINT: hello
+    STRUCTURED: time=... pid=...
     """
 
     def __init__(self, msg=None, detail=None, hint=None):

@@ -35,9 +35,8 @@ from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 
-# TODO: Make controllable from userland
 log_help.configure(
-    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+    format='%(name)-12s %(levelname)-8s %(message)s')
 
 logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 

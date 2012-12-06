@@ -2,7 +2,7 @@
 A module to assist with using the Python logging module
 
 """
-
+import datetime
 import errno
 import logging
 import logging.handlers
@@ -10,33 +10,7 @@ import os
 import time
 
 
-class UTCFormatter(logging.Formatter):
-
-    # Undocumented, seemingly still in 2.7 (see
-    # http://od-eon.com/blogs/stefan/logging-utc-timestamps-python/)
-    converter = time.gmtime
-
-    def formatTime(self, record, datefmt=None):
-        """
-        Return the creation time of the specified LogRecord as formatted text.
-
-        Base taken from logging.Formatter, but modified very slightly
-        to produce a more standard ISO8601 millisecond-including
-        timestamp.  At the very least, it was chosen to very carefully
-        be parsable with PostgreSQL's timestamptz datatype.
-
-        It also avoids the representation of ISO8601 with spaces.
-
-        """
-
-        ct = self.converter(record.created)
-
-        if datefmt:
-            s = time.strftime(datefmt, ct)
-        else:
-            t = time.strftime("%Y-%m-%dT%H:%M:%S", ct)
-            s = "%s.%03d+00 pid=%d" % (t, record.msecs, os.getpid())
-        return s
+class IndentFormatter(logging.Formatter):
 
     def format(self, record, *args, **kwargs):
         """
@@ -77,7 +51,7 @@ def configure_guts(*args, **kwargs):
     """
     Borrowed from logging.basicConfig
 
-    Uses the UTCFormatter instead of the regular Formatter
+    Uses the IndentFormatter instead of the regular Formatter
 
     Also, opts you into syslogging.
 
@@ -109,7 +83,7 @@ def configure_guts(*args, **kwargs):
 
         fs = kwargs.get("format", logging.BASIC_FORMAT)
         dfs = kwargs.get("datefmt", None)
-        fmt = UTCFormatter(fs, dfs)
+        fmt = IndentFormatter(fs, dfs)
 
         for handler in handlers:
             handler.setFormatter(fmt)
@@ -134,9 +108,19 @@ class WalELogger(object):
 
     @staticmethod
     def _fmt_structured(d):
-        """Formats '{k1:v1, k2:v2}' => 'k1=v1 k2=v2'"""
-        return ' '.join(sorted('='.join([unicode(k), unicode(v)])
-                               for (k, v) in d.items()))
+        """Formats '{k1:v1, k2:v2}' => 'time=... pid=... k1=v1 k2=v2'
+
+        Output is lexically sorted, *except* the time and pid always
+        come first, to assist with human scanning of the data.
+        """
+        timeEntry = datetime.datetime.utcnow().strftime(
+            "time=%Y-%m-%dT%H:%M:%S.%f-00")
+        pidEntry = "pid=" + str(os.getpid())
+
+        rest = sorted('='.join([unicode(k), unicode(v)])
+                      for (k, v) in d.items())
+
+        return ' '.join([timeEntry, pidEntry] + rest)
 
     @staticmethod
     def fmt_logline(msg, detail=None, hint=None, structured=None):
@@ -146,9 +130,16 @@ class WalELogger(object):
             msg_parts.append('DETAIL: ' + detail)
         if hint is not None:
             msg_parts.append('HINT: ' + hint)
-        if structured is not None:
-            msg_parts.append('STRUCTURED: ' +
-                             WalELogger._fmt_structured(structured))
+
+        # Initialize a fresh dictionary if structured is not passed,
+        # because keyword arguments are not re-evaluated when calling
+        # the function and it's okay for callees to mutate their
+        # passed dictionary.
+        if structured is None:
+            structured = {}
+
+        msg_parts.append('STRUCTURED: ' +
+                         WalELogger._fmt_structured(structured))
 
         return '\n'.join(msg_parts)
 
