@@ -1,7 +1,18 @@
 WAL-E Disaster Recovery
 =======================
 
-.. contents:: Table of Contents
+Important
+---------
+
+``wal-e`` has become its own organization, and has a new repository,
+reflecting its importance to multiple people and organizations, to
+enable more direct ``wal-e`` contributions.  It can be found here:
+
+   https://github.com/wal-e/wal-e
+
+The version seen here will remain in archival for 'quite a while' in
+the Github organization "Heroku" to not break any program that may
+have become reliant that address.
 
 Introduction
 ------------
