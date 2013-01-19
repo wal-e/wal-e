@@ -1,13 +1,13 @@
 WAL-E's History
 ===============
 
-WAL-E's development began Heroku, Inc in early 2011, commissioned by
-the Department of Data with the intent of ensuring that appreciable
-data loss on Heroku would have to be accompanied by a spectacularly
-obscure mechanisms: it was not acceptable to lose a lot of data in
-common cases of media failure or operator error.  The notion of
-subsequent the replication-related "fork" and "follow" features did
-not exist.  The "Heroku Postgres" product was not yet a concept.
+WAL-E's development began Heroku in early 2011, commissioned by the
+Department of Data with the intent of ensuring that appreciable data
+loss on Heroku would have to be accompanied by a spectacularly obscure
+mechanisms: it was not acceptable to lose a lot of data in common
+cases of media failure or operator error.  The notion of subsequent
+the replication-related "fork" and "follow" features did not exist.
+The "Heroku Postgres" product was not yet a concept.
 
 Within one month after the first commit of `WAL-E`, the very earliest
 versions were deployed to Heroku production, v0.2.0.  At this point,
