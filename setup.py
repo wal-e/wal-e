@@ -1,9 +1,6 @@
 #!/usr/bin/env python
-import errno
 import os.path
 import sys
-
-from distutils.cmd import Command
 
 # Version file managment scheme and graceful degredation for
 # setuptools borrowed and adapted from GitPython.
@@ -17,7 +14,6 @@ except ImportError:
 if sys.version_info < (2, 6):
     raise RuntimeError('Python versions < 2.6 are not supported.')
 
-
 # Utility function to read the contents of short files.
 def read(fname):
     with open(os.path.join(os.path.dirname(__file__), fname)) as f:
@@ -29,31 +25,13 @@ install_requires = [
     l for l in read('requirements.txt').split('\n')
     if l and not l.startswith('#')]
 
+tests_require = [
+    "pytest>=2.2.1",
+    "pytest-capturelog>=0.7",
+]
 
 if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
-
-
-class PyTest(Command):
-    user_options = []
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        import subprocess
-
-        try:
-            retcode = subprocess.call('py.test')
-        except EnvironmentError, e:
-            if e.errno == errno.ENOENT:
-                print >>sys.stderr, ('Could not find test runner, consider '
-                                     '"pip install pytest pytest-xdist".')
-        else:
-            raise SystemExit(retcode)
 
 setup(
     name="wal-e",
@@ -61,7 +39,7 @@ setup(
     packages=find_packages(),
 
     install_requires=install_requires,
-    extras_require=extras_require,
+    tests_require=tests_require,
 
     # metadata for upload to PyPI
     author="Daniel Farina",
@@ -81,7 +59,7 @@ setup(
     package_data={'wal_e': ['VERSION']},
 
     # run tests
-    cmdclass={'test': PyTest},
+    test_suite='runtests.runtests',
 
     # install
     entry_points={'console_scripts': ['wal-e=wal_e.cmd:main']})
