@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 import sys
-from distutils.spawn import find_executable
 
-EXTERNAL_DEPENDENCIES = ['lzop', 'psql', 'pv']
+from wal_e.cmd import external_program_check
+from wal_e.pipeline import PV_BIN
 
 
 def runtests(args=None):
     import pytest
 
-    for dep in EXTERNAL_DEPENDENCIES:
-        if not find_executable(dep):
-            print >>sys.stderr, 'FATAL: Missing binary for dependency "%s".' % dep
-            sys.exit(1)
+    external_program_check([PV_BIN])
 
     if args is None:
         args = []
