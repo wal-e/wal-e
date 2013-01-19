@@ -45,7 +45,7 @@ setup(
     description="PostgreSQL WAL-shipping for S3",
     license="BSD",
     keywords="postgresql database backup",
-    url="https://github.com/heroku/wal-e",
+    url="https://github.com/wal-e/wal-e",
 
     # run tests
     test_suite='runtests.runtests',
