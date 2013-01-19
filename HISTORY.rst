@@ -9,7 +9,7 @@ cases of media failure or operator error.  The subsequent
 replication-related "fork" and "follow" features did not exist.  The
 "Heroku Postgres" product was not yet a concept.
 
-Within one month after the first commit of `WAL-E`, the very earliest
+Within one month after the first commit of WAL-E, the very earliest
 versions were deployed to Heroku production, v0.2.0.  At this point,
 it was somewhat unclear that WAL-E even worked, which was to be
 determined at leisure following deployment.  However, within two
