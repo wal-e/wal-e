@@ -34,9 +34,9 @@ to work well:
 * backup-fetch
 * WALE_S3_PREFIX
 
-In April of 2011, the v0.5 series was released.  Notably, this was the
-first version possessing a stable version of the storage format in S3,
-version '005'.
+Also in April of 2011, the v0.5 series was released.  Notably, this
+was the first version possessing a stable version of the storage
+format in S3, version '005'.
 
 By May of 2011, it became clear that a lot more control over error
 handling and exceptions would be necessary to make WAL-E an ergonomic
