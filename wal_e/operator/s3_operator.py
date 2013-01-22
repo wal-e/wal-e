@@ -304,8 +304,8 @@ class S3Backup(object):
 
         try:
             if not while_offline:
-                start_backup_info = PgBackupStatements.run_start_backup()
-                version = PgBackupStatements.pg_version()['version']
+                start_backup_info = PgBackupStatements.run_start_backup(data_directory)
+                version = PgBackupStatements.pg_version(data_directory)['version']
             else:
                 if os.path.exists(os.path.join(data_directory,
                                                'postmaster.pid')):
@@ -335,7 +335,7 @@ class S3Backup(object):
                             'See README: TODO about pg_cancel_backup'))
 
             if not while_offline:
-                stop_backup_info = PgBackupStatements.run_stop_backup()
+                stop_backup_info = PgBackupStatements.run_stop_backup(data_directory)
             else:
                 stop_backup_info = start_backup_info
             backup_stop_good = True
