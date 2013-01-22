@@ -42,7 +42,7 @@ logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
 
 def external_program_check(
-    to_check=frozenset([PSQL_BIN, LZOP_BIN, PV_BIN])):
+    to_check=frozenset([PSQL_BIN, LZOP_BIN, PV_BIN]), data_directory=None):
     """
     Validates the existence and basic working-ness of other programs
 
@@ -72,7 +72,7 @@ def external_program_check(
         for program in to_check:
             try:
                 if program is PSQL_BIN:
-                    psql_csv_run('SELECT 1', error_handler=psql_err_handler)
+                    psql_csv_run('SELECT 1', error_handler=psql_err_handler, data_directory=data_directory)
                 else:
                     if program is PV_BIN:
                         extra_args = ['--quiet']
@@ -319,7 +319,7 @@ def main(argv=None):
             else:
                 external_programs = [LZOP_BIN, PSQL_BIN, PV_BIN]
 
-            external_program_check(external_programs)
+            external_program_check(external_programs, args.PG_CLUSTER_DIRECTORY)
             rate_limit = args.rate_limit
 
             while_offline = args.while_offline

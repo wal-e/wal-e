@@ -6,6 +6,8 @@ from subprocess import PIPE
 from wal_e.piper import popen_nonblock
 from wal_e.exception import UserException
 
+import psutil
+
 PSQL_BIN = 'psql'
 
 
@@ -30,7 +32,7 @@ class UTC(datetime.tzinfo):
         return self.ZERO
 
 
-def psql_csv_run(sql_command, error_handler=None):
+def psql_csv_run(sql_command, error_handler=None, data_directory=None):
     """
     Runs psql and returns a CSVReader object from the query
 
@@ -38,11 +40,31 @@ def psql_csv_run(sql_command, error_handler=None):
     situations.  The output is fully buffered into Python.
 
     """
+
+    if data_directory is not None:
+      with open(data_directory + "/postmaster.pid", 'r') as file:
+        postgresql_pid = int(file.readline().rstrip())
+
+      process = psutil.Process(postgresql_pid)
+
+      for s in (process.get_connections(kind='unix') + process.get_connections(kind='tcp')):
+        if s.status in ("", "LISTEN"):
+          addr = s.local_address
+          if isinstance(addr, str):
+            host, port = (addr).rsplit("/", 1)
+            port = port.rsplit(".", 1)[1]
+          else:
+            host = addr[0]
+            port = str(addr[1])
+          break
+
     csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
                  .format(query=sql_command))
+    cmd_array = [PSQL_BIN, '-d', 'postgres', '-c', csv_query]
+    if data_directory is not None:
+      cmd_array += ['-h', host, '-p', port]
 
-    psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
-                         stdout=PIPE)
+    psql_proc = popen_nonblock(cmd_array, stdout=PIPE)
     stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
@@ -80,7 +102,7 @@ class PgBackupStatements(object):
         return dict(zip(*rows))
 
     @classmethod
-    def run_start_backup(cls):
+    def run_start_backup(cls, data_directory):
         """
         Connects to a server and attempts to start a hot backup
 
@@ -104,10 +126,10 @@ class PgBackupStatements(object):
                 "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
                 "  pg_start_backup('{0}'))".format(label),
-                error_handler=handler))
+                error_handler=handler, data_directory=data_directory))
 
     @classmethod
-    def run_stop_backup(cls):
+    def run_stop_backup(cls, data_directory):
         """
         Stop a hot backup, if it was running, or error
 
@@ -123,10 +145,10 @@ class PgBackupStatements(object):
                 "SELECT file_name, "
                 "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
-                "  pg_stop_backup())", error_handler=handler))
+                "  pg_stop_backup())", error_handler=handler, data_directory=data_directory))
 
     @classmethod
-    def pg_version(cls):
+    def pg_version(cls,data_directory=None):
         """
         Get a very informative version string from Postgres
 
@@ -134,4 +156,4 @@ class PgBackupStatements(object):
         other details.
 
         """
-        return cls._dict_transform(psql_csv_run('SELECT * FROM version()'))
+        return cls._dict_transform(psql_csv_run('SELECT * FROM version()', data_directory))
