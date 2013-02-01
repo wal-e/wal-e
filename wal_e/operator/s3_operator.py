@@ -48,8 +48,17 @@ class S3Backup(object):
         from boto.s3.connection import OrdinaryCallingFormat
         from boto.s3.connection import S3Connection
 
+        # Work around boto/443 (https://github.com/boto/boto/issues/443)
+        if not hasattr(self, 's3_host'):
+            connection_args = (
+                self.aws_access_key_id,
+                self.aws_secret_access_key,
+            )
+            self.s3_host = s3_worker.s3_endpoint_for_uri(self.s3_prefix,
+                                                         connection_args)
         return S3Connection(self.aws_access_key_id,
                             self.aws_secret_access_key,
+                            host=self.s3_host,
                             calling_format=OrdinaryCallingFormat())
 
     def backup_list(self, query, detail):

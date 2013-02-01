@@ -17,6 +17,8 @@ import tarfile
 import tempfile
 import time
 import traceback
+from urlparse import urlparse
+from boto.s3.connection import S3Connection, SubdomainCallingFormat
 
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
@@ -137,6 +139,67 @@ def retry_with_count(side_effect_func):
     return retry_with_count_internal
 
 
+_S3_REGIONS = {
+    # A map like this is actually defined in boto.s3 in newer versions of boto
+    # but we reproduce it here for the folks (notably, Ubuntu 12.04) on older
+    # versions.
+    'us-west-1': 's3-us-west-1.amazonaws.com',
+    'us-west-2': 's3-us-west-2.amazonaws.com',
+    'ap-northeast-1': 's3-ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 's3-ap-southeast-1.amazonaws.com',
+    'ap-southeast-2': 's3-ap-southeast-2.amazonaws.com',
+    'eu-west-1': 's3-eu-west-1.amazonaws.com',
+}
+
+
+try:
+    # Override our hard-coded region map with boto's mappings if available.
+    from boto.s3 import regions
+    _S3_REGIONS.update(dict((r.name, r.endpoint) for r in regions()))
+except ImportError:
+    pass
+
+
+def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
+    # 'connection' argument is used for unit test dependency injection
+    # Work around boto/443 (https://github.com/boto/boto/issues/443)
+    bucket_name = urlparse(s3_uri).netloc
+    default = 's3.amazonaws.com'
+
+    if bucket_name not in s3_endpoint_for_uri.cache:
+        try:
+            # Attempting to use .get_bucket() with OrdinaryCallingFormat raises
+            # a S3ResponseError (status 301).  See boto/443 referenced above.
+            c_args = c_args or ()
+            c_kwargs = c_kwargs or {}
+            c_kwargs['calling_format'] = SubdomainCallingFormat()
+            conn = connection or S3Connection(*c_args, **c_kwargs)
+            s3_endpoint_for_uri.cache[bucket_name] = _S3_REGIONS.get(
+                    conn.get_bucket(bucket_name).get_location(), default)
+        except:
+            detail = ''.join(traceback.format_exception(*sys.exc_info()))
+            hint = ('Bucket names containing upper case letters'
+                    ' are known to be problematic.')
+            logger.warning('Problem getting region information for bucket %s.',
+                           bucket_name, hint=hint, detail=detail)
+            s3_endpoint_for_uri.cache[bucket_name] = default
+
+    return s3_endpoint_for_uri.cache[bucket_name]
+s3_endpoint_for_uri.cache = {}
+
+
+def s3_uri_wrap(s3_uri):
+    """
+    Thin wrapper around boto.storage_uri to work around boto warts.
+
+    Disable validation as a kludge to get around use of upper-case bucket
+    names.
+    """
+    suri = boto.storage_uri(s3_uri, validate=False)
+    suri.connection_args = {'host': s3_endpoint_for_uri(s3_uri)}
+    return suri
+
+
 def uri_put_file(s3_uri, fp, content_encoding=None):
     # Per Boto 2.2.2, which will only read from the current file
     # position to the end.  This manifests as successfully uploaded
@@ -148,9 +211,7 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
     # in mind, assert it as a precondition for using this procedure.
     assert fp.tell() == 0
 
-    # XXX: disable validation as a kludge to get around use of
-    # upper-case bucket names.
-    suri = boto.storage_uri(s3_uri, validate=False)
+    suri = s3_uri_wrap(s3_uri)
     k = suri.new_key()
 
     if content_encoding is not None:
@@ -334,7 +395,7 @@ def do_lzop_s3_get(s3_url, path, decrypt):
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
-            suri = boto.storage_uri(s3_url, validate=False)
+            suri = s3_uri_wrap(s3_url)
             bucket = suri.get_bucket()
             key = bucket.get_key(suri.object_name)
 
