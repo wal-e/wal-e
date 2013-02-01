@@ -17,6 +17,8 @@ import tarfile
 import tempfile
 import time
 import traceback
+from urlparse import urlparse
+from boto.s3.connection import S3Connection, SubdomainCallingFormat
 
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
@@ -137,6 +139,35 @@ def retry_with_count(side_effect_func):
     return retry_with_count_internal
 
 
+def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None):
+    # Work around boto/443 (https://github.com/boto/boto/issues/443)
+    bucket_name = urlparse(s3_uri).netloc
+
+    if bucket_name not in s3_endpoint_for_uri.cache:
+        # Attempting to use .get_bucket() with OrdinaryCallingFormat
+        # raises a S3ResponseError (status 301).  See boto/443 referenced
+        # above.
+        c_args = c_args or ()
+        c_kwargs = c_kwargs or {}
+        c_kwargs['calling_format'] = SubdomainCallingFormat()
+        conn = S3Connection(*c_args, **c_kwargs)
+        s3_endpoint_for_uri.cache[bucket_name] = {
+            # A map like this is actually defined in boto.s3 in newer versions
+            # of boto but we reproduce it here for the folks (notably, Ubuntu
+            # 12.04) on older versions.
+            'us-west-1': 's3-us-west-1.amazonaws.com',
+            'us-west-2': 's3-us-west-2.amazonaws.com',
+            'ap-northeast-1': 's3-ap-northeast-1.amazonaws.com',
+            'ap-southeast-1': 's3-ap-southeast-1.amazonaws.com',
+            'ap-southeast-2': 's3-ap-southeast-2.amazonaws.com',
+            'eu-west-1': 's3-eu-west-1.amazonaws.com',
+        }.get(conn.get_bucket(bucket_name).get_location(),
+              's3.amazonaws.com')
+
+    return s3_endpoint_for_uri.cache[bucket_name]
+s3_endpoint_for_uri.cache = {}
+
+
 def uri_put_file(s3_uri, fp, content_encoding=None):
     # Per Boto 2.2.2, which will only read from the current file
     # position to the end.  This manifests as successfully uploaded
@@ -151,6 +182,7 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
     # XXX: disable validation as a kludge to get around use of
     # upper-case bucket names.
     suri = boto.storage_uri(s3_uri, validate=False)
+    suri.connection_args = {'host': s3_endpoint_for_uri(s3_uri)}
     k = suri.new_key()
 
     if content_encoding is not None:
@@ -335,6 +367,7 @@ def do_lzop_s3_get(s3_url, path, decrypt):
     def download():
         with open(path, 'wb') as decomp_out:
             suri = boto.storage_uri(s3_url, validate=False)
+            suri.connection_args = {'host': s3_endpoint_for_uri(s3_url)}
             bucket = suri.get_bucket()
             key = bucket.get_key(suri.object_name)
 
