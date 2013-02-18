@@ -14,19 +14,19 @@ help:
 .PHONY: clean
 # target: clean - Clean repo
 clean:
-	sudo rm -rf build dist
+	rm -rf build dist
 	find . -name "*.pyc" -delete
 	find . -name "*.orig" -delete
 
 .PHONY: register
 # target: register - Register module on PyPi
 register:
-	python setup.py register
+	$(PYTHON) setup.py register
 
 .PHONY: upload
 # target: upload - Upload module on PyPi
 upload: clean
-	python setup.py sdist upload || echo 'Upload already'
+	$(PYTHON) setup.py sdist upload || echo 'Upload already'
 
 .PHONY: test
 # target: test - Run module tests
