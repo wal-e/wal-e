@@ -25,10 +25,10 @@ def read(fname):
 
 VERSION = read(os.path.join('wal_e', 'VERSION')).strip()
 
-install_requires = ['gevent>=0.13.0', 'boto>=2.0']
-extras_require = {
-    'test':  ["pytest>=2.2.1", "pytest-xdist>=1.8", "pytest-capturelog>=0.7"]
-    }
+install_requires = [
+    l for l in read('requirements.txt').split('\n')
+    if l and not l.startswith('#')]
+
 
 if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
