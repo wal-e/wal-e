@@ -167,7 +167,7 @@ def format_kib_per_second(start, finish, amount_in_bytes):
         return 'NaN'
 
 
-def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
+def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key, clearxlogtail):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -177,7 +177,8 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         pipeline = get_upload_pipeline(PIPE, tf,
-                                       rate_limit=rate_limit, gpg_key=gpg_key)
+                                       rate_limit=rate_limit, gpg_key=gpg_key,
+                                       clearxlogtail=clearxlogtail)
         tpart.tarfile_write(pipeline.stdin)
         pipeline.stdin.flush()
         pipeline.stdin.close()
@@ -243,7 +244,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
-def do_lzop_s3_put(s3_url, local_path, gpg_key):
+def do_lzop_s3_put(s3_url, local_path, gpg_key, clearxlogtail):
     """
     Compress and upload a given local path.
 
@@ -260,7 +261,8 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         pipeline = get_upload_pipeline(
-            open(local_path, 'r'), tf, gpg_key=gpg_key)
+            open(local_path, 'r'), tf, gpg_key=gpg_key,
+                 clearxlogtail=clearxlogtail)
         pipeline.finish()
 
         tf.flush()

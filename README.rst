@@ -339,6 +339,13 @@ file.  Thus, the temporary file directory needs to be big enough and
 fast enough to support this, although this tool is designed to avoid
 calling fsync(), so some memory can be leveraged.
 
+To further reduce the size of a WAL file pushed using ``wal-push``,
+use the ``--clearxlogtail`` option. This will zero the unused portion
+(if any) at the tail of WAL file. This is particularly useful for a
+database with little activitiy. Note that this is not part of a
+distribution but you have to build the required tool manually, see
+https://github.com/gregs1104/clearxlogtail.
+
 Base backups first have their files consolidated into disjoint tar
 files of limited length to avoid the relatively large per-file S3
 overhead.  This has the effect of making base backups and restores
