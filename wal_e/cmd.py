@@ -207,7 +207,7 @@ def main(argv=None):
         '--detail', default=False, action='store_true',
         help='show more detailed information about every backup')
 
-    # wal-push operator section
+    # wal-fetch operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
 
