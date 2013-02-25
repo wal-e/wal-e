@@ -344,7 +344,7 @@ def main(argv=None):
                 sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            if clearxlogtail is True:
+            if args.clearxlogtail is True:
               external_program_check([CLEARXLOGTAIL_BIN])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT, args.clearxlogtail)
         elif subcommand == 'delete':
