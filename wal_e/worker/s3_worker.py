@@ -10,6 +10,7 @@ import functools
 import gevent
 import json
 import logging
+import os
 import re
 import socket
 import sys
@@ -259,6 +260,7 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key, clearxlogtail):
     s3_url += '.lzo'
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        clearxlogtail = clearxlogtail and re.match('^[A-Z0-9]{24}$', os.path.basename(local_path)) is not None
         pipeline = get_upload_pipeline(
             open(local_path, 'r'), tf, gpg_key=gpg_key,
                  clearxlogtail=clearxlogtail)
