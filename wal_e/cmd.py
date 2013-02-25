@@ -296,18 +296,13 @@ def main(argv=None):
     # This will be None if we're not encrypting
     gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
 
-    clearxlogtail = args.clearxlogtail;
-
     backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix,
-                                      gpg_key_id, clearxlogtail)
+                                      gpg_key_id)
 
     subcommand = args.subcommand
 
     if gpg_key_id is not None:
         external_program_check([GPG_BIN])
-
-    if clearxlogtail is True:
-        external_program_check([CLEARXLOGTAIL_BIN])
 
     try:
         if subcommand == 'backup-fetch':
@@ -349,7 +344,9 @@ def main(argv=None):
                 sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+            if clearxlogtail is True:
+              external_program_check([CLEARXLOGTAIL_BIN])
+            backup_cxt.wal_s3_archive(args.WAL_SEGMENT, args.clearxlogtail)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data
             #

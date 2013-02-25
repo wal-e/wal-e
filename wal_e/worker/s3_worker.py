@@ -167,7 +167,7 @@ def format_kib_per_second(start, finish, amount_in_bytes):
         return 'NaN'
 
 
-def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key, clearxlogtail):
+def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
     """
     Synchronous version of the s3-upload wrapper
 
@@ -177,8 +177,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key, clearxlogtail
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         pipeline = get_upload_pipeline(PIPE, tf,
-                                       rate_limit=rate_limit, gpg_key=gpg_key,
-                                       clearxlogtail=clearxlogtail)
+                                       rate_limit=rate_limit, gpg_key=gpg_key)
         tpart.tarfile_write(pipeline.stdin)
         pipeline.stdin.flush()
         pipeline.stdin.close()

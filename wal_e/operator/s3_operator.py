@@ -34,11 +34,10 @@ class S3Backup(object):
 
     def __init__(self,
                  aws_access_key_id, aws_secret_access_key, s3_prefix,
-                 gpg_key_id, clearxlogtail):
+                 gpg_key_id):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.gpg_key_id = gpg_key_id
-        self.clearxlogtail = clearxlogtail
 
         # Canonicalize the s3 prefix by stripping any trailing slash
         self.s3_prefix = s3_prefix.rstrip('/')
@@ -375,7 +374,7 @@ class S3Backup(object):
             # exception never will get raised.
             raise UserCritical('could not complete backup process')
 
-    def wal_s3_archive(self, wal_path):
+    def wal_s3_archive(self, wal_path, clearxlogtail):
         """
         Uploads a WAL file to S3
 
@@ -398,7 +397,7 @@ class S3Backup(object):
         # Upload and record the rate at which it happened.
         kib_per_second = s3_worker.do_lzop_s3_put(s3_url, wal_path,
                                                   self.gpg_key_id,
-                                                  self.clearxlogtail)
+                                                  clearxlogtail)
 
         logger.info(
             msg='completed archiving to a file ',
