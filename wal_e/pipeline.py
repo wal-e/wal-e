@@ -174,8 +174,8 @@ class PipeViwerRateLimitFilter(PipelineCommand):
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
 
 class ClearXlogTailFilter(PipelineCommand):
-    """ Clean up the WAL log file using pg_clearxlogtail. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
+    """ Clean up the WAL log file using clearxlogtail. """
         PipelineCommand.__init__(
                 self, [CLEARXLOGTAIL_BIN], stdin, stdout)
 

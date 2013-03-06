@@ -215,8 +215,8 @@ def main(argv=None):
     # wal-push operator section
     wal_push_parser.add_argument(
         '--clearxlogtail',
-        help='Use clearxlogtail to zero the unused portion (if any)'
-             'at the tail of WAL xlog file.  ',
+        help='Use clearxlogtail to zero the unused portion (if any) '
+        'at the tail of a WAL file.'
         action='store_true')
 
     # delete subparser section

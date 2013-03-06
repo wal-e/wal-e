@@ -341,7 +341,7 @@ calling fsync(), so some memory can be leveraged.
 
 To further reduce the size of a WAL file pushed using ``wal-push``,
 use the ``--clearxlogtail`` option. This will zero the unused portion
-(if any) at the tail of WAL file. This is particularly useful for a
+(if any) at the tail of a WAL file. This is particularly useful for a
 database with little activitiy. Note that this is not part of a
 distribution but you have to build the required tool manually, see
 https://github.com/gregs1104/clearxlogtail.
