@@ -32,7 +32,7 @@ from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
-from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN, CLEARXLOGTAIL_BIN
+from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 
 log_help.configure(
@@ -216,8 +216,7 @@ def main(argv=None):
     wal_push_parser.add_argument(
         '--clearxlogtail',
         help='Use clearxlogtail to zero the unused portion (if any) '
-        'at the tail of a WAL file.'
-        action='store_true')
+        'at the tail of a WAL file.')
 
     # delete subparser section
     delete_parser = subparsers.add_parser(
@@ -344,8 +343,8 @@ def main(argv=None):
                 sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            if args.clearxlogtail is True:
-              external_program_check([CLEARXLOGTAIL_BIN])
+            if args.clearxlogtail is not None:
+              external_program_check([args.clearxlogtail])
             backup_cxt.wal_s3_archive(args.WAL_SEGMENT, args.clearxlogtail)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data

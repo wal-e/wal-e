@@ -10,7 +10,6 @@ from wal_e.piper import popen_sp, NonBlockPipeFileWrap, PIPE
 PV_BIN = 'pv'
 GPG_BIN = 'gpg'
 LZOP_BIN = 'lzop'
-CLEARXLOGTAIL_BIN = 'pg_clearxlogtail'
 
 # BUFSIZE_HT: Buffer Size, High Throughput
 #
@@ -21,14 +20,14 @@ BUFSIZE_HT = 128 * 8192
 
 
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
-                        gpg_key=None, clearxlogtail=False):
+                        gpg_key=None, clearxlogtail=None):
     """ Create a UNIX pipeline to process a file for uploading.
         (Compress, and optionally encrypt) """
     commands = []
     if rate_limit is not None:
         commands.append(PipeViwerRateLimitFilter(rate_limit))
-    if clearxlogtail is True:
-        commands.append(ClearXlogTailFilter())
+    if clearxlogtail is not None:
+        commands.append(ClearXlogTailFilter(clearxlogtail))
     commands.append(LZOCompressionFilter())
 
     if gpg_key is not None:
@@ -174,10 +173,10 @@ class PipeViwerRateLimitFilter(PipelineCommand):
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
 
 class ClearXlogTailFilter(PipelineCommand):
-    def __init__(self, stdin=PIPE, stdout=PIPE):
     """ Clean up the WAL log file using clearxlogtail. """
+    def __init__(self, clearxlogtail, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
-                self, [CLEARXLOGTAIL_BIN], stdin, stdout)
+                self, [clearxlogtail], stdin, stdout)
 
 class LZOCompressionFilter(PipelineCommand):
     """ Compress using LZO. """
