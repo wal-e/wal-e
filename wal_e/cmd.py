@@ -26,6 +26,8 @@ import sys
 import textwrap
 import traceback
 
+from boto.exception import S3ResponseError
+
 import wal_e.log_help as log_help
 
 from wal_e.exception import UserException
@@ -254,16 +256,12 @@ def main(argv=None):
     # Okay, parse some arguments, finally
     args = parser.parse_args()
 
-    # Attempt to read a few key parameters from environment variables
-    # *or* the command line, enforcing a precedence order and
-    # complaining should the required parameter not be defined in
-    # either location.
+    # Let the user set the secret key via environment variables.
+    # If they do not set it, the secret_key will be set to None, which
+    # is ok provided they have an instance profile and role setup
+    # See:
+    # http://aws.typepad.com/aws/2012/06/iam-roles-for-ec2-instances-simplified-secure-access-to-aws-service-apis-from-ec2.html
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-    if secret_key is None:
-        logger.error(
-            msg='no AWS_SECRET_ACCESS_KEY defined',
-            hint='Define the environment variable AWS_SECRET_ACCESS_KEY.')
-        sys.exit(1)
 
     s3_prefix = args.s3_prefix or os.getenv('WALE_S3_PREFIX')
 
@@ -274,22 +272,21 @@ def main(argv=None):
                   'environment variable WALE_S3_PREFIX.'))
         sys.exit(1)
 
-    if args.aws_access_key_id is None:
-        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-        if aws_access_key_id is None:
-            logger.error(
-                msg='no storage prefix defined',
-                hint=('Either set the --aws-access-key-id option or define '
-                      'the environment variable AWS_ACCESS_KEY_ID.'))
-            sys.exit(1)
-    else:
+    # Use the access key id they provide on the command line.  If not provided
+    # then check the environment variable.  If that's not set, then set it to
+    # None, which will allow us to work with instance profiles & roles.
+    # See the above url about this.
+    if args.aws_access_key_id:
         aws_access_key_id = args.aws_access_key_id
+    else:
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
 
     # This will be None if we're not encrypting
     gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
 
-    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix,
-                                      gpg_key_id)
+    backup_cxt = s3_operator.S3Backup(s3_prefix, gpg_key_id,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=secret_key)
 
     subcommand = args.subcommand
 
@@ -393,6 +390,18 @@ def main(argv=None):
                    msg=log_help.WalELogger
                    .fmt_logline(e.msg, e.detail, e.hint))
         sys.exit(1)
+    except S3ResponseError, e:
+        if e.error_code == 'AccessDenied':
+            logger.critical(
+                    msg='You do not have the proper S3 permissions.  Ensure '
+                            'that you\'ve provided your aws access key id and '
+                            'aws secret key.')
+        else:
+            logger.critical(
+                    msg='An S3Response exception has avoided all error '
+                            'handling.',
+                    detail=''.join(traceback.format_exception(*sys.exc_info())))
+        sys.exit(2)
     except Exception, e:
         logger.critical(
             msg='An unprocessed exception has avoided all error handling',
