@@ -7,7 +7,6 @@ import errno
 import logging
 import logging.handlers
 import os
-import time
 
 
 class IndentFormatter(logging.Formatter):
@@ -25,37 +24,23 @@ class IndentFormatter(logging.Formatter):
 
 
 def configure(*args, **kwargs):
-    """Guards configuring logging to enable retry
-
-    Logging is rather important to start up properly, so try very hard
-    to make this happen: without it is difficult to report sane and
-    well-formatted error messages to the log.
     """
-    def terrible_log_output(s):
-        import sys
+    Configure logging.
 
-        print >>sys.stderr, s
-
-    while True:
-        try:
-            return configure_guts(*args, **kwargs)
-        except EnvironmentError, e:
-            if e.errno == errno.EACCES:
-                terrible_log_output('wal-e: Could not set up logger because'
-                                    'of EACCESS, connection refused issue: '
-                                    'retrying')
-                time.sleep(1)
-
-
-def configure_guts(*args, **kwargs):
-    """
     Borrowed from logging.basicConfig
 
     Uses the IndentFormatter instead of the regular Formatter
 
-    Also, opts you into syslogging.
+    Also, opts the caller into Syslog output, unless syslog could not
+    be opened for some reason or another, in which case a warning will
+    be printed to the other log handlers.
 
     """
+
+    def terrible_log_output(s):
+        import sys
+
+        print >>sys.stderr, s
 
     syslog_address = kwargs.setdefault('syslog_address', '/dev/log')
     handlers = []
@@ -74,12 +59,12 @@ def configure_guts(*args, **kwargs):
             # works on Linux.
             handlers.append(logging.handlers.SysLogHandler(syslog_address))
         except EnvironmentError, e:
-            if e.errno == errno.ENOENT:
-                # Silently do-not-write to syslog if the socket cannot
-                # be found at all.
-                pass
-            else:
-                raise
+            if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
+                message = ('wal-e: Could not set up syslog, '
+                           'continuing anyway.  '
+                           'Reason: {0}').format(errno.errorcode[e.errno])
+
+                terrible_log_output(message)
 
         fs = kwargs.get("format", logging.BASIC_FORMAT)
         dfs = kwargs.get("datefmt", None)
