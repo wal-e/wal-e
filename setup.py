@@ -26,7 +26,7 @@ def read(fname):
 
 VERSION = read(os.path.join('wal_e', 'VERSION')).strip()
 
-install_requires = ['gevent>=0.13.0', 'boto>=2.0']
+install_requires = ['gevent>=0.13.0', 'boto>=2.2.0']
 tests_require = [
     "pytest>=2.2.1",
     "pytest-capturelog>=0.7",

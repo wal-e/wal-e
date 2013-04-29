@@ -362,6 +362,7 @@ def main(argv=None):
                 is_dry_run_really = True
 
                 import boto.s3.key
+                import boto.s3.Bucket
 
                 # This is not necessary, but "just in case" to find bugs.
                 def just_error(*args, **kwargs):
@@ -369,6 +370,7 @@ def main(argv=None):
                                    'dry-run mode.  Please report a bug.')
 
                 boto.s3.key.Key.delete = just_error
+                boto.s3.bucket.Bucket.delete_keys = just_error
 
             # Handle the subcommands and route them to the right
             # implementations.
