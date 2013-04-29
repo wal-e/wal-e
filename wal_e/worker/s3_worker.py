@@ -18,13 +18,14 @@ import traceback
 from urlparse import urlparse
 from boto.s3.connection import S3Connection, SubdomainCallingFormat
 
-import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
+import wal_e.storage.s3_storage as s3_storage
 
 from wal_e.exception import UserException
 from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
 from wal_e.piper import PIPE
 from wal_e.retries import retry, retry_with_count
+from wal_e.worker import s3_deleter
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
 
@@ -502,9 +503,13 @@ class DeleteFromContext(object):
         self.dry_run = dry_run
         self.layout = layout
 
+        if not dry_run:
+            self.deleter = s3_deleter.Deleter()
+        else:
+            self.deleter = None
+
         assert self.dry_run in (True, False)
 
-    @retry()
     def _maybe_delete_key(self, key, type_of_thing):
         url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
                                             name=key.name)
@@ -514,7 +519,7 @@ class DeleteFromContext(object):
 
         if self.dry_run is False:
             logger.info(**log_message)
-            key.delete()
+            self.deleter.delete(key)
         elif self.dry_run is True:
             log_message['hint'] = ('This is only a dry run -- no actual data '
                                    'is being deleted')
@@ -543,6 +548,9 @@ class DeleteFromContext(object):
 
         for key in bucket.list(prefix=self.layout.wal_directory()):
             self._maybe_delete_key(key, 'part of wal logs')
+
+        if self.deleter:
+            self.deleter.close()
 
     def delete_before(self, segment_info):
         """
@@ -713,3 +721,6 @@ class DeleteFromContext(object):
                     assert False
             else:
                 assert False
+
+        if self.deleter:
+            self.deleter.close()
