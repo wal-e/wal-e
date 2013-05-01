@@ -3,6 +3,8 @@ import logging
 import sys
 import traceback
 
+import gevent
+
 import wal_e.log_help as log_help
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
@@ -54,6 +56,9 @@ def retry(exception_processor=generic_exception_processor):
             exc_processor_cxt = None
 
             while True:
+                # Avoid livelocks while spinning on retry by yielding.
+                gevent.sleep(0)
+
                 try:
                     return f(*args, **kwargs)
                 except:
