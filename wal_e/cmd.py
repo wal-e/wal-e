@@ -242,6 +242,7 @@ def main(argv=None):
                         ))
     delete_keepcount_parser.add_argument(
         'KEEP_COUNT',
+        type=int,
         help='An integer greater than zero representing the number of basebackups to keep.')
 
 
@@ -380,9 +381,36 @@ def main(argv=None):
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
                 backup_cxt.delete_before(is_dry_run_really, segment_info)
-            elif args.delete_command == 'keepcount':
-                keepcount = args.KEEP_COUNT
-                backup_cxt.delete_keep_count(keepcount)
+            elif args.delete_subcommand == 'keepcount':
+                # 1. Get the list of basebackups (0, 1, 2, 3, .. n).
+                # 2. Determine the oldest one to keep (e.g. #2)
+                # 3. delete_before that one
+                
+                keep_count = max(args.KEEP_COUNT,1)
+
+                bl = backup_cxt.get_backup_list()
+
+                backup_hash = {}
+
+                for backup_info in bl:
+#                    for backup_info in bl_iter:
+#                    print "{0} -> {1}".format(backup_info[0], backup_info[1])
+                    backup_hash[backup_info[0]] = backup_info
+
+                i = 0;
+                print 'keep_count = {0}'.format(keep_count)
+                for bkid in sorted(backup_hash.keys(), reverse=True):
+                    i += 1
+                    if (i <= keep_count):
+                        print '{0}\tKEEP'.format(bkid)
+                    else:
+                        print '{0}\tDELETE'.format(bkid)
+                    
+
+
+
+
+                #backup_cxt.delete_keep_count(keep_count)
             else:
                 assert False, 'Should be rejected by argument parsing.'
         else:
