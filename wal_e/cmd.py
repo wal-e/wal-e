@@ -34,6 +34,10 @@ from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
+from datetime import datetime
+
+
+
 
 log_help.configure(
     format='%(name)-12s %(levelname)-8s %(message)s')
@@ -397,20 +401,32 @@ def main(argv=None):
 #                    print "{0} -> {1}".format(backup_info[0], backup_info[1])
                     backup_hash[backup_info[0]] = backup_info
 
+
+                # 2013-05-07T12:36:27.000Z
+                df = '%Y-%m-%dT%H:%M:%S.%fZ'
                 i = 0;
-                print 'keep_count = {0}'.format(keep_count)
+                delete_segment = None
+                prev_segment = None
+
                 for bkid in sorted(backup_hash.keys(), reverse=True):
                     i += 1
+                    backup_date = backup_hash[bkid][1]
+                    backup_date = datetime.strptime(backup_date,df)
+                    backup_age = datetime.utcnow() - backup_date;
+
                     if (i <= keep_count):
-                        print '{0}\tKEEP'.format(bkid)
+                        print '{0} ({1}, age: {2})\tKEEP'.format(bkid, backup_date, backup_age)
+                        prev_segment = bkid
                     else:
-                        print '{0}\tDELETE'.format(bkid)
+                        if delete_segment == None:
+                            delete_segment = prev_segment
+                        print '{0} ({1}, age: {2})\tDELETE'.format(bkid, backup_date, backup_age)
+                if delete_segment != None:
+                    print "Deleting older than {0}".format(delete_segment)
+                    segment_info = extract_segment(delete_segment)
+                    backup_cxt.delete_before(is_dry_run_really, segment_info)
                     
 
-
-
-
-                #backup_cxt.delete_keep_count(keep_count)
             else:
                 assert False, 'Should be rejected by argument parsing.'
         else:

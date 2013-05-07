@@ -52,6 +52,16 @@ class S3Backup(object):
                             self.aws_secret_access_key,
                             calling_format=OrdinaryCallingFormat())
 
+    def get_backup_list(self):
+
+        s3_conn = self.new_connection()
+
+        bl = s3_worker.BackupList(s3_conn,
+                                  s3_storage.StorageLayout(self.s3_prefix),
+                                  None)
+
+        return bl    
+
     def backup_list(self, query, detail):
         """
         Lists base backups and basic information about them
