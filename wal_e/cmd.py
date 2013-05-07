@@ -236,6 +236,17 @@ def main(argv=None):
         'BEFORE_SEGMENT_EXCLUSIVE',
         help='A WAL segment number or base backup name')
 
+    # delete 'keepcount' operator
+    delete_keepcount_parser = delete_subparsers.add_parser(
+        'keepcount', help=('Retain the most recent "n" basebackups, deleting all backups and WAL created before that.'
+                        ))
+    delete_keepcount_parser.add_argument(
+        'KEEP_COUNT',
+        help='An integer greater than zero representing the number of basebackups to keep.')
+
+
+
+
     # delete old versions operator
     delete_subparsers.add_parser(
         'old-versions',
@@ -369,6 +380,9 @@ def main(argv=None):
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
                 backup_cxt.delete_before(is_dry_run_really, segment_info)
+            elif args.delete_command == 'keepcount':
+                keepcount = args.KEEP_COUNT
+                backup_cxt.delete_keep_count(keepcount)
             else:
                 assert False, 'Should be rejected by argument parsing.'
         else:
