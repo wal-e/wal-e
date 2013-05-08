@@ -188,7 +188,7 @@ def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
 s3_endpoint_for_uri.cache = {}
 
 
-def s3_uri(s3_uri):
+def s3_uri_wrap(s3_uri):
     """
     Thin wrapper around boto.storage_uri to work around boto warts.
 
@@ -211,7 +211,7 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
     # in mind, assert it as a precondition for using this procedure.
     assert fp.tell() == 0
 
-    suri = s3_uri(s3_uri)
+    suri = s3_uri_wrap(s3_uri)
     k = suri.new_key()
 
     if content_encoding is not None:
@@ -395,7 +395,7 @@ def do_lzop_s3_get(s3_url, path, decrypt):
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
-            suri = s3_uri(s3_url)
+            suri = s3_uri_wrap(s3_url)
             bucket = suri.get_bucket()
             key = bucket.get_key(suri.object_name)
 
