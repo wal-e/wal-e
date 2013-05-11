@@ -1,0 +1,3 @@
+recursive-include wal_e *
+exclude *.pyc *.orig
+include VERSION
