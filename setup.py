@@ -33,7 +33,7 @@ if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
 
 setup(
-    name="WAL-E",
+    name="wal-e",
     version=VERSION,
     packages=find_packages(),
 
