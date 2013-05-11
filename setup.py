@@ -18,9 +18,13 @@ except ImportError:
 if sys.version_info < (2, 6):
     raise RuntimeError('Python versions < 2.6 are not supported.')
 
-v = open(os.path.join(os.path.dirname(__file__), 'wal_e', 'VERSION'))
-VERSION = v.readline().strip()
-v.close()
+
+# Utility function to read the contents of short files.
+def read(fname):
+    with open(os.path.join(os.path.dirname(__file__), fname)) as f:
+        return f.read()
+
+VERSION = read(os.path.join('wal_e', 'VERSION')).strip()
 
 install_requires = ['gevent>=0.13.0', 'boto>=2.0']
 tests_require = [
@@ -43,8 +47,14 @@ setup(
     author="Daniel Farina",
     author_email="daniel@heroku.com",
     description="PostgreSQL WAL-shipping for S3",
+    long_description=read('README.rst'),
+    classifiers=['Topic :: Database',
+                 'Topic :: System :: Archiving',
+                 'Topic :: System :: Recovery Tools'],
+    platforms=['any'],
     license="BSD",
-    keywords="postgresql database backup",
+    keywords=("postgres postgresql database backup archive "
+              "archiving s3 aws wal shipping"),
     url="https://github.com/wal-e/wal-e",
 
     # Include the VERSION file
