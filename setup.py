@@ -33,7 +33,6 @@ install_requires = [
 tests_require = [
     "pytest>=2.2.1",
     "pytest-capturelog>=0.7",
-    "unittest2>=0.5",
 ]
 
 if sys.version_info < (2, 7):
