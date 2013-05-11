@@ -51,3 +51,6 @@ tramp
 .*.sw[a-z]
 *.un~
 Session.vim
+
+# Virtualenv
+.env
