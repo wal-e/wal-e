@@ -32,12 +32,11 @@ class S3WorkerIntegrationTest(unittest.TestCase):
 
         try:
             conn = boto.s3.connection.S3Connection()
-            bucket = conn.create_bucket(bucket_name, location='us-west-1')
+            conn.create_bucket(bucket_name, location='us-west-1')
             self.assertEqual('s3-us-west-1.amazonaws.com',
                              s3_worker.s3_endpoint_for_uri(uri))
         finally:
             conn.delete_bucket(bucket_name)
-
 
 
 class S3WorkerTest(unittest.TestCase):
