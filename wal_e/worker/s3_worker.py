@@ -176,7 +176,7 @@ def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
             conn = connection or S3Connection(*c_args, **c_kwargs)
             s3_endpoint_for_uri.cache[bucket_name] = _S3_REGIONS.get(
                     conn.get_bucket(bucket_name).get_location(), default)
-        except:
+        except StandardError:
             detail = ''.join(traceback.format_exception(*sys.exc_info()))
             hint = ('Bucket names containing upper case letters'
                     ' are known to be problematic.')
