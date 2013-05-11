@@ -1,6 +1,2 @@
 gevent>=0.13.0
-boto>=2.0
-
-pytest>=2.2.1
-pytest-xdist>=1.8
-pytest-capturelog>=0.7
+boto>=2.2.0

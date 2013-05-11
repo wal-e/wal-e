@@ -1,22 +1,28 @@
-MODULE=wal_e
-SPHINXBUILD=sphinx-build
 ALLSPHINXOPTS= -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
-BUILDDIR=_build
-PYTHON=.env/bin/python
+MODULE=wal_e
+VIRTUALENV=$(shell echo "$${VDIR:-'.env'}")
+PYTHON=$(VIRTUALENV)/bin/python
 
-all: .env
+all: $(VIRTUALENV)
+
+$(VIRTUALENV): requirements.txt
+	@virtualenv --no-site-packages $(VIRTUALENV)
+	@$(VIRTUALENV)/bin/pip install -M -r requirements.txt
+	touch $(VIRTUALENV)
 
 .PHONY: help
 # target: help - Display callable targets
 help:
-	@egrep "^# target:" [Mm]akefile
+	@egrep "^# target:" [Mm]akefile | sed -e 's/^# target: //g'
 
 .PHONY: clean
 # target: clean - Clean repo
 clean:
-	rm -rf build dist
-	find . -name "*.pyc" -delete
-	find . -name "*.orig" -delete
+	@rm -rf build dist docs/_build
+	@rm -f *.py[co]
+	@rm -f *.orig
+	@rm -f */*.py[co]
+	@rm -f */*.orig
 
 .PHONY: register
 # target: register - Register module on PyPi
@@ -30,9 +36,5 @@ upload: clean
 
 .PHONY: test
 # target: test - Run module tests
-test: .env
+test: clean
 	$(PYTHON) setup.py test
-
-.env: requirements.txt
-	virtualenv --no-site-packages .env
-	.env/bin/pip install -M -r requirements.txt
