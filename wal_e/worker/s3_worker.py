@@ -11,7 +11,6 @@ import json
 import logging
 import re
 import socket
-import sys
 import tarfile
 import tempfile
 import time
