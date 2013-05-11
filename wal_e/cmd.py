@@ -153,6 +153,9 @@ def main(argv=None):
                                          type=int, default=4,
                                          help='Download pooling size')
 
+    # operator to print the wal-e version
+    subparsers.add_parser('version', help='print the wal-e version')
+
     # Common arguments for backup-list and backup-fetch
     #
     # NB: This does not include the --detail options because some
@@ -253,6 +256,15 @@ def main(argv=None):
 
     # Okay, parse some arguments, finally
     args = parser.parse_args()
+    subcommand = args.subcommand
+
+    # Handle version printing specially, because it doesn't need
+    # credentials.
+    if subcommand == 'version':
+        import pkgutil
+
+        print pkgutil.get_data('wal_e', 'VERSION').strip()
+        sys.exit(0)
 
     # Attempt to read a few key parameters from environment variables
     # *or* the command line, enforcing a precedence order and
@@ -290,8 +302,6 @@ def main(argv=None):
 
     backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix,
                                       gpg_key_id)
-
-    subcommand = args.subcommand
 
     if gpg_key_id is not None:
         external_program_check([GPG_BIN])
