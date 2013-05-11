@@ -1,3 +1,10 @@
-recursive-include wal_e *
-exclude *.pyc *.orig
+include LICENSE
+include README.rst
 include VERSION
+include requirements.txt
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * *.orig
+
+recursive-include wal_e *
