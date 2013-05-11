@@ -18,7 +18,7 @@ except ImportError:
 if sys.version_info < (2, 6):
     raise RuntimeError('Python versions < 2.6 are not supported.')
 
-v = open(os.path.join(os.path.dirname(__file__), 'VERSION'))
+v = open(os.path.join(os.path.dirname(__file__), 'wal_e', 'VERSION'))
 VERSION = v.readline().strip()
 v.close()
 
@@ -47,6 +47,9 @@ setup(
     license="BSD",
     keywords="postgresql database backup",
     url="https://github.com/wal-e/wal-e",
+
+    # Include the VERSION file
+    package_data={'wal_e': ['VERSION']},
 
     # run tests
     test_suite='runtests.runtests',
