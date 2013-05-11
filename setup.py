@@ -52,7 +52,7 @@ class PyTest(Command):
             raise SystemExit(retcode)
 
 setup(
-    name="WAL-E",
+    name="wal-e",
     version=VERSION,
     packages=find_packages(),
 
