@@ -18,7 +18,8 @@ import time
 import traceback
 
 from urlparse import urlparse
-from boto.s3.connection import S3Connection, SubdomainCallingFormat
+from boto.s3.connection import (S3Connection, SubdomainCallingFormat,
+                                OrdinaryCallingFormat)
 
 import wal_e.log_help as log_help
 import wal_e.storage.s3_storage as s3_storage
@@ -104,7 +105,10 @@ def s3_uri_wrap(s3_uri):
     names.
     """
     suri = boto.storage_uri(s3_uri, validate=False)
-    suri.connection_args = {'host': s3_endpoint_for_uri(s3_uri)}
+    suri.connection_args = {
+        'host': s3_endpoint_for_uri(s3_uri),
+        'calling_format': OrdinaryCallingFormat(),
+    }
     return suri
 
 
