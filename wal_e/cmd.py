@@ -362,7 +362,7 @@ def main(argv=None):
                 is_dry_run_really = True
 
                 import boto.s3.key
-                import boto.s3.Bucket
+                import boto.s3.bucket
 
                 # This is not necessary, but "just in case" to find bugs.
                 def just_error(*args, **kwargs):
