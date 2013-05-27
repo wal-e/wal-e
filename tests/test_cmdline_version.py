@@ -1,3 +1,5 @@
+import errno
+import pytest
 import subprocess
 
 from os import path
@@ -11,7 +13,11 @@ def test_version_print():
         expected = f.read()
 
     # Try loading it via command line invocation
-    proc = subprocess.Popen(['wal-e', 'version'], stdout=subprocess.PIPE)
+    try:
+        proc = subprocess.Popen(['wal-e', 'version'], stdout=subprocess.PIPE)
+    except EnvironmentError, e:
+        if e.errno == errno.ENOENT:
+            pytest.skip('wal-e must be in $PATH to test version output')
     result = proc.communicate()[0]
 
     # Make sure the two versions match and the command exits
