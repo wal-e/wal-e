@@ -9,6 +9,7 @@ Mostly necessary only because of http://bugs.python.org/issue1652.
 import copy
 import errno
 import fcntl
+import gevent
 import gevent.socket
 import os
 import signal
@@ -109,21 +110,63 @@ def subprocess_setup(f=None):
     return wrapper
 
 
-def popen_sp(*args, **kwargs):
-    """
-    Same as subprocess.Popen, but restores SIGPIPE
+class PopenShim(object):
+    def __init__(self, sleep_time=1, max_tries=None):
+        self.sleep_time = sleep_time
+        self.max_tries = max_tries
 
-    This bug is documented (See subprocess_setup) but did not make it
-    to standard library.  Could also be resolved by using the
-    python-subprocess32 backport and using it appropriately (See
-    'restore_signals' keyword argument to Popen)
+    def __call__(self, *args, **kwargs):
+        """
+        Same as subprocess.Popen, but restores SIGPIPE
 
-    """
+        This bug is documented (See subprocess_setup) but did not make
+        it to standard library.  Could also be resolved by using the
+        python-subprocess32 backport and using it appropriately (See
+        'restore_signals' keyword argument to Popen)
+        """
 
-    kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
-    proc = subprocess.Popen(*args, **kwargs)
+        kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
 
-    return proc
+        # Call Popen, but be persistent in the face of ENOMEM.
+        #
+        # The utility of this is that on systems with overcommit off,
+        # the momentary spike in committed virtual memory from fork()
+        # can be large, but is cleared soon thereafter because
+        # 'subprocess' uses an 'exec' system call.  Without retrying,
+        # the the backup process would lose all its progress
+        # immediately with no recourse, which is undesirable.
+        #
+        # Because the ENOMEM error happens on fork() before any
+        # meaningful work can be done, one thinks this retry would be
+        # safe, and without side effects.  Because fork is being
+        # called through 'subprocess' and not directly here, this
+        # program has to rely on the semantics of the exceptions
+        # raised from 'subprocess' to avoid retries in unrelated
+        # scenarios, which could be dangerous.
+        tries = 0
+
+        while True:
+            try:
+                proc = subprocess.Popen(*args, **kwargs)
+            except OSError, e:
+                if e.errno == errno.ENOMEM:
+                    should_retry = (self.max_tries is not None and
+                                    tries >= self.max_tries)
+
+                    if should_retry:
+                        raise
+
+                    gevent.sleep(self.sleep_time)
+                    tries += 1
+                    continue
+
+                raise
+            else:
+                break
+
+        return proc
+
+popen_sp = PopenShim()
 
 
 def popen_nonblock(*args, **kwargs):
