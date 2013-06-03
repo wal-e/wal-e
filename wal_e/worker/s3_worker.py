@@ -9,6 +9,7 @@ import boto
 import gevent
 import json
 import logging
+import os
 import re
 import socket
 import sys
@@ -216,7 +217,7 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
             .format(s3_url=s3_url, kib_per_second=kib_per_second))
 
 
-def do_lzop_s3_put(s3_url, local_path, gpg_key):
+def do_lzop_s3_put(s3_url, local_path, gpg_key, clearxlogtail):
     """
     Compress and upload a given local path.
 
@@ -232,8 +233,11 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
     s3_url += '.lzo'
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        if re.match('^[A-Z0-9]{24}$', os.path.basename(local_path)) is None:
+          clearxlogtail = None
         pipeline = get_upload_pipeline(
-            open(local_path, 'r'), tf, gpg_key=gpg_key)
+            open(local_path, 'r'), tf, gpg_key=gpg_key,
+                 clearxlogtail=clearxlogtail)
         pipeline.finish()
 
         tf.flush()

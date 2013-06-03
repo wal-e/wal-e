@@ -20,12 +20,14 @@ BUFSIZE_HT = 128 * 8192
 
 
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
-                        gpg_key=None):
+                        gpg_key=None, clearxlogtail=None):
     """ Create a UNIX pipeline to process a file for uploading.
         (Compress, and optionally encrypt) """
     commands = []
     if rate_limit is not None:
         commands.append(PipeViwerRateLimitFilter(rate_limit))
+    if clearxlogtail is not None:
+        commands.append(ClearXlogTailFilter(clearxlogtail))
     commands.append(LZOCompressionFilter())
 
     if gpg_key is not None:
@@ -170,6 +172,11 @@ class PipeViwerRateLimitFilter(PipelineCommand):
             self,
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
 
+class ClearXlogTailFilter(PipelineCommand):
+    """ Clean up the WAL log file using clearxlogtail. """
+    def __init__(self, clearxlogtail, stdin=PIPE, stdout=PIPE):
+        PipelineCommand.__init__(
+                self, [clearxlogtail], stdin, stdout)
 
 class LZOCompressionFilter(PipelineCommand):
     """ Compress using LZO. """

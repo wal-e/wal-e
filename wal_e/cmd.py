@@ -195,8 +195,9 @@ def main(argv=None):
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
         parents=[wal_fetchpush_parent])
-    subparsers.add_parser('wal-push', help='push a WAL file to S3',
-                          parents=[wal_fetchpush_parent])
+    wal_push_parser = subparsers.add_parser(
+        'wal-push', help='push a WAL file to S3',
+        parents=[wal_fetchpush_parent])
 
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
@@ -210,9 +211,15 @@ def main(argv=None):
         '--detail', default=False, action='store_true',
         help='show more detailed information about every backup')
 
-    # wal-push operator section
+    # wal-fetch operator section
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
+
+    # wal-push operator section
+    wal_push_parser.add_argument(
+        '--clearxlogtail',
+        help='Use clearxlogtail to zero the unused portion (if any) '
+        'at the tail of a WAL file.')
 
     # delete subparser section
     delete_parser = subparsers.add_parser(
@@ -346,7 +353,9 @@ def main(argv=None):
                 sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+            if args.clearxlogtail is not None:
+              external_program_check([args.clearxlogtail])
+            backup_cxt.wal_s3_archive(args.WAL_SEGMENT, args.clearxlogtail)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data
             #

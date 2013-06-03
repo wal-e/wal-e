@@ -383,7 +383,7 @@ class S3Backup(object):
             # exception never will get raised.
             raise UserCritical('could not complete backup process')
 
-    def wal_s3_archive(self, wal_path):
+    def wal_s3_archive(self, wal_path, clearxlogtail):
         """
         Uploads a WAL file to S3
 
@@ -405,7 +405,8 @@ class S3Backup(object):
 
         # Upload and record the rate at which it happened.
         kib_per_second = s3_worker.do_lzop_s3_put(s3_url, wal_path,
-                                                  self.gpg_key_id)
+                                                  self.gpg_key_id,
+                                                  clearxlogtail)
 
         logger.info(
             msg='completed archiving to a file ',
