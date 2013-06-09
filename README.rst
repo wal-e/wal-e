@@ -22,13 +22,15 @@ WAL-E has four critical operators:
 
 * backup-fetch
 * backup-push
+* archive-push
 * wal-fetch
 * wal-push
 
 Of these, the "push" operators send things to S3, and "fetch"
 operators get things from S3.  "wal" operators send/get write ahead
 log, and "backup" send/get a hot backup of the base database that WAL
-segments can be applied to.
+segments can be applied to. "archive" operator is intended for processing
+backup, compressed into file.
 
 All of these operators work in a context of three important
 environment-variable based settings:
@@ -92,6 +94,13 @@ Sending a WAL segment to S3::
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
 
+Uploading a compressed backup file to S3::
+
+  $ AWS_SECRET_ACCESS_KEY=... wal-e			\
+    -k AWS_ACCESS_KEY_ID				\
+    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+    archive-push /var/backups/today_archive.tar.gz
+
 It is generally recommended that one use some sort of environment
 variable management with WAL-E: working with it this way is less verbose,
 less prone to error, and less likely to expose secret information in
@@ -125,6 +134,7 @@ incorrect values::
 
   $ envdir /etc/wal-e.d/env wal-e backup-push ...
   $ envdir /etc/wal-e.d/env wal-e wal-push ...
+  $ envdir /etc/wal-e.d/env wal-e archive-push ...
 
 envdir is conveniently combined with the archive_command functionality
 used by PostgreSQL to enable continuous archiving.  To enable
@@ -324,8 +334,8 @@ environment variable configuration for clarity:
 Compression and Temporary Files
 -------------------------------
 
-All assets pushed to S3 are run through the program "lzop" which
-compresses the object using the very fast lzo compression algorithm.
+All assets except archives pushed to S3 are run through the program "lzop"
+which compresses the object using the very fast lzo compression algorithm.
 It takes roughly 2 CPU seconds to compress a gigabyte, which when
 sending things to S3 at about 25MB/s occupies about 5% CPU time.
 Compression ratios are expected to make file sizes 50% or less of the
