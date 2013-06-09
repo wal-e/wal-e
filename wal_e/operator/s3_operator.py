@@ -214,6 +214,55 @@ class S3Backup(object):
 
         return backup_s3_prefix, total_size
 
+    def _s3_upload_pg_archive(self, archive_filename, pool_size,
+                              rate_limit=None):
+        """
+        Upload archive_filename to s3_url_prefix.
+        """
+        backup_s3_prefix = ('{0}/basebackups_{1}/base_{2}'
+                            .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
+                                    os.path.basename(archive_filename)))
+
+        # absolute upload paths are used for telling lzop what to compress
+        local_abspath = os.path.abspath(archive_filename)
+
+        partitions = tar_partition.archive_partitions_plan(local_abspath,
+
+            # 1610612736 bytes == 1.5 gigabytes, per partition,
+            # non-tunable
+            1610612736)
+
+        if rate_limit is None:
+            per_process_limit = None
+        else:
+            per_process_limit = int(rate_limit / pool_size)
+
+        # Reject tiny per-process rate limits.  They should be
+        # rejected more nicely elsewhere.
+        assert per_process_limit > 0 or per_process_limit is None
+
+        # a list to accumulate async upload jobs
+        uploads = []
+
+        total_size = os.path.getsize(local_abspath)
+
+        pool = gevent.pool.Pool(size=pool_size)
+
+        # Enqueue uploads for parallel execution
+        try:
+            for part in partitions:
+                uploads.append(pool.apply_async(
+                        s3_worker.do_archive_partition_put,
+                        [backup_s3_prefix, part, per_process_limit,
+                         self.gpg_key_id]))
+        finally:
+            while uploads:
+                uploads.pop().get()
+
+            pool.join()
+
+        return backup_s3_prefix, total_size
+
     def _exception_gather_guard(self, fn):
         """
         A higher order function to trap UserExceptions and then log them.
@@ -382,6 +431,37 @@ class S3Backup(object):
             # have more informative results, it is intended that this
             # exception never will get raised.
             raise UserCritical('could not complete backup process')
+
+    def archive_s3_upload(self, archive_filename, *args, **kwargs):
+        """
+        Uploads an archive_filename to S3.
+
+        Mechanism: just wraps _s3_upload_pg_archive with
+        start/stop backup actions with exception handling.
+
+        In particular there is a 'finally' block to stop the backup in
+        most situations.
+        """
+        upload_good = False
+        upload_stop_good = False
+
+        try:
+            uploaded_to, expanded_size_bytes = self._s3_upload_pg_archive(
+                archive_filename, *args, **kwargs)
+            upload_good = True
+        finally:
+            if not upload_good:
+                logger.warning(
+                    'upload failed',
+                    detail=('The upload was not completed successfully.'))
+
+            upload_stop_good = True
+
+        if not (upload_good and upload_stop_good):
+            # NB: Other exceptions should be raised before this that
+            # have more informative results, it is intended that this
+            # exception never will get raised.
+            raise UserCritical('could not complete archive upload process')
 
     def wal_s3_archive(self, wal_path):
         """

@@ -34,6 +34,24 @@ def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
     return Pipeline(commands, in_fd, out_fd)
 
 
+def get_archive_upload_pipeline(in_fd, out_fd, rate_limit=None, gpg_key=None):
+    """
+    Create a UNIX pipeline to process a file for uploading.
+
+    Optionally encrypt.
+    """
+    commands = []
+    if rate_limit is not None:
+        commands.append(PipeViwerRateLimitFilter(rate_limit))
+    else:
+        commands.append(PipeViwerFilter())
+
+    if gpg_key is not None:
+        commands.append(GPGEncryptionFilter(gpg_key))
+
+    return Pipeline(commands, in_fd, out_fd)
+
+
 def get_download_pipeline(in_fd, out_fd, gpg=False):
     """ Create a pipeline to process a file after downloading.
         (Optionally decrypt, then decompress) """
@@ -169,6 +187,11 @@ class PipeViwerRateLimitFilter(PipelineCommand):
         PipelineCommand.__init__(
             self,
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
+
+
+class PipeViwerFilter(PipelineCommand):
+    def __init__(self, stdin=PIPE, stdout=PIPE):
+        PipelineCommand.__init__(self, [PV_BIN], stdin, stdout)
 
 
 class LZOCompressionFilter(PipelineCommand):

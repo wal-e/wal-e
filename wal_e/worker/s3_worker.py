@@ -25,7 +25,9 @@ import wal_e.log_help as log_help
 import wal_e.storage.s3_storage as s3_storage
 
 from wal_e.exception import UserException
-from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
+from wal_e.pipeline import (
+    get_archive_upload_pipeline,
+    get_download_pipeline, get_upload_pipeline)
 from wal_e.piper import PIPE
 from wal_e.retries import retry, retry_with_count
 from wal_e.worker import s3_deleter
@@ -172,6 +174,77 @@ def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
                 return (prefix + '  There have been {n} attempts to send the '
                         'volume {name} so far.'.format(n=exc_processor_cxt,
                                                        name=tpart.name))
+
+            typ, value, tb = exc_tup
+            del exc_tup
+
+            # Screen for certain kinds of known-errors to retry from
+            if issubclass(typ, socket.error):
+                socketmsg = value[1] if isinstance(value, tuple) else value
+
+                logger.info(
+                    msg='Retrying send because of a socket error',
+                    detail=standard_detail_message(
+                        "The socket error's message is '{0}'."
+                        .format(socketmsg)))
+            elif (issubclass(typ, boto.exception.S3ResponseError) and
+                  value.error_code == 'RequestTimeTooSkewed'):
+                logger.info(msg='Retrying send because of a Request Skew time',
+                            detail=standard_detail_message())
+
+            else:
+                # This type of error is unrecognized as a retry-able
+                # condition, so propagate it, original stacktrace and
+                # all.
+                raise typ, value, tb
+
+        @retry(retry_with_count(log_volume_failures_on_error))
+        def put_file_helper():
+            tf.seek(0)
+            return uri_put_file(s3_url, tf)
+
+        # Actually do work, retrying if necessary, and timing how long
+        # it takes.
+        clock_start = time.clock()
+        k = put_file_helper()
+        clock_finish = time.clock()
+
+        kib_per_second = format_kib_per_second(clock_start, clock_finish,
+                                               k.size)
+        logger.info(
+            msg='finish uploading a base backup volume',
+            detail=('Uploading to "{s3_url}" complete at '
+                    '{kib_per_second}KiB/s. ')
+            .format(s3_url=s3_url, kib_per_second=kib_per_second))
+
+
+def do_archive_partition_put(backup_s3_prefix, part, rate_limit, gpg_key):
+    """
+    Synchronous version of the s3-upload wrapper
+    """
+    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        pipeline = get_archive_upload_pipeline(
+            PIPE, tf, rate_limit=rate_limit, gpg_key=gpg_key)
+        part.stream_write(pipeline.stdin)
+        pipeline.stdin.flush()
+        pipeline.stdin.close()
+        pipeline.finish()
+
+        tf.flush()
+
+        s3_url = '/'.join([backup_s3_prefix, 'partitions',
+                           'part_{number}'.format(number=part.name)])
+
+        logger.info(
+            msg='begin uploading a base backup volume',
+            detail=('Uploading to "{s3_url}".')
+            .format(s3_url=s3_url))
+
+        def log_volume_failures_on_error(exc_tup, exc_processor_cxt):
+            def standard_detail_message(prefix=''):
+                return (prefix + '  There have been {n} attempts to send the '
+                        'volume {name} so far.'.format(n=exc_processor_cxt,
+                                                       name=part.name))
 
             typ, value, tb = exc_tup
             del exc_tup

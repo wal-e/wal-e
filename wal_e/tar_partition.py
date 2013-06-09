@@ -173,6 +173,20 @@ class TarPartition(list):
         return '\n'.join(parts)
 
 
+class ArchivePartition(object):
+
+    def __init__(self, name, src, start, size):
+        self.name = name
+        self.src = src
+        self.start = start
+        self.size = size
+
+    def stream_write(self, fileobj):
+        with open(self.src) as f_p:
+            f_p.seek(self.start)
+            fileobj.write(f_p.read(self.size))
+
+
 def tar_partitions_plan(root, file_path_list, max_partition_size):
     # To generate ExtendedTarInfo instances (via gettarinfo) utilizing
     # Python's existing code, it's necessary to have a TarFile
@@ -259,6 +273,35 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
 
             # Partition overflow must not reach here
             assert partition_bytes < max_partition_size
+
+    # Flush out the final partition that may not be full, should it be
+    # non-empty.  This could be especially tiny.
+    if current_partition:
+        yield current_partition
+
+
+def archive_partitions_plan(file_path, max_partition_size):
+    """
+    Produce markup of the archive partitions to be uploaded.
+    """
+    # Start partitioning pass.
+    partition_start = 0
+
+    current_partition_number = 0
+    current_partition = ArchivePartition(
+        current_partition_number, file_path, partition_start,
+        max_partition_size)
+
+    archive_size = os.path.getsize(file_path)
+    while partition_start <= archive_size:
+        yield current_partition
+
+        # Prepare a fresh partition.
+        current_partition_number += 1
+        partition_start += max_partition_size
+        current_partition = ArchivePartition(
+            current_partition_number, file_path, partition_start,
+            max_partition_size)
 
     # Flush out the final partition that may not be full, should it be
     # non-empty.  This could be especially tiny.

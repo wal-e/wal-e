@@ -153,6 +153,14 @@ def main(argv=None):
                                          type=int, default=4,
                                          help='Download pooling size')
 
+    # Common arguments for archive-fetch and archive-push
+    archive_fetchpush_parent = argparse.ArgumentParser(add_help=False)
+    archive_fetchpush_parent.add_argument('ARCHIVE_FILENAME',
+                                          help="Database archive file")
+    archive_fetchpush_parent.add_argument('--pool-size', '-p',
+                                          type=int, default=4,
+                                          help='Download pooling size')
+
     # operator to print the wal-e version
     subparsers.add_parser('version', help='print the wal-e version')
 
@@ -177,6 +185,11 @@ def main(argv=None):
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3',
         parents=[backup_fetchpush_parent])
+
+    archive_push_parser = subparsers.add_parser(
+        'archive-push', help='pushing archive file to S3',
+        parents=[archive_fetchpush_parent])
+
     backup_push_parser.add_argument(
         '--cluster-read-rate-limit',
         help='Rate limit reading the PostgreSQL cluster directory to a '
@@ -191,6 +204,12 @@ def main(argv=None):
         dest='while_offline',
         action='store_true',
         default=False)
+    archive_push_parser.add_argument(
+        '--cluster-read-rate-limit',
+        help='Rate limit reading the archive to a '
+        'tunable number of bytes per second', dest='rate_limit',
+        metavar='BYTES_PER_SECOND',
+        type=int, default=None)
 
     wal_fetch_parser = subparsers.add_parser(
         'wal-fetch', help='fetch a WAL file from S3',
@@ -337,6 +356,15 @@ def main(argv=None):
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
+                pool_size=args.pool_size)
+
+        elif subcommand == 'archive-push':
+            external_programs = [PV_BIN]
+            external_program_check(external_programs)
+            rate_limit = args.rate_limit
+            backup_cxt.archive_s3_upload(
+                args.ARCHIVE_FILENAME,
+                rate_limit=rate_limit,
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
