@@ -121,56 +121,12 @@ class S3Backup(object):
         (which affect upload throughput) would help.
 
         """
-
-        # Get a manifest of files first.
-        matches = []
-
-        def raise_walk_error(e):
-            raise e
-
-        walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
-        for root, dirnames, filenames in walker:
-            is_cluster_toplevel = (os.path.abspath(root) ==
-                                   os.path.abspath(pg_cluster_dir))
-
-            # Do not capture any WAL files, although we do want to
-            # capture the WAL directory or symlink
-            if is_cluster_toplevel:
-                if 'pg_xlog' in dirnames:
-                    dirnames.remove('pg_xlog')
-                    matches.append(os.path.join(root, 'pg_xlog'))
-
-            for filename in filenames:
-                if is_cluster_toplevel and filename in ('postmaster.pid',
-                                                        'postgresql.conf'):
-                    # Do not include the postmaster pid file or the
-                    # configuration file in the backup.
-                    pass
-                else:
-                    matches.append(os.path.join(root, filename))
-
-            # Special case for empty directories
-            if not filenames:
-                matches.append(root)
+        parts = tar_partition.partition(pg_cluster_dir)
 
         backup_s3_prefix = ('{0}/basebackups_{1}/'
                             'base_{file_name}_{file_offset}'
                             .format(self.s3_prefix, FILE_STRUCTURE_VERSION,
                                     **start_backup_info))
-
-        # absolute upload paths are used for telling lzop what to compress
-        local_abspaths = [os.path.abspath(match) for match in matches]
-
-        # computed to subtract out extra extraneous absolute path
-        # information when storing on S3
-        common_local_prefix = os.path.commonprefix(local_abspaths)
-
-        partitions = tar_partition.tar_partitions_plan(
-            common_local_prefix, local_abspaths,
-
-            # 1610612736 bytes == 1.5 gigabytes, per partition,
-            # non-tunable
-            1610612736)
 
         if rate_limit is None:
             per_process_limit = None
@@ -200,7 +156,7 @@ class S3Backup(object):
 
         # Enqueue uploads for parallel execution
         try:
-            for tpart in partitions:
+            for tpart in parts:
                 total_size += tpart.total_member_size
                 uploads.append(pool.apply_async(
                         s3_worker.do_partition_put,
