@@ -21,13 +21,13 @@ import argparse
 import logging
 import os
 import re
-import subprocess
 import sys
 import textwrap
 import traceback
 
 import wal_e.log_help as log_help
 
+from wal_e import subprocess
 from wal_e.exception import UserException
 from wal_e.operator import s3_operator
 from wal_e.piper import popen_sp

@@ -13,11 +13,13 @@ import gevent
 import gevent.socket
 import os
 import signal
-import subprocess
+
 import sys
 
 from cStringIO import StringIO
-from subprocess import PIPE
+
+from wal_e import subprocess
+from wal_e.subprocess import PIPE
 
 # This is not used in this module, but is imported by dependent
 # modules, so do this to quiet pyflakes.
