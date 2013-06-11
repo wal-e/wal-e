@@ -173,7 +173,7 @@ class TarPartition(list):
         return '\n'.join(parts)
 
 
-def tar_partitions_plan(root, file_path_list, max_partition_size):
+def _segmentation_guts(root, file_path_list, max_partition_size):
     # To generate ExtendedTarInfo instances (via gettarinfo) utilizing
     # Python's existing code, it's necessary to have a TarFile
     # instance.  Abuse that instance by writing to devnull.
@@ -264,3 +264,54 @@ def tar_partitions_plan(root, file_path_list, max_partition_size):
     # non-empty.  This could be especially tiny.
     if current_partition:
         yield current_partition
+
+
+def partition(pg_cluster_dir):
+    def raise_walk_error(e):
+        raise e
+
+    # Accumulates a list of archived files while walking the file
+    # system.
+    matches = []
+
+    walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
+    for root, dirnames, filenames in walker:
+        is_cluster_toplevel = (os.path.abspath(root) ==
+                               os.path.abspath(pg_cluster_dir))
+
+        # Do not capture any WAL files, although we do want to
+        # capture the WAL directory or symlink
+        if is_cluster_toplevel:
+            if 'pg_xlog' in dirnames:
+                dirnames.remove('pg_xlog')
+                matches.append(os.path.join(root, 'pg_xlog'))
+
+        for filename in filenames:
+            if is_cluster_toplevel and filename in ('postmaster.pid',
+                                                    'postgresql.conf'):
+                # Do not include the postmaster pid file or the
+                # configuration file in the backup.
+                pass
+            else:
+                matches.append(os.path.join(root, filename))
+
+        # Special case for empty directories
+        if not filenames:
+            matches.append(root)
+
+    # Absolute upload paths are used for telling lzop what to
+    # compress.
+    local_abspaths = [os.path.abspath(match) for match in matches]
+
+    # Computed to subtract out extra extraneous absolute path
+    # information when storing on S3.
+    common_local_prefix = os.path.commonprefix(local_abspaths)
+
+    parts = _segmentation_guts(
+        common_local_prefix, local_abspaths,
+
+        # 1610612736 bytes == 1.5 gigabytes, per partition,
+        # non-tunable
+        1610612736)
+
+    return parts
