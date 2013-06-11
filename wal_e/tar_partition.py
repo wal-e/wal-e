@@ -58,6 +58,12 @@ class StreamPadFileObj(object):
 
     """
 
+    # Try to save space via __slots__ optimization: many of these can
+    # be created on systems with many small files that are packed into
+    # a tar partition, and memory blows up when instantiating the
+    # tarfile instance full of these.
+    __slots__ = ('underlying_fp', 'target_size', 'pos')
+
     def __init__(self, underlying_fp, target_size):
         self.underlying_fp = underlying_fp
         self.target_size = target_size
