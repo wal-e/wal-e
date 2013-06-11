@@ -1,11 +1,11 @@
 import errno
 import os
-import subprocess
 
 import gevent
 import pytest
 
 from wal_e import piper
+from wal_e import subprocess
 
 
 def invoke_program():
