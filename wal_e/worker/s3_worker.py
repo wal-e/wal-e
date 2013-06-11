@@ -11,7 +11,6 @@ import json
 import logging
 import re
 import socket
-import sys
 import tarfile
 import tempfile
 import time
@@ -76,22 +75,34 @@ def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
     default = 's3.amazonaws.com'
 
     if bucket_name not in s3_endpoint_for_uri.cache:
-        try:
+        c_args = c_args or ()
+        c_kwargs = c_kwargs or {}
+
+        if bucket_name.lower() != bucket_name:
+            # Handle case of legacy S3 API calling formats
+            #
+            # The most common reason that people do this is because
+            # AWS unceremoniously allows creation of upper-case bucket
+            # names in S3 classic and in some older regions.  There
+            # are other restrictions (because the new format has
+            # absorbed restrictions seen in the DNS standards), but in
+            # practice people only seem to report this issue, so for
+            # now just handle that case.
+            s3_endpoint_for_uri.cache[bucket_name] = default
+
+            logger.warning(msg='upper case buckets will be deprecated',
+                           detail=('The offending bucket name is {0}.'
+                                   .format(bucket_name)),
+                           hint=('Upper case bucket names do not work in '
+                                 'newer regions and cannot use the newer '
+                                 'preferred S3 calling conventions.'))
+        else:
             # Attempting to use .get_bucket() with OrdinaryCallingFormat raises
             # a S3ResponseError (status 301).  See boto/443 referenced above.
-            c_args = c_args or ()
-            c_kwargs = c_kwargs or {}
             c_kwargs['calling_format'] = SubdomainCallingFormat()
             conn = connection or S3Connection(*c_args, **c_kwargs)
             s3_endpoint_for_uri.cache[bucket_name] = _S3_REGIONS.get(
-                    conn.get_bucket(bucket_name).get_location(), default)
-        except StandardError:
-            detail = ''.join(traceback.format_exception(*sys.exc_info()))
-            hint = ('Bucket names containing upper case letters'
-                    ' are known to be problematic.')
-            logger.warning('Problem getting region information for bucket %s.',
-                           bucket_name, hint=hint, detail=detail)
-            s3_endpoint_for_uri.cache[bucket_name] = default
+                conn.get_bucket(bucket_name).get_location(), default)
 
     return s3_endpoint_for_uri.cache[bucket_name]
 s3_endpoint_for_uri.cache = {}

@@ -15,7 +15,7 @@ def no_real_s3_credentials():
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_s3_endpoint_for_uri():
+def test_s3_endpoint_for_west_uri():
     """Integration test for bucket naming issues
 
     AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
@@ -39,11 +39,38 @@ def test_s3_endpoint_for_uri():
         conn.delete_bucket(bucket_name)
 
 
-def test_s3_endpoint_for_uri_fail():
-    'Connection exceptions in s3_endpoint_for_uri should fail gracefully.'
-    uri = 's3://invalid_bucket'
-    # Fall back to the default S3 endpoint.
-    # Cause failure by passing in an invalid connection object.
+@pytest.mark.skipif("no_real_s3_credentials()")
+def test_s3_endpoint_for_upcase_bucket():
+    """Integration test for bucket naming issues
+
+    AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
+    this test.
+    """
+    import boto.s3.connection
+
+    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    bucket_name = 'wal-e-test-' + aws_access_key.upper()
+    uri = 's3://{b}'.format(b=bucket_name)
+
+    try:
+        conn = boto.s3.connection.S3Connection()
+        conn.create_bucket(bucket_name)
+
+        expected = 's3.amazonaws.com'
+        result = s3_worker.s3_endpoint_for_uri(uri)
+
+        assert result == expected
+    finally:
+        conn.delete_bucket(bucket_name)
+
+
+def test_ordinary_calling_format_upcase():
+    """Some bucket names have to switch to an older calling format.
+
+    This case tests upper case names -- which are not allowed -- only.
+    """
+
+    uri = 's3://InvalidBucket'
     expected = 's3.amazonaws.com'
-    result = s3_worker.s3_endpoint_for_uri(uri, connection=object())
+    result = s3_worker.s3_endpoint_for_uri(uri)
     assert result == expected
