@@ -1,0 +1,5 @@
+Bug reported in http://bugs.python.org/18186
+
+Resolution: the 2.2 compatibility was an obsolete comment, now
+removed.  Guess I'm taking my chances with 2.7-era subprocesss in a
+2.6+ project.
