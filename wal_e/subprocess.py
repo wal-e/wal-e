@@ -553,7 +553,7 @@ def check_output(*popenargs, **kwargs):
     The arguments are the same as for the Popen constructor.  Example:
 
     >>> check_output(["ls", "-l", "/dev/null"])
-    'crw-rw-rw- 1 root root 1, 3 Oct 18  2007 /dev/null\n'
+    'crw-rw-rw- 1 root root ...'
 
     The stdout argument is not allowed as it is used internally.
     To capture standard error in the result, use stderr=STDOUT.
@@ -561,7 +561,7 @@ def check_output(*popenargs, **kwargs):
     >>> check_output(["/bin/sh", "-c",
     ...               "ls -l non_existent_file ; exit 0"],
     ...              stderr=STDOUT)
-    'ls: non_existent_file: No such file or directory\n'
+    'ls: ...'
     """
     if 'stdout' in kwargs:
         raise ValueError('stdout argument not allowed, it will be overridden.')
