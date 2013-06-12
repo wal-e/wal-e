@@ -179,44 +179,49 @@ class TarPartition(list):
         return '\n'.join(parts)
 
 
-def _segmentation_guts(root, file_path_list, max_partition_size):
-    # To generate ExtendedTarInfo instances (via gettarinfo) utilizing
-    # Python's existing code, it's necessary to have a TarFile
-    # instance.  Abuse that instance by writing to devnull.
-    #
-    # NB: TarFile.gettarinfo does look at the Tarfile instance for
-    # attributes like "dereference".
+def _segmentation_guts(root, file_paths, max_partition_size):
+    """Segment a series of file paths into TarPartition values
+
+    These TarPartitions are disjoint and roughly below the prescribed
+    size.
+    """
 
     # Canonicalize root to include the trailing slash, since root is
     # intended to be a directory anyway.
     if not root.endswith(os.path.sep):
         root += os.path.sep
 
+    # Ensure that the root path is a directory before continuing.
     if not os.path.isdir(root):
         raise TarBadRootError(root=root)
-
-    for file_path in file_path_list:
-        if not file_path.startswith(root):
-            raise TarBadPathError(root=root, offensive_path=file_path)
 
     bogus_tar = None
 
     try:
+        # Create a bogus TarFile as a contrivance to be able to run
+        # gettarinfo and produce such instances.  Some of the settings
+        # on the TarFile are important, like whether to de-reference
+        # symlinks.
         bogus_tar = tarfile.TarFile(os.devnull, 'w', dereference=False)
 
-        et_infos = []
-        for file_path in file_path_list:
-            # Must be enforced prior
-            assert file_path.startswith(root)
-            assert root.endswith(os.path.sep)
+        # Bookkeeping for segmentation of tar members into partitions.
+        partition_number = 0
+        partition_bytes = 0
+        partition = TarPartition(partition_number)
 
+        for file_path in file_paths:
+            # Ensure tar members exist within a shared root before
+            # continuing.
+            if not file_path.startswith(root):
+                raise TarBadPathError(root=root, offensive_path=file_path)
+
+            # Create an ExtendedTarInfo to represent the tarfile.
             try:
                 et_info = ExtendedTarInfo(
                     tarinfo=bogus_tar.gettarinfo(
                         file_path, arcname=file_path[len(root):]),
                     submitted_path=file_path)
 
-                et_infos.append(et_info)
             except EnvironmentError, e:
                 if (e.errno == errno.ENOENT and
                     e.filename == file_path):
@@ -228,48 +233,42 @@ def _segmentation_guts(root, file_path_list, max_partition_size):
                         detail='Skipping {0}.'.format(et_info.submitted_path))
                 else:
                     raise
+
+            # Ensure tar members are within an expected size before
+            # continuing.
+            if et_info.tarinfo.size > max_partition_size:
+                raise TarMemberTooBigError(
+                    et_info.tarinfo.name, max_partition_size,
+                    et_info.tarinfo.size)
+
+            if partition_bytes + et_info.tarinfo.size >= max_partition_size:
+                # Partition is full and cannot accept another member,
+                # so yield the complete one to the caller.
+                yield partition
+
+                # Prepare a fresh partition to accrue additional file
+                # paths into.
+                partition_number += 1
+                partition_bytes = et_info.tarinfo.size
+                partition = TarPartition(
+                    partition_number, [et_info])
+            else:
+                # Partition is able to accept this member, so just add
+                # it and increment the size counters.
+                partition_bytes += et_info.tarinfo.size
+                partition.append(et_info)
+
+                # Partition size overflow must not to be possible
+                # here.
+                assert partition_bytes < max_partition_size
+
     finally:
         if bogus_tar is not None:
             bogus_tar.close()
 
-    # Check for fidelity of all tar members first.  This is done
-    # up-front to avoid creating a bunch of TARs and then erroring
-    # (potentially much) later.
-    for et_info in et_infos:
-        tarinfo = et_info.tarinfo
-        if et_info.tarinfo.size > max_partition_size:
-            raise TarMemberTooBigError(tarinfo.name, max_partition_size,
-                                       tarinfo.size)
-
-    # Start actual partitioning pass
-    partition_bytes = 0
-
-    current_partition_number = 0
-    current_partition = TarPartition(current_partition_number)
-
-    for et_info in et_infos:
-        # Size of members must be enforced elsewhere.
-        assert et_info.tarinfo.size <= max_partition_size
-
-        if partition_bytes + et_info.tarinfo.size >= max_partition_size:
-            yield current_partition
-
-            # Prepare a fresh partition.
-            current_partition_number += 1
-            partition_bytes = et_info.tarinfo.size
-            current_partition = TarPartition(
-                current_partition_number, [et_info])
-        else:
-            partition_bytes += et_info.tarinfo.size
-            current_partition.append(et_info)
-
-            # Partition overflow must not reach here
-            assert partition_bytes < max_partition_size
-
-    # Flush out the final partition that may not be full, should it be
-    # non-empty.  This could be especially tiny.
-    if current_partition:
-        yield current_partition
+    # Flush out the final partition should it be non-empty.
+    if partition:
+        yield partition
 
 
 def partition(pg_cluster_dir):
