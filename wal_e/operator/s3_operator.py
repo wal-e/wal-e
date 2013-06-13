@@ -1,4 +1,6 @@
 import functools
+import gc
+import gevent
 import gevent.pool
 import itertools
 import json
@@ -24,6 +26,46 @@ logger = log_help.WalELogger(__name__, level=logging.INFO)
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = s3_storage.CURRENT_VERSION
+
+
+def scrub_greenlets(greenlets):
+    """Construct a new list with finished greenlets removed.
+
+    Excessive memory bloat occurs when greenlet instances referencing
+    expensive objects are held, even if those greenlets are finished
+    and waiting to yield a result.  This procedure allows such
+    greenlets to be collected, provided they are not referenced
+    elsewhere.
+
+    In addition, this procedure re-raises an exception should the
+    greenlet have suffered an uncaught exception.
+    """
+
+    output = []
+
+    for g in greenlets:
+        # Very carefully check for termination of greenlets, raising
+        # exceptions as they are encountered so that callers can know
+        # a greenlet failed (otherwise, an incomplete upload may be
+        # marked as a complete backup).
+        #
+        # The most subtle case is gevent.Timeout, because one might
+        # think to replace the following construction with
+        # "g.get(block=False)" (as it raises an exception from a
+        # failed greenlet), but then there is an introduced ambiguity
+        # in the case where the greenlet itself question died as a
+        # result of a gevent.Timeout, which is raised in non-blocking
+        # mode should the greenlet still be running.
+        if g.ready():
+            if g.successful():
+                continue
+            else:
+                raise g.exception
+        else:
+            # Greenlet still running
+            output.append(g)
+
+    return output
 
 
 class S3Backup(object):
@@ -171,9 +213,25 @@ class S3Backup(object):
                 # avoid doing it all at once when the parallelism is
                 # not useful anyway.
                 pool.wait_available()
+
+                # Attempt to avoid too much VM growth.
+                #
+                # The garbage in consideration is that made available
+                # by scrub_greenlets's destruction of references to
+                # expensive TarInfo objects
+                uploads = scrub_greenlets(uploads)
+                gc.collect()
         finally:
             while uploads:
-                uploads.pop().get()
+                uploads = scrub_greenlets(uploads)
+                
+                # Give other greenlets a chance to run.
+                #
+                # Scrubbing in tight loop (which gives no opportunity
+                # for cooperative scheduling) can instigate starvation
+                # final Greenlets in the pool without such a
+                # consideration.
+                gevent.sleep(1)
 
             pool.join()
 
