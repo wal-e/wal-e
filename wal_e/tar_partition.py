@@ -23,6 +23,9 @@ This module attempts to address the following problems:
 
 * Representation of empty directories and symbolic links.
 
+* Avoiding volumes with "too many" individual members to avoid
+  consuming too much memory with metadata.
+
 The *approximate* maximum size of a volume is tunable.  If any archive
 members are too large, a TarMemberTooBig exception is raised: in this
 case, it is necessary to raise the partition size.  The volume size
@@ -207,6 +210,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         # Bookkeeping for segmentation of tar members into partitions.
         partition_number = 0
         partition_bytes = 0
+        partition_members = 0
         partition = TarPartition(partition_number)
 
         for file_path in file_paths:
@@ -241,7 +245,8 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     et_info.tarinfo.name, max_partition_size,
                     et_info.tarinfo.size)
 
-            if partition_bytes + et_info.tarinfo.size >= max_partition_size:
+            if (partition_bytes + et_info.tarinfo.size >= max_partition_size
+                or partition_members > 10000):
                 # Partition is full and cannot accept another member,
                 # so yield the complete one to the caller.
                 yield partition
@@ -250,12 +255,14 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                 # paths into.
                 partition_number += 1
                 partition_bytes = et_info.tarinfo.size
+                partition_members = 1
                 partition = TarPartition(
                     partition_number, [et_info])
             else:
                 # Partition is able to accept this member, so just add
                 # it and increment the size counters.
                 partition_bytes += et_info.tarinfo.size
+                partition_members += 1
                 partition.append(et_info)
 
                 # Partition size overflow must not to be possible
