@@ -162,6 +162,15 @@ class S3Backup(object):
                         s3_worker.do_partition_put,
                         [backup_s3_prefix, tpart, per_process_limit,
                          self.gpg_key_id]))
+
+                # Wait for the pool to contain additional capacity
+                # before apply_async-ing even more uploads.
+                #
+                # Reasoning: 'parts' is lazy and generating each
+                # 'tpart' from it is memory and cpu intensive, so
+                # avoid doing it all at once when the parallelism is
+                # not useful anyway.
+                pool.wait_available()
         finally:
             while uploads:
                 uploads.pop().get()
