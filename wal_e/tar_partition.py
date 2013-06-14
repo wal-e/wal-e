@@ -119,6 +119,21 @@ class TarBadPathError(Exception):
 ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
                                          'submitted_path tarinfo')
 
+# 1.5 GiB is 1610612736 bytes, and Postgres allocates 1 GiB files as a
+# nominal maximum.  This must be greater than that.
+PARTITION_MAX_SZ = 1610612736
+
+# Maximum number of members in a TarPartition segment.
+#
+# This is to restrain memory consumption when segmenting the
+# partitions.  Some workloads can produce many tiny files, so it's
+# important to try to choose some happy medium between avoiding
+# excessive bloat in the number of partitions and making the wal-e
+# process effectively un-fork()-able for performing any useful work.
+#
+# 262144 is 256 KiB.
+PARTITION_MAX_MEMBERS = int(PARTITION_MAX_SZ / 262144)
+
 
 class TarPartition(list):
 
@@ -246,7 +261,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     et_info.tarinfo.size)
 
             if (partition_bytes + et_info.tarinfo.size >= max_partition_size
-                or partition_members > 10000):
+                or partition_members > PARTITION_MAX_MEMBERS):
                 # Partition is full and cannot accept another member,
                 # so yield the complete one to the caller.
                 yield partition
@@ -321,9 +336,6 @@ def partition(pg_cluster_dir):
 
     parts = _segmentation_guts(
         common_local_prefix, local_abspaths,
-
-        # 1610612736 bytes == 1.5 gigabytes, per partition,
-        # non-tunable
-        1610612736)
+        PARTITION_MAX_SZ)
 
     return parts
