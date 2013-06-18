@@ -261,7 +261,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     et_info.tarinfo.size)
 
             if (partition_bytes + et_info.tarinfo.size >= max_partition_size
-                or partition_members > PARTITION_MAX_MEMBERS):
+                or partition_members >= PARTITION_MAX_MEMBERS):
                 # Partition is full and cannot accept another member,
                 # so yield the complete one to the caller.
                 yield partition
