@@ -1,5 +1,4 @@
 import functools
-import gc
 import gevent
 import gevent.pool
 import itertools
@@ -14,10 +13,11 @@ import wal_e.log_help as log_help
 
 from cStringIO import StringIO
 
+from wal_e import worker
 from wal_e.exception import UserException, UserCritical
 from wal_e.storage import s3_storage
-from wal_e.worker.psql_worker import PgBackupStatements
-from wal_e.worker.pg_controldata_worker import PgControlDataParser
+from wal_e.worker import PgBackupStatements
+from wal_e.worker import PgControlDataParser
 
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
@@ -26,46 +26,6 @@ logger = log_help.WalELogger(__name__, level=logging.INFO)
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = s3_storage.CURRENT_VERSION
-
-
-def scrub_greenlets(greenlets):
-    """Construct a new list with finished greenlets removed.
-
-    Excessive memory bloat occurs when greenlet instances referencing
-    expensive objects are held, even if those greenlets are finished
-    and waiting to yield a result.  This procedure allows such
-    greenlets to be collected, provided they are not referenced
-    elsewhere.
-
-    In addition, this procedure re-raises an exception should the
-    greenlet have suffered an uncaught exception.
-    """
-
-    output = []
-
-    for g in greenlets:
-        # Very carefully check for termination of greenlets, raising
-        # exceptions as they are encountered so that callers can know
-        # a greenlet failed (otherwise, an incomplete upload may be
-        # marked as a complete backup).
-        #
-        # The most subtle case is gevent.Timeout, because one might
-        # think to replace the following construction with
-        # "g.get(block=False)" (as it raises an exception from a
-        # failed greenlet), but then there is an introduced ambiguity
-        # in the case where the greenlet itself question died as a
-        # result of a gevent.Timeout, which is raised in non-blocking
-        # mode should the greenlet still be running.
-        if g.ready():
-            if g.successful():
-                continue
-            else:
-                raise g.exception
-        else:
-            # Greenlet still running
-            output.append(g)
-
-    return output
 
 
 class S3Backup(object):
@@ -179,9 +139,6 @@ class S3Backup(object):
         # rejected more nicely elsewhere.
         assert per_process_limit > 0 or per_process_limit is None
 
-        # a list to accumulate async upload jobs
-        uploads = []
-
         total_size = 0
 
         # Make an attempt to upload extended version metadata
@@ -194,46 +151,23 @@ class S3Backup(object):
                                content_encoding='text/plain')
         logger.info(msg='postgres version metadata upload complete')
 
-        pool = gevent.pool.Pool(size=pool_size)
+        uploader = s3_worker.PartitionUploader(backup_s3_prefix,
+                                               per_process_limit,
+                                               self.gpg_key_id)
+
+        pool = worker.TarUploadPool(uploader, pool_size)
 
         # Enqueue uploads for parallel execution
-        try:
-            for tpart in parts:
-                total_size += tpart.total_member_size
-                uploads.append(pool.apply_async(
-                        s3_worker.do_partition_put,
-                        [backup_s3_prefix, tpart, per_process_limit,
-                         self.gpg_key_id]))
+        for tpart in parts:
+            total_size += tpart.total_member_size
 
-                # Wait for the pool to contain additional capacity
-                # before apply_async-ing even more uploads.
-                #
-                # Reasoning: 'parts' is lazy and generating each
-                # 'tpart' from it is memory and cpu intensive, so
-                # avoid doing it all at once when the parallelism is
-                # not useful anyway.
-                pool.wait_available()
+            # 'put' can raise an exception for a just-failed upload,
+            # aborting the process.
+            pool.put(tpart)
 
-                # Attempt to avoid too much VM growth.
-                #
-                # The garbage in consideration is that made available
-                # by scrub_greenlets's destruction of references to
-                # expensive TarInfo objects
-                uploads = scrub_greenlets(uploads)
-                gc.collect()
-        finally:
-            while uploads:
-                uploads = scrub_greenlets(uploads)
-                
-                # Give other greenlets a chance to run.
-                #
-                # Scrubbing in tight loop (which gives no opportunity
-                # for cooperative scheduling) can instigate starvation
-                # final Greenlets in the pool without such a
-                # consideration.
-                gevent.sleep(1)
-
-            pool.join()
+        # Wait for remaining parts to upload.  An exception can be
+        # raised to signal failure of the upload.
+        pool.join()
 
         return backup_s3_prefix, total_size
 

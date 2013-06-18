@@ -245,80 +245,93 @@ def format_kib_per_second(start, finish, amount_in_bytes):
         return 'NaN'
 
 
-def do_partition_put(backup_s3_prefix, tpart, rate_limit, gpg_key):
-    """
-    Synchronous version of the s3-upload wrapper
+class PartitionUploader(object):
+    def __init__(self, backup_s3_prefix, rate_limit, gpg_key):
+        self.backup_s3_prefix = backup_s3_prefix
+        self.rate_limit = rate_limit
+        self.gpg_key = gpg_key
 
-    """
-    logger.info(msg='beginning volume compression',
-                detail='Building volume {name}.'.format(name=tpart.name))
+    def __call__(self, tpart):
+        """
+        Synchronous version of the s3-upload wrapper
 
-    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
-        pipeline = get_upload_pipeline(PIPE, tf,
-                                       rate_limit=rate_limit, gpg_key=gpg_key)
-        tpart.tarfile_write(pipeline.stdin)
-        pipeline.stdin.flush()
-        pipeline.stdin.close()
-        pipeline.finish()
+        """
+        logger.info(msg='beginning volume compression',
+                    detail='Building volume {name}.'.format(name=tpart.name))
 
-        tf.flush()
+        with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+            pipeline = get_upload_pipeline(PIPE,
+                                           tf,
+                                           rate_limit=self.rate_limit,
+                                           gpg_key=self.gpg_key)
 
-        s3_url = '/'.join([backup_s3_prefix, 'tar_partitions',
-                           'part_{number}.tar.lzo'
-                           .format(number=tpart.name)])
+            tpart.tarfile_write(pipeline.stdin)
+            pipeline.stdin.flush()
+            pipeline.stdin.close()
+            pipeline.finish()
 
-        logger.info(
-            msg='begin uploading a base backup volume',
-            detail=('Uploading to "{s3_url}".')
-            .format(s3_url=s3_url))
+            tf.flush()
 
-        def log_volume_failures_on_error(exc_tup, exc_processor_cxt):
-            def standard_detail_message(prefix=''):
-                return (prefix + '  There have been {n} attempts to send the '
-                        'volume {name} so far.'.format(n=exc_processor_cxt,
-                                                       name=tpart.name))
+            s3_url = '/'.join([self.backup_s3_prefix, 'tar_partitions',
+                               'part_{number}.tar.lzo'
+                               .format(number=tpart.name)])
 
-            typ, value, tb = exc_tup
-            del exc_tup
+            logger.info(
+                msg='begin uploading a base backup volume',
+                detail=('Uploading to "{s3_url}".')
+                .format(s3_url=s3_url))
 
-            # Screen for certain kinds of known-errors to retry from
-            if issubclass(typ, socket.error):
-                socketmsg = value[1] if isinstance(value, tuple) else value
+            def log_volume_failures_on_error(exc_tup, exc_processor_cxt):
+                def standard_detail_message(prefix=''):
+                    return (prefix +
+                            '  There have been {n} attempts to send the '
+                            'volume {name} so far.'.format(n=exc_processor_cxt,
+                                                           name=tpart.name))
 
-                logger.info(
-                    msg='Retrying send because of a socket error',
-                    detail=standard_detail_message(
-                        "The socket error's message is '{0}'."
-                        .format(socketmsg)))
-            elif (issubclass(typ, boto.exception.S3ResponseError) and
-                  value.error_code == 'RequestTimeTooSkewed'):
-                logger.info(msg='Retrying send because of a Request Skew time',
-                            detail=standard_detail_message())
+                typ, value, tb = exc_tup
+                del exc_tup
 
-            else:
-                # This type of error is unrecognized as a retry-able
-                # condition, so propagate it, original stacktrace and
-                # all.
-                raise typ, value, tb
+                # Screen for certain kinds of known-errors to retry from
+                if issubclass(typ, socket.error):
+                    socketmsg = value[1] if isinstance(value, tuple) else value
 
-        @retry(retry_with_count(log_volume_failures_on_error))
-        def put_file_helper():
-            tf.seek(0)
-            return uri_put_file(s3_url, tf)
+                    logger.info(
+                        msg='Retrying send because of a socket error',
+                        detail=standard_detail_message(
+                            "The socket error's message is '{0}'."
+                            .format(socketmsg)))
+                elif (issubclass(typ, boto.exception.S3ResponseError) and
+                      value.error_code == 'RequestTimeTooSkewed'):
+                    logger.info(
+                        msg='Retrying send because of a Request Skew time',
+                        detail=standard_detail_message())
 
-        # Actually do work, retrying if necessary, and timing how long
-        # it takes.
-        clock_start = time.clock()
-        k = put_file_helper()
-        clock_finish = time.clock()
+                else:
+                    # This type of error is unrecognized as a retry-able
+                    # condition, so propagate it, original stacktrace and
+                    # all.
+                    raise typ, value, tb
 
-        kib_per_second = format_kib_per_second(clock_start, clock_finish,
-                                               k.size)
-        logger.info(
-            msg='finish uploading a base backup volume',
-            detail=('Uploading to "{s3_url}" complete at '
-                    '{kib_per_second}KiB/s. ')
-            .format(s3_url=s3_url, kib_per_second=kib_per_second))
+            @retry(retry_with_count(log_volume_failures_on_error))
+            def put_file_helper():
+                tf.seek(0)
+                return uri_put_file(s3_url, tf)
+
+            # Actually do work, retrying if necessary, and timing how long
+            # it takes.
+            clock_start = time.clock()
+            k = put_file_helper()
+            clock_finish = time.clock()
+
+            kib_per_second = format_kib_per_second(clock_start, clock_finish,
+                                                   k.size)
+            logger.info(
+                msg='finish uploading a base backup volume',
+                detail=('Uploading to "{s3_url}" complete at '
+                        '{kib_per_second}KiB/s. ')
+                .format(s3_url=s3_url, kib_per_second=kib_per_second))
+
+        return tpart
 
 
 def do_lzop_s3_put(s3_url, local_path, gpg_key):
