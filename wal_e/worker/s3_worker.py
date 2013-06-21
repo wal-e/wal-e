@@ -6,6 +6,7 @@ with the intention that they are used in forked worker processes.
 
 """
 import boto
+import boto.exception
 import functools
 import gevent
 import json
@@ -195,8 +196,24 @@ def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
             # a S3ResponseError (status 301).  See boto/443 referenced above.
             c_kwargs['calling_format'] = SubdomainCallingFormat()
             conn = connection or S3Connection(*c_args, **c_kwargs)
-            s3_endpoint_for_uri.cache[bucket_name] = _S3_REGIONS.get(
-                conn.get_bucket(bucket_name).get_location(), default)
+            bucket = conn.get_bucket(bucket_name)
+
+            try:
+                location = bucket.get_location()
+            except boto.exception.S3ResponseError, e:
+                if e.status == 403:
+                    # A 403 can be caused by IAM keys that do not
+                    # permit GetBucketLocation.  To not change
+                    # behavior for environments that do not have
+                    # GetBucketLocation allowed, fall back to the
+                    # default endpoint, preserving behavior for those
+                    # using S3-Classic.
+                    s3_endpoint_for_uri.cache[bucket_name] = default
+                else:
+                    raise
+            else:
+                s3_endpoint_for_uri.cache[bucket_name] = \
+                    _S3_REGIONS.get(location, default)
 
     return s3_endpoint_for_uri.cache[bucket_name]
 s3_endpoint_for_uri.cache = {}
