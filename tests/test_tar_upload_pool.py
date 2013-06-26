@@ -17,9 +17,6 @@ class FakeTarPartition(object):
 
 class FakeUploader(object):
     """A no-op uploader that makes affordance for fault injection."""
-    def __init__(self):
-        # For controlled pausing of uploads
-        self.flow = event.Event()
 
     def __call__(self, tpart):
         if tpart._explosive:
