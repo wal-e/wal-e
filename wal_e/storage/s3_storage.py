@@ -19,6 +19,8 @@ CURRENT_VERSION = '005'
 SEGMENT_REGEXP = (r'(?P<filename>(?P<tli>[0-9A-F]{8,8})(?P<log>[0-9A-F]{8,8})'
                   '(?P<seg>[0-9A-F]{8,8}))')
 
+SEGMENT_READY_REGEXP = SEGMENT_REGEXP + r'\.ready'
+
 BASE_BACKUP_REGEXP = (r'base_' + SEGMENT_REGEXP + r'_(?P<offset>[0-9A-F]{8})')
 
 COMPLETE_BASE_BACKUP_REGEXP = (

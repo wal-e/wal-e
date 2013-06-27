@@ -193,8 +193,13 @@ def main(argv=None):
         default=False)
 
     # wal-push operator section
-    subparsers.add_parser('wal-push', help='push a WAL file to S3',
-                          parents=[wal_fetchpush_parent])
+    wal_push_parser = subparsers.add_parser(
+        'wal-push', help='push a WAL file to S3',
+        parents=[wal_fetchpush_parent])
+
+    wal_push_parser.add_argument(
+        '--pool-size', '-p', type=int, default=1,
+        help='Set the maximum number of concurrent transfers')
 
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
@@ -347,7 +352,8 @@ def main(argv=None):
                 sys.exit(1)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            backup_cxt.wal_s3_archive(args.WAL_SEGMENT)
+            backup_cxt.wal_s3_archive(args.WAL_SEGMENT,
+                                      concurrency=args.pool_size)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data
             #
