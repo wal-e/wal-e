@@ -113,3 +113,29 @@ def test_put_after_join():
 
     with pytest.raises(exception.UserCritical):
         pool.put(FakeTarPartition(1))
+
+
+def test_pool_concurrent_success():
+    pool = make_pool(4, 4)
+
+    for i in xrange(30):
+        pool.put(FakeTarPartition(1))
+
+    pool.join()
+
+
+def test_pool_concurrent_failure():
+    pool = make_pool(4, 4)
+
+    parts = [FakeTarPartition(1) for i in xrange(30)]
+
+    exc = Explosion('boom')
+    parts[27]._explosive = exc
+
+    with pytest.raises(Explosion) as e:
+        for part in parts:
+            pool.put(part)
+
+        pool.join()
+
+    assert e.value is exc
