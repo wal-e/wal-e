@@ -168,6 +168,43 @@ def format_kib_per_second(start, finish, amount_in_bytes):
         return 'NaN'
 
 
+class WalUploader(object):
+    def __init__(self, prefix, gpg_key_id):
+        self.prefix = prefix
+        self.gpg_key_id = gpg_key_id
+
+    def __call__(self, segment):
+        s3_url = '{0}/wal_{1}/{2}.lzo'.format(
+            self.prefix, s3_storage.CURRENT_VERSION, segment.name)
+
+        logger.info(msg='begin archiving a file',
+                    detail=('Uploading "{wal_path}" to "{s3_url}".'
+                            .format(wal_path=segment.path, s3_url=s3_url)),
+                    structured={'action': 'push-wal',
+                                'key': s3_url,
+                                'seg': segment.name,
+                                'prefix': self.prefix,
+                                'state': 'begin'})
+
+        # Upload and record the rate at which it happened.
+        kib_per_second = _do_lzop_s3_put(s3_url, segment.path,
+                                         self.gpg_key_id)
+
+        logger.info(
+            msg='completed archiving to a file ',
+            detail=('Archiving to "{s3_url}" complete at '
+                    '{kib_per_second}KiB/s. ')
+            .format(s3_url=s3_url, kib_per_second=kib_per_second),
+                    structured={'action': 'push-wal',
+                                'key': s3_url,
+                                'rate': kib_per_second,
+                                'seg': segment.name,
+                                'prefix': self.prefix,
+                                'state': 'complete'})
+
+        return segment
+
+
 class PartitionUploader(object):
     def __init__(self, backup_s3_prefix, rate_limit, gpg_key):
         self.backup_s3_prefix = backup_s3_prefix
@@ -257,7 +294,7 @@ class PartitionUploader(object):
         return tpart
 
 
-def do_lzop_s3_put(s3_url, local_path, gpg_key):
+def _do_lzop_s3_put(s3_url, local_path, gpg_key):
     """
     Compress and upload a given local path.
 
@@ -269,8 +306,7 @@ def do_lzop_s3_put(s3_url, local_path, gpg_key):
 
     """
 
-    assert not s3_url.endswith('.lzo')
-    s3_url += '.lzo'
+    assert s3_url.endswith('.lzo')
 
     with tempfile.NamedTemporaryFile(mode='rwb') as tf:
         pipeline = get_upload_pipeline(

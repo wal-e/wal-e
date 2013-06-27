@@ -12,6 +12,7 @@ import wal_e.tar_partition as tar_partition
 import wal_e.log_help as log_help
 
 from cStringIO import StringIO
+from os import path
 
 from wal_e import worker
 from wal_e.exception import UserException, UserCritical
@@ -340,41 +341,41 @@ class S3Backup(object):
             # exception never will get raised.
             raise UserCritical('could not complete backup process')
 
-    def wal_s3_archive(self, wal_path):
+    def wal_s3_archive(self, wal_path, concurrency=1):
         """
         Uploads a WAL file to S3
 
         This code is intended to typically be called from Postgres's
         archive_command feature.
         """
-        wal_file_name = os.path.basename(wal_path)
-        s3_url = '{0}/wal_{1}/{2}'.format(
-            self.s3_prefix, FILE_STRUCTURE_VERSION, wal_file_name)
 
-        logger.info(msg='begin archiving a file',
-                    detail=('Uploading "{wal_path}" to "{s3_url}".'
-                            .format(wal_path=wal_path, s3_url=s3_url)),
-                    structured={'action': 'push-wal',
-                                'key': s3_url,
-                                'seg': wal_file_name,
-                                'prefix': self.s3_prefix,
-                                'state': 'begin'})
+        # Upload the segment expressly indicated.  It's special
+        # relative to other uploads when parallel wal-push is enabled,
+        # in that it's not desirable to tweak its .ready/.done files
+        # in archive_status.
+        xlog_dir = path.dirname(wal_path)
+        segment = worker.WalSegment(wal_path, explicit=True)
+        uploader = s3_worker.WalUploader(self.s3_prefix, self.gpg_key_id)
+        group = worker.WalTransferGroup(uploader)
+        group.start(segment)
 
-        # Upload and record the rate at which it happened.
-        kib_per_second = s3_worker.do_lzop_s3_put(s3_url, wal_path,
-                                                  self.gpg_key_id)
+        # Upload any additional wal segments up to the specified
+        # concurrency by scanning the Postgres archive_status
+        # directory.
+        started = 1
+        seg_stream = worker.WalSegment.from_ready_archive_status(xlog_dir)
+        while started < concurrency:
+            try:
+                other_segment = seg_stream.next()
+            except StopIteration:
+                break
 
-        logger.info(
-            msg='completed archiving to a file ',
-            detail=('Archiving to "{s3_url}" complete at '
-                    '{kib_per_second}KiB/s. ')
-            .format(s3_url=s3_url, kib_per_second=kib_per_second),
-                    structured={'action': 'push-wal',
-                                'key': s3_url,
-                                'rate': kib_per_second,
-                                'seg': wal_file_name,
-                                'prefix': self.s3_prefix,
-                                'state': 'complete'})
+            if other_segment.path != wal_path:
+                group.start(other_segment)
+                started += 1
+
+        # Wait for uploads to finish.
+        group.join()
 
     def wal_s3_restore(self, wal_name, wal_destination):
         """
