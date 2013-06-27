@@ -1,6 +1,5 @@
 import pytest
 
-from gevent import event
 from wal_e import exception
 from wal_e import worker
 
