@@ -18,62 +18,51 @@ class TarUploadPool(object):
 
         # Current concurrency burden
         self.member_burden = 0
-        self.concurrency_burden = 0
 
         # Synchronization and tasks
-        self.group = gevent.pool.Group()
         self.wait_change = queue.Queue(maxsize=0)
         self.closed = False
 
-    def _charge(self, tpart):
-        """Account for consumed resources
+        # Used for both synchronization and measurement.
+        self.concurrency_burden = 0
 
-        In addition, start the upload of the partition.
-        """
+    def _start(self, tpart):
+        """Start upload and accout for resource consumption."""
         self.concurrency_burden += 1
         self.member_burden += len(tpart)
 
         g = gevent.Greenlet(self.uploader, tpart)
-        g.link(self._uncharge)
-        self.group.add(g)
+        g.link(self._finish)
         g.start()
 
-    def _uncharge(self, g):
-        """Un-account for consumed resources
+    def _finish(self, g):
+        """Called on completion of an upload greenlet.
 
-        Given a complete greenlet, subtact out the resources it
-        consumed.  As a final step, pass off its completion value to
-        another greenlet as so that errors can be handled properly.
+        Takes care to forward Exceptions or, if there is no error, the
+        finished TarPartition value across a channel.
         """
-        # Triggered via completion callback.
-        #
-        # Runs in its own greenlet, so take care to forward the
-        # exception, if any, to fail the entire upload in event of
-        # trouble.
         assert g.ready()
 
         if g.successful():
             finished_tpart = g.get()
-            self.member_burden -= len(finished_tpart)
-            self.concurrency_burden -= 1
-            self.wait_change.put(None)
+            self.wait_change.put(finished_tpart)
         else:
             self.wait_change.put(g.exception)
 
-    def _get(self):
+    def _wait(self):
         """Block until an upload finishes
 
         Raise an exception if that tar volume failed with an error.
         """
         val = self.wait_change.get()
 
-        # Take an opportunity to gc before unblocking potential new
-        # work to do: much memory can be freed by the completed
-        # upload.
-        gc.collect()
-
-        if val is not None:
+        if isinstance(val, Exception):
+            # Don't other uncharging, because execution is going to stop
             raise val
+        else:
+            # Uncharge for resources.
+            self.member_burden -= len(val)
+            self.concurrency_burden -= 1
 
     def put(self, tpart):
         """Upload a tar volume
@@ -97,13 +86,13 @@ class TarUploadPool(object):
                 # even with zero uploads in progress, then something
                 # has gone wrong: the user should not be given enough
                 # rope to hang themselves in this way.
-                if len(self.group.greenlets) == 0:
+                if self.concurrency_burden == 0:
                     raise UserCritical(
                         msg=('not enough resources in pool to '
                              'support an upload'),
                         hint='report a bug')
 
-                # _get blocks until an upload finishes and clears its
+                # _wait blocks until an upload finishes and clears its
                 # used resources, after which another attempt to
                 # evaluate scheduling resources for another upload
                 # might be worth evaluating.
@@ -112,19 +101,16 @@ class TarUploadPool(object):
                 # previous upload in which case it'll be raised here
                 # and cause the process to regard the upload as a
                 # failure.
-                self._get()
+                self._wait()
+                gc.collect()
             else:
                 # Enough resources available: commence upload
-                self._charge(tpart)
+                self._start(tpart)
                 return
 
     def join(self):
         """Wait for uploads to exit, raising errors as necessary."""
         self.closed = True
 
-        while True:
-            if len(self.group.greenlets) != 0:
-                self._get()
-            else:
-                self.group.join()
-                return
+        while self.concurrency_burden > 0:
+            self._wait()
