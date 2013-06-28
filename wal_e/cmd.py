@@ -192,9 +192,7 @@ def main(argv=None):
         action='store_true',
         default=False)
 
-    wal_fetch_parser = subparsers.add_parser(
-        'wal-fetch', help='fetch a WAL file from S3',
-        parents=[wal_fetchpush_parent])
+    # wal-push operator section
     subparsers.add_parser('wal-push', help='push a WAL file to S3',
                           parents=[wal_fetchpush_parent])
 
@@ -210,7 +208,10 @@ def main(argv=None):
         '--detail', default=False, action='store_true',
         help='show more detailed information about every backup')
 
-    # wal-push operator section
+    # wal-fetch operator section
+    wal_fetch_parser = subparsers.add_parser(
+        'wal-fetch', help='fetch a WAL file from S3',
+        parents=[wal_fetchpush_parent])
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
 
