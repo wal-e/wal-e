@@ -149,9 +149,9 @@ def main(argv=None):
     backup_fetchpush_parent.add_argument('PG_CLUSTER_DIRECTORY',
                                          help="Postgres cluster path, "
                                          "such as '/var/lib/database'")
-    backup_fetchpush_parent.add_argument('--pool-size', '-p',
-                                         type=int, default=4,
-                                         help='Download pooling size')
+    backup_fetchpush_parent.add_argument(
+        '--pool-size', '-p', type=int, default=4,
+        help='Set the maximum number of concurrent transfers')
 
     # operator to print the wal-e version
     subparsers.add_parser('version', help='print the wal-e version')
