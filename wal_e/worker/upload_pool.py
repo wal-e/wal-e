@@ -28,11 +28,15 @@ class TarUploadPool(object):
 
     def _start(self, tpart):
         """Start upload and accout for resource consumption."""
-        self.concurrency_burden += 1
-        self.member_burden += len(tpart)
-
         g = gevent.Greenlet(self.uploader, tpart)
         g.link(self._finish)
+
+        # Account for concurrency_burden before starting the greenlet
+        # to avoid racing against .join.
+        self.concurrency_burden += 1
+
+        self.member_burden += len(tpart)
+
         g.start()
 
     def _finish(self, g):
