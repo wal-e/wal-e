@@ -21,7 +21,7 @@ class FakeWalSegment(object):
         self._uploaded = False
 
     def mark_done(self):
-        if self._mark_done_explosive is not False:
+        if self._mark_done_explosive:
             raise self._mark_done_explosive
 
         self._marked = True
