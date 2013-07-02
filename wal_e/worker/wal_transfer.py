@@ -96,7 +96,7 @@ class WalTransferGroup(object):
         self.closed = True
 
         while self.expect > 0:
-            val = self.wait_change.get(block=True, timeout=5)
+            val = self.wait_change.get()
             self.expect -= 1
 
             if val is not None:
