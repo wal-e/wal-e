@@ -63,7 +63,12 @@ def test_mark_done(pg_xlog):
 
 
 def test_mark_done_problem(pg_xlog, monkeypatch):
-    """Check a failure to mark fails noisily."""
+    """Check that mark_done fails loudly if status file is missing.
+
+    While in normal operation, WAL-E does not expect races against
+    other processes manipulating .ready files.  But, just in case that
+    should occur, WAL-E is designed to crash, exercised here.
+    """
     seg = make_segment(1, explicit=False)
 
     with pytest.raises(exception.UserCritical):
