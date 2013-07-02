@@ -69,6 +69,8 @@ def indeterminate(seg):
             assert seg._marked is False
         else:
             assert seg._marked is True
+    else:
+        assert seg._marked is False
 
     return True
 
