@@ -57,9 +57,9 @@ def success(seg):
 
 
 def indeterminate(seg):
-    """Returns true as long as the segment is interanlly consistent.
+    """Returns true as long as the segment is internally consistent.
 
-    Checks invariants of mark_done, dependingg on whether the segment
+    Checks invariants of mark_done, depending on whether the segment
     has been uploaded.  This is useful in cases with tests with
     failures and concurrent execution, and calls out the state of the
     segment in any case to the reader.
@@ -188,7 +188,7 @@ def test_start_after_join():
 
 
 def test_mark_done_fault():
-    """Exercise exception handline from .mark_done()"""
+    """Exercise exception handling from .mark_done()"""
     group = worker.WalTransferGroup(FakeWalUploader())
 
     exp = Explosion('boom')
