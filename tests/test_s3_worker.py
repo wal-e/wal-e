@@ -1,21 +1,24 @@
 import os
 import pytest
 
-from wal_e.worker import s3_worker
+from boto.s3.connection import (
+    OrdinaryCallingFormat,
+    SubdomainCallingFormat,
+)
+from s3_integration_help import (
+    boto_supports_certs,
+    FreshBucket,
+    no_real_s3_credentials,
+)
 
-
-def no_real_s3_credentials():
-    for e_var in ('AWS_ACCESS_KEY_ID',
-                  'AWS_SECRET_ACCESS_KEY',
-                  'WALE_S3_INTEGRATION_TESTS'):
-        if os.getenv(e_var) is None:
-            return True
-
-    return False
+# Contrivance to quiet down pyflakes, since pytest does some
+# string-evaluation magic in test collection.
+no_real_s3_credentials = no_real_s3_credentials
+boto_supports_certs = boto_supports_certs
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_s3_endpoint_for_west_uri():
+def test_301_redirect():
     """Integration test for bucket naming issues
 
     AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
@@ -24,23 +27,20 @@ def test_s3_endpoint_for_west_uri():
     import boto.s3.connection
 
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    bucket_name = 'wal-e-test-' + aws_access_key.lower()
-    uri = 's3://{b}'.format(b=bucket_name)
+    bucket_name = 'wal-e-test-301-redirect' + aws_access_key.lower()
 
-    try:
-        conn = boto.s3.connection.S3Connection()
-        conn.create_bucket(bucket_name, location='us-west-1')
+    with pytest.raises(boto.exception.S3ResponseError) as e:
+         # Just initiating the bucket manipulation API calls is enough
+         # to provoke a 301 redirect.
+        with FreshBucket(bucket_name, calling_format=OrdinaryCallingFormat()):
+            pass
 
-        expected = 's3-us-west-1.amazonaws.com'
-        result = s3_worker.s3_endpoint_for_uri(uri)
-
-        assert result == expected
-    finally:
-        conn.delete_bucket(bucket_name)
+    assert e.value.status == 301
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_s3_endpoint_for_upcase_bucket():
+@pytest.mark.skipif("not boto_supports_certs()")
+def test_get_bucket_vs_certs():
     """Integration test for bucket naming issues
 
     AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
@@ -49,28 +49,10 @@ def test_s3_endpoint_for_upcase_bucket():
     import boto.s3.connection
 
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    bucket_name = 'wal-e-test-' + aws_access_key.upper()
-    uri = 's3://{b}'.format(b=bucket_name)
 
-    try:
-        conn = boto.s3.connection.S3Connection()
-        conn.create_bucket(bucket_name)
+    # Add dots to try to trip up TLS certificate validation.
+    bucket_name = 'wal-e.test.dots.' + aws_access_key.lower()
 
-        expected = 's3.amazonaws.com'
-        result = s3_worker.s3_endpoint_for_uri(uri)
-
-        assert result == expected
-    finally:
-        conn.delete_bucket(bucket_name)
-
-
-def test_ordinary_calling_format_upcase():
-    """Some bucket names have to switch to an older calling format.
-
-    This case tests upper case names -- which are not allowed -- only.
-    """
-
-    uri = 's3://InvalidBucket'
-    expected = 's3.amazonaws.com'
-    result = s3_worker.s3_endpoint_for_uri(uri)
-    assert result == expected
+    with pytest.raises(boto.https_connection.InvalidCertificateException):
+        with FreshBucket(bucket_name, calling_format=SubdomainCallingFormat()):
+            pass
