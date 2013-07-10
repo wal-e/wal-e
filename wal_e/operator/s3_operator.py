@@ -13,16 +13,15 @@ import wal_e.log_help as log_help
 
 from cStringIO import StringIO
 from os import path
-
+from urlparse import urlparse
+from wal_e import s3
 from wal_e import worker
 from wal_e.exception import UserException, UserCritical
 from wal_e.storage import s3_storage
 from wal_e.worker import PgBackupStatements
 from wal_e.worker import PgControlDataParser
 
-
 logger = log_help.WalELogger(__name__, level=logging.INFO)
-
 
 # Provides guidence in object names as to the version of the file
 # structure.
@@ -45,24 +44,18 @@ class S3Backup(object):
         # Canonicalize the s3 prefix by stripping any trailing slash
         self.s3_prefix = s3_prefix.rstrip('/')
 
+        # Create a CallingInfo that will figure out region and calling
+        # format issues and cache some of the determinations, if
+        # necessary.
+        url_tup = urlparse(self.s3_prefix)
+        bucket_name = url_tup.netloc
+        self.cinfo = s3.calling_format.from_bucket_name(bucket_name)
+
         self.exceptions = []
 
     def new_connection(self):
-        from boto.s3.connection import OrdinaryCallingFormat
-        from boto.s3.connection import S3Connection
-
-        # Work around boto/443 (https://github.com/boto/boto/issues/443)
-        if not hasattr(self, 's3_host'):
-            connection_args = (
-                self.aws_access_key_id,
-                self.aws_secret_access_key,
-            )
-            self.s3_host = s3_worker.s3_endpoint_for_uri(self.s3_prefix,
-                                                         connection_args)
-        return S3Connection(self.aws_access_key_id,
-                            self.aws_secret_access_key,
-                            host=self.s3_host,
-                            calling_format=OrdinaryCallingFormat())
+        return self.cinfo.connect(self.aws_access_key_id,
+                                  self.aws_secret_access_key)
 
     def backup_list(self, query, detail):
         """
@@ -148,13 +141,15 @@ class S3Backup(object):
             msg='start upload postgres version metadata',
             detail=('Uploading to {extended_version_url}.'
                     .format(extended_version_url=extended_version_url)))
-        s3_worker.uri_put_file(extended_version_url, StringIO(version),
+        s3_worker.uri_put_file(self.aws_access_key_id,
+                               self.aws_secret_access_key,
+                               extended_version_url, StringIO(version),
                                content_encoding='text/plain')
         logger.info(msg='postgres version metadata upload complete')
 
-        uploader = s3_worker.PartitionUploader(backup_s3_prefix,
-                                               per_process_limit,
-                                               self.gpg_key_id)
+        uploader = s3_worker.PartitionUploader(
+            self.aws_access_key_id, self.aws_secret_access_key,
+            backup_s3_prefix, per_process_limit, self.gpg_key_id)
 
         pool = worker.TarUploadPool(uploader, pool_size)
 
@@ -333,6 +328,7 @@ class S3Backup(object):
             # bump).
             sentinel_content.seek(0)
             s3_worker.uri_put_file(
+                self.aws_access_key_id, self.aws_secret_access_key,
                 uploaded_to + '_backup_stop_sentinel.json',
                 sentinel_content, content_encoding='application/json')
         else:
@@ -355,7 +351,9 @@ class S3Backup(object):
         # in archive_status.
         xlog_dir = path.dirname(wal_path)
         segment = worker.WalSegment(wal_path, explicit=True)
-        uploader = s3_worker.WalUploader(self.s3_prefix, self.gpg_key_id)
+        uploader = s3_worker.WalUploader(self.aws_access_key_id,
+                                         self.aws_secret_access_key,
+                                         self.s3_prefix, self.gpg_key_id)
         group = worker.WalTransferGroup(uploader)
         group.start(segment)
 
@@ -401,6 +399,7 @@ class S3Backup(object):
                         'state': 'begin'})
 
         ret = s3_worker.do_lzop_s3_get(
+            self.aws_access_key_id, self.aws_secret_access_key,
             s3_url, wal_destination, self.gpg_key_id is not None)
 
         logger.info(

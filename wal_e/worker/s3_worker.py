@@ -20,8 +20,6 @@ import time
 import traceback
 
 from urlparse import urlparse
-from boto.s3.connection import (S3Connection, SubdomainCallingFormat,
-                                OrdinaryCallingFormat)
 
 import wal_e.storage.s3_storage as s3_storage
 import wal_e.log_help as log_help
@@ -29,6 +27,7 @@ import wal_e.log_help as log_help
 from wal_e.exception import UserException
 from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
 from wal_e.piper import PIPE
+from wal_e.s3 import calling_format
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
 
@@ -142,99 +141,9 @@ def retry_with_count(side_effect_func):
     return retry_with_count_internal
 
 
-_S3_REGIONS = {
-    # A map like this is actually defined in boto.s3 in newer versions of boto
-    # but we reproduce it here for the folks (notably, Ubuntu 12.04) on older
-    # versions.
-    'us-west-1': 's3-us-west-1.amazonaws.com',
-    'us-west-2': 's3-us-west-2.amazonaws.com',
-    'ap-northeast-1': 's3-ap-northeast-1.amazonaws.com',
-    'ap-southeast-1': 's3-ap-southeast-1.amazonaws.com',
-    'ap-southeast-2': 's3-ap-southeast-2.amazonaws.com',
-    'eu-west-1': 's3-eu-west-1.amazonaws.com',
-}
-
-
-try:
-    # Override our hard-coded region map with boto's mappings if available.
-    from boto.s3 import regions
-    _S3_REGIONS.update(dict((r.name, r.endpoint) for r in regions()))
-except ImportError:
-    pass
-
-
-def s3_endpoint_for_uri(s3_uri, c_args=None, c_kwargs=None, connection=None):
-    # 'connection' argument is used for unit test dependency injection
-    # Work around boto/443 (https://github.com/boto/boto/issues/443)
-    bucket_name = urlparse(s3_uri).netloc
-    default = 's3.amazonaws.com'
-
-    if bucket_name not in s3_endpoint_for_uri.cache:
-        c_args = c_args or ()
-        c_kwargs = c_kwargs or {}
-
-        if bucket_name.lower() != bucket_name:
-            # Handle case of legacy S3 API calling formats
-            #
-            # The most common reason that people do this is because
-            # AWS unceremoniously allows creation of upper-case bucket
-            # names in S3 classic and in some older regions.  There
-            # are other restrictions (because the new format has
-            # absorbed restrictions seen in the DNS standards), but in
-            # practice people only seem to report this issue, so for
-            # now just handle that case.
-            s3_endpoint_for_uri.cache[bucket_name] = default
-
-            logger.warning(msg='upper case buckets will be deprecated',
-                           detail=('The offending bucket name is {0}.'
-                                   .format(bucket_name)),
-                           hint=('Upper case bucket names do not work in '
-                                 'newer regions and cannot use the newer '
-                                 'preferred S3 calling conventions.'))
-        else:
-            # Attempting to use .get_bucket() with OrdinaryCallingFormat raises
-            # a S3ResponseError (status 301).  See boto/443 referenced above.
-            c_kwargs['calling_format'] = SubdomainCallingFormat()
-            conn = connection or S3Connection(*c_args, **c_kwargs)
-            bucket = conn.get_bucket(bucket_name)
-
-            try:
-                location = bucket.get_location()
-            except boto.exception.S3ResponseError, e:
-                if e.status == 403:
-                    # A 403 can be caused by IAM keys that do not
-                    # permit GetBucketLocation.  To not change
-                    # behavior for environments that do not have
-                    # GetBucketLocation allowed, fall back to the
-                    # default endpoint, preserving behavior for those
-                    # using S3-Classic.
-                    s3_endpoint_for_uri.cache[bucket_name] = default
-                else:
-                    raise
-            else:
-                s3_endpoint_for_uri.cache[bucket_name] = \
-                    _S3_REGIONS.get(location, default)
-
-    return s3_endpoint_for_uri.cache[bucket_name]
-s3_endpoint_for_uri.cache = {}
-
-
-def s3_uri_wrap(s3_uri):
-    """
-    Thin wrapper around boto.storage_uri to work around boto warts.
-
-    Disable validation as a kludge to get around use of upper-case bucket
-    names.
-    """
-    suri = boto.storage_uri(s3_uri, validate=False)
-    suri.connection_args = {
-        'host': s3_endpoint_for_uri(s3_uri),
-        'calling_format': OrdinaryCallingFormat(),
-    }
-    return suri
-
-
-def uri_put_file(s3_uri, fp, content_encoding=None):
+def uri_put_file(aws_access_key_id,
+                 aws_secret_access_key,
+                 s3_uri, fp, content_encoding=None):
     # Per Boto 2.2.2, which will only read from the current file
     # position to the end.  This manifests as successfully uploaded
     # *empty* keys in S3 instead of the intended data because of how
@@ -245,14 +154,24 @@ def uri_put_file(s3_uri, fp, content_encoding=None):
     # in mind, assert it as a precondition for using this procedure.
     assert fp.tell() == 0
 
-    suri = s3_uri_wrap(s3_uri)
-    k = suri.new_key()
+    k = uri_to_key(aws_access_key_id, aws_secret_access_key, s3_uri)
 
     if content_encoding is not None:
         k.content_type = content_encoding
 
     k.set_contents_from_file(fp)
     return k
+
+
+def uri_to_key(aws_access_key_id, aws_secret_access_key, s3_uri):
+    assert s3_uri.startswith('s3://')
+
+    url_tup = urlparse(s3_uri)
+    bucket_name = url_tup.netloc
+    cinfo = calling_format.from_bucket_name(bucket_name)
+    conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+    bucket = boto.s3.bucket.Bucket(connection=conn, name=bucket_name)
+    return boto.s3.key.Key(bucket=bucket, name=url_tup.path)
 
 
 def format_kib_per_second(start, finish, amount_in_bytes):
@@ -263,7 +182,10 @@ def format_kib_per_second(start, finish, amount_in_bytes):
 
 
 class WalUploader(object):
-    def __init__(self, prefix, gpg_key_id):
+    def __init__(self, aws_access_key_id, aws_secret_access_key,
+                 prefix, gpg_key_id):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
         self.prefix = prefix
         self.gpg_key_id = gpg_key_id
 
@@ -281,7 +203,9 @@ class WalUploader(object):
                                 'state': 'begin'})
 
         # Upload and record the rate at which it happened.
-        kib_per_second = _do_lzop_s3_put(s3_url, segment.path,
+        kib_per_second = _do_lzop_s3_put(self.aws_access_key_id,
+                                         self.aws_secret_access_key,
+                                         s3_url, segment.path,
                                          self.gpg_key_id)
 
         logger.info(
@@ -300,7 +224,10 @@ class WalUploader(object):
 
 
 class PartitionUploader(object):
-    def __init__(self, backup_s3_prefix, rate_limit, gpg_key):
+    def __init__(self, aws_access_key_id, aws_secret_access_key,
+                 backup_s3_prefix, rate_limit, gpg_key):
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
         self.backup_s3_prefix = backup_s3_prefix
         self.rate_limit = rate_limit
         self.gpg_key = gpg_key
@@ -369,7 +296,8 @@ class PartitionUploader(object):
             @retry(retry_with_count(log_volume_failures_on_error))
             def put_file_helper():
                 tf.seek(0)
-                return uri_put_file(s3_url, tf)
+                return uri_put_file(self.aws_access_key_id,
+                                    self.aws_secret_access_key, s3_url, tf)
 
             # Actually do work, retrying if necessary, and timing how long
             # it takes.
@@ -388,7 +316,8 @@ class PartitionUploader(object):
         return tpart
 
 
-def _do_lzop_s3_put(s3_url, local_path, gpg_key):
+def _do_lzop_s3_put(aws_access_key_id, aws_secret_access_key,
+                    s3_url, local_path, gpg_key):
     """
     Compress and upload a given local path.
 
@@ -411,7 +340,7 @@ def _do_lzop_s3_put(s3_url, local_path, gpg_key):
 
         clock_start = time.clock()
         tf.seek(0)
-        k = uri_put_file(s3_url, tf)
+        k = uri_put_file(aws_access_key_id, aws_secret_access_key, s3_url, tf)
         clock_finish = time.clock()
 
         kib_per_second = format_kib_per_second(clock_start, clock_finish,
@@ -428,7 +357,8 @@ def write_and_close_thread(key, stream):
         stream.close()
 
 
-def do_lzop_s3_get(s3_url, path, decrypt):
+def do_lzop_s3_get(aws_access_key_id, aws_secret_access_key,
+                   s3_url, path, decrypt):
     """
     Get and decompress a S3 URL
 
@@ -478,9 +408,7 @@ def do_lzop_s3_get(s3_url, path, decrypt):
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
-            suri = s3_uri_wrap(s3_url)
-            bucket = suri.get_bucket()
-            key = bucket.get_key(suri.object_name)
+            key = uri_to_key(aws_access_key_id, aws_secret_access_key, s3_url)
 
             if key is None:
                 logger.info(
