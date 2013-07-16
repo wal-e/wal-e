@@ -27,7 +27,13 @@ except ImportError:
 
 
 def _is_ipv4_like(s):
-    """Find if a string looks like an IPv4 address."""
+    """Find if a string superficially looks like an IPv4 address.
+
+    AWS documentation plays it fast and loose with this; in other
+    regions, it seems like even non-valid IPv4 addresses (in
+    particular, ones that possess decimal numbers out of range for
+    IPv4) are rejected.
+    """
     parts = s.split('.')
 
     if len(parts) != 4:
@@ -35,11 +41,8 @@ def _is_ipv4_like(s):
 
     for part in parts:
         try:
-            number = int(part)
+            int(part)
         except ValueError:
-            return False
-
-        if number < 0 or number > 255:
             return False
 
     return True

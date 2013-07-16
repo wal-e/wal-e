@@ -142,10 +142,12 @@ def test_ipv4_detect():
     """
     assert _is_ipv4_like('1.1.1.1') is True
 
-    assert _is_ipv4_like('1.1.1.256') is False
+    # Out-of IPv4 numerical range is irrelevant to the rules.
+    assert _is_ipv4_like('1.1.1.256') is True
+    assert _is_ipv4_like('-1.1.1.1') is True
+
     assert _is_ipv4_like('1.1.1.hello') is False
     assert _is_ipv4_like('hello') is False
-    assert _is_ipv4_like('-1.1.1.1') is False
     assert _is_ipv4_like('-1.1.1') is False
     assert _is_ipv4_like('-1.1.1.') is False
 
