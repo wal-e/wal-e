@@ -78,7 +78,7 @@ def _connect_secureish(*args, **kwargs):
     S3Connection, and enable it via configuration option just seems to
     cause an error.
     """
-    if boto.__version__ >= '2.6.0':
+    if tuple(int(x) for x in boto.__version__.split('.')) >= (2, 6, 0):
         kwargs['validate_certs'] = True
 
     kwargs['is_secure'] = True
