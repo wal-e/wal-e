@@ -127,7 +127,7 @@ class CallingInfo(object):
                 **kwargs)
 
         # Check if subdomain format compatible; no need to go through
-        # nay region detection mumbo-jumbo of any kind.
+        # any region detection mumbo-jumbo of any kind.
         if self.calling_format is connection.SubdomainCallingFormat:
             return _conn_help()
 
