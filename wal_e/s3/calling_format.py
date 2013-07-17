@@ -194,20 +194,15 @@ def from_bucket_name(bucket_name):
             # The bucket_name might have been DNS compatible, but once
             # dots are involved TLS certificate validations will
             # certainly fail even if that's the case.
-            #
-            # Leave it to the caller to perform the API call, as to
-            # avoid teaching this part of the code about credentials.
             return CallingInfo(
                 bucket_name=bucket_name,
                 calling_format=connection.OrdinaryCallingFormat,
                 region=None,
                 ordinary_endpoint=None)
         else:
-            # SubdomainCallingFormat can be used, with TLS,
+            # If the bucket follows naming rules and has no dots in
+            # the name, SubdomainCallingFormat can be used, with TLS,
             # world-wide, and WAL-E can be region-oblivious.
-            #
-            # This is because there are no dots in the bucket name,
-            # and no other bucket naming abnormalities either.
             return CallingInfo(
                 bucket_name=bucket_name,
                 calling_format=connection.SubdomainCallingFormat,
