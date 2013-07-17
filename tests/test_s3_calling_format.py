@@ -92,13 +92,13 @@ def test_real_get_location():
     that would otherwise break TLS, test sniffing the right endpoint
     so it can be used to address the bucket.
     """
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    bucket_name = 'wal-e-test-us-west-1.get.location.' + aws_access_key.lower()
-
-    cinfo = calling_format.from_bucket_name(bucket_name)
-
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    bucket_name = ('wal-e-test-us-west-1.get.location.' +
+                   aws_access_key_id.lower())
+
+    cinfo = calling_format.from_bucket_name(bucket_name)
 
     with FreshBucket(bucket_name,
                      host='s3-us-west-1.amazonaws.com',
