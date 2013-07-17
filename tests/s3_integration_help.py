@@ -13,7 +13,7 @@ def no_real_s3_credentials():
 
 
 def boto_supports_certs():
-    return boto.__version__ >= '2.6.0'
+    return tuple(int(x) for x in boto.__version__.split('.')) >= (2, 6, 0)
 
 
 def apathetic_bucket_delete(bucket_name, *args, **kwargs):
