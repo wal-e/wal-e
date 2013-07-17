@@ -169,10 +169,9 @@ class CallingInfo(object):
             self.region = loc
             self.ordinary_endpoint = _S3_REGIONS[loc]
 
-        # Recurse, now that the region information is filled; this
-        # should return a bona-fide usable connection.
+        # Region/endpoint information completed: connect.
         assert self.ordinary_endpoint is not None
-        return self.connect(aws_access_key_id, aws_secret_access_key)
+        return _conn_help(host=self.ordinary_endpoint)
 
 
 def from_bucket_name(bucket_name):
