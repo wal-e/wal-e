@@ -88,9 +88,9 @@ def test_cert_validation_sensitivity():
 def test_real_get_location():
     """Exercise a case where a get location call is needed.
 
-    In cases where a bucket has offensive characters, like dots, that
-    would otherwise break TLS, test the sniffing the right endpoint
-    that can be used to address the bucket.
+    In cases where a bucket has offensive characters -- like dots --
+    that would otherwise break TLS, test sniffing the right endpoint
+    so it can be used to address the bucket.
     """
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
     bucket_name = 'wal-e-test-us-west-1.get.location.' + aws_access_key.lower()
