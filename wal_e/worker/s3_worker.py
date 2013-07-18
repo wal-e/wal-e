@@ -316,21 +316,28 @@ def do_lzop_s3_get(aws_access_key_id, aws_secret_access_key,
         with open(path, 'wb') as decomp_out:
             key = uri_to_key(aws_access_key_id, aws_secret_access_key, s3_url)
 
-            if key is None:
-                logger.info(
-                    msg='could not locate object while performing wal restore',
-                    detail=('The absolute URI that could not be located '
-                            'is {url}.'.format(url=s3_url)),
-                    hint=('This can be normal when Postgres is trying to '
-                          'detect what timelines are available during '
-                          'restoration.'))
-                return False
-
             pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
             g = gevent.spawn(write_and_close_thread, key, pipeline.stdin)
 
-            # Raise any exceptions from _write_and_close
-            g.get()
+            try:
+                # Raise any exceptions from _write_and_close
+                g.get()
+            except boto.exception.S3ResponseError, e:
+                if e.status == 404:
+                    # Do not retry if the key not present, this can happen
+                    # under normal situations.
+                    logger.info(
+                        msg=('could not locate object while performing wal '
+                             'restore'),
+                        detail=('The absolute URI that could not be located '
+                                'is {url}.'.format(url=s3_url)),
+                        hint=('This can be normal when Postgres is trying to '
+                              'detect what timelines are available during '
+                              'restoration.'))
+
+                    return False
+                else:
+                    raise
 
             pipeline.finish()
 
