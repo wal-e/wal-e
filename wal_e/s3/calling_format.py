@@ -1,8 +1,11 @@
 import boto
+import logging
 
 from boto import s3
 from boto.s3 import connection
+from wal_e import log_help
 
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 _S3_REGIONS = {
     # A map like this is actually defined in boto.s3 in newer versions of boto
@@ -162,6 +165,15 @@ class CallingInfo(object):
                 # environments that do not have GetBucketLocation
                 # allowed, fall back to the default endpoint,
                 # preserving behavior for those using us-standard.
+                logger.warning(msg='cannot detect location of bucket',
+                               detail=('The specified bucket name was: ' +
+                                       repr(self.bucket_name)),
+                               hint=('Permit the GetLocation permission for '
+                                     'the provided AWS credentials.  '
+                                     'Or, use a bucket name that follows the '
+                                     'preferred bucket naming guidelines '
+                                     'and has no dots in it.'))
+
                 self.region = 'us-standard'
                 self.ordinary_endpoint = _S3_REGIONS[self.region]
             else:
