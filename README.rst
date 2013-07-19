@@ -58,7 +58,7 @@ Dependencies
 ------------
 
 * lzop
-* psql
+* psql (>= 8.4)
 * pv
 
 This software is most frequently used with Python 2.6+.  It will
