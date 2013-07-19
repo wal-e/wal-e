@@ -41,8 +41,9 @@ def psql_csv_run(sql_command, error_handler=None):
     csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
                  .format(query=sql_command))
 
-    psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '-c', csv_query],
-                         stdout=PIPE)
+    psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
+                                '-c', csv_query],
+                               stdout=PIPE)
     stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
