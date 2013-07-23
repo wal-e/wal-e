@@ -1,11 +1,10 @@
 import boto
-import logging
 
 from boto import s3
 from boto.s3 import connection
 from wal_e import log_help
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+logger = log_help.WalELogger(__name__)
 
 _S3_REGIONS = {
     # A map like this is actually defined in boto.s3 in newer versions of boto

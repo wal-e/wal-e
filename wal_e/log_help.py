@@ -9,6 +9,10 @@ import logging.handlers
 import os
 
 
+# Minimum logging level to emit logs for, inclusive.
+MINIMUM_LOG_LEVEL = logging.INFO
+
+
 class IndentFormatter(logging.Formatter):
 
     def format(self, record, *args, **kwargs):
@@ -81,15 +85,7 @@ def configure(*args, **kwargs):
 
 class WalELogger(object):
     def __init__(self, *args, **kwargs):
-        # Enable a shortcut to create the logger and set its level all
-        # at once.  To do that, pop the level out of the dictionary,
-        # which will otherwise cause getLogger to explode.
-        level = kwargs.pop('level', None)
-
         self._logger = logging.getLogger(*args, **kwargs)
-
-        if level is not None:
-            self._logger.setLevel(level)
 
     @staticmethod
     def _fmt_structured(d):
@@ -129,6 +125,9 @@ class WalELogger(object):
         return '\n'.join(msg_parts)
 
     def log(self, level, msg, *args, **kwargs):
+        if level < MINIMUM_LOG_LEVEL:
+            return
+
         detail = kwargs.pop('detail', None)
         hint = kwargs.pop('hint', None)
         structured = kwargs.pop('structured', None)

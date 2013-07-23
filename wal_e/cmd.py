@@ -86,7 +86,7 @@ from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 log_help.configure(
     format='%(name)-12s %(levelname)-8s %(message)s')
 
-logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
+logger = log_help.WalELogger('wal_e.main')
 
 
 def external_program_check(
@@ -188,6 +188,10 @@ def main(argv=None):
         help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
         'Can also be defined via environment variable '
         'WALE_GPG_KEY_ID')
+
+    parser.add_argument(
+        '--terse', action='store_true',
+        help='Only log messages as or more severe than a warning.')
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -311,6 +315,10 @@ def main(argv=None):
     # Okay, parse some arguments, finally
     args = parser.parse_args()
     subcommand = args.subcommand
+
+    # Adjust logging level if terse output is set.
+    if args.terse:
+        log_help.MINIMUM_LOG_LEVEL = logging.WARNING
 
     # Handle version printing specially, because it doesn't need
     # credentials.
