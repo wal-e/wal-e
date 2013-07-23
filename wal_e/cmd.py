@@ -141,6 +141,9 @@ def main(argv=None):
         'Can also be defined via environment variable '
         'WALE_GPG_KEY_ID')
 
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help='Suppress INFO and DEBUG-level messages.')
+                        
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
@@ -264,6 +267,9 @@ def main(argv=None):
     args = parser.parse_args()
     subcommand = args.subcommand
 
+    # Set the quiet flag in the logger
+    log_help.QUIET = args.quiet
+    
     # Handle version printing specially, because it doesn't need
     # credentials.
     if subcommand == 'version':
@@ -311,7 +317,7 @@ def main(argv=None):
 
     if gpg_key_id is not None:
         external_program_check([GPG_BIN])
-
+    
     try:
         if subcommand == 'backup-fetch':
             external_program_check([LZOP_BIN])
