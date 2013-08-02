@@ -126,20 +126,19 @@ def main(argv=None):
 
     parser.add_argument('-k', '--aws-access-key-id',
                         help='public AWS access key. Can also be defined in '
-                        'an environment variable. If both are defined, '
-                        'the one defined in the programs arguments takes '
-                        'precedence.')
+                             'an environment variable. If both are defined, '
+                             'the one defined in the programs arguments takes '
+                             'precedence.')
 
     parser.add_argument('--s3-prefix',
                         help='S3 prefix to run all commands against.  '
-                        'Can also be defined via environment variable '
-                        'WALE_S3_PREFIX')
+                             'Can also be defined via environment variable '
+                             'WALE_S3_PREFIX')
 
-    parser.add_argument(
-        '--gpg-key-id',
-        help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
-        'Can also be defined via environment variable '
-        'WALE_GPG_KEY_ID')
+    parser.add_argument('--gpg-key-id',
+                        help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
+                             'Can also be defined via environment variable '
+                             'WALE_GPG_KEY_ID')
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -148,10 +147,12 @@ def main(argv=None):
     backup_fetchpush_parent = argparse.ArgumentParser(add_help=False)
     backup_fetchpush_parent.add_argument('PG_CLUSTER_DIRECTORY',
                                          help="Postgres cluster path, "
-                                         "such as '/var/lib/database'")
-    backup_fetchpush_parent.add_argument(
-        '--pool-size', '-p', type=int, default=4,
-        help='Set the maximum number of concurrent transfers')
+                                              "such as '/var/lib/database'")
+
+    backup_fetchpush_parent.add_argument('--pool-size', '-p', 
+                                         help='Set the maximum number of concurrent transfers',
+                                         type=int, 
+                                         default=4)
 
     # operator to print the wal-e version
     subparsers.add_parser('version', help='print the wal-e version')
@@ -168,68 +169,89 @@ def main(argv=None):
     wal_fetchpush_parent.add_argument('WAL_SEGMENT',
                                       help='Path to a WAL segment to upload')
 
-    backup_fetch_parser = subparsers.add_parser(
-        'backup-fetch', help='fetch a hot backup from S3',
-        parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
-    backup_list_parser = subparsers.add_parser(
-        'backup-list', parents=[backup_list_nodetail_parent],
-        help='list backups in S3')
-    backup_push_parser = subparsers.add_parser(
-        'backup-push', help='pushing a fresh hot backup to S3',
-        parents=[backup_fetchpush_parent])
-    backup_push_parser.add_argument(
-        '--cluster-read-rate-limit',
-        help='Rate limit reading the PostgreSQL cluster directory to a '
-        'tunable number of bytes per second', dest='rate_limit',
-        metavar='BYTES_PER_SECOND',
-        type=int, default=None)
-    backup_push_parser.add_argument(
-        '--while-offline',
-        help=('Backup a Postgres cluster that is in a stopped state '
-              '(for example, a replica that you stop and restart '
-              'when taking a backup)'),
-        dest='while_offline',
-        action='store_true',
-        default=False)
+    backup_fetch_parser = subparsers.add_parser('backup-fetch', 
+                                                 help='fetch a hot backup from S3',
+                                                 parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
+
+    backup_list_parser = subparsers.add_parser('backup-list', 
+                                                help='list backups in S3',
+                                                parents=[backup_list_nodetail_parent])
+
+    backup_push_parser = subparsers.add_parser('backup-push', 
+                                                help='pushing a fresh hot backup to S3',
+                                                parents=[backup_fetchpush_parent])
+
+    backup_push_parser.add_argument('--cluster-read-rate-limit',
+                                    help='Rate limit reading the PostgreSQL cluster directory to a '
+                                         'tunable number of bytes per second', 
+                                    dest='rate_limit',
+                                    metavar='BYTES_PER_SECOND',
+                                    type=int, 
+                                    default=None)
+
+    backup_push_parser.add_argument('--while-offline',
+                                    help=('Backup a Postgres cluster that is in a stopped state '
+                                          '(for example, a replica that you stop and restart '
+                                          'when taking a backup)'),
+                                    dest='while_offline',
+                                    action='store_true',
+                                    default=False)
+
+    backup_push_parser.add_argument('--all-tablespaces',
+                                    help=('Include all tablespaces - '
+                                          'not just the ones directly mounted under ${PGDATA} '),
+                                    dest='all_tablespaces',
+                                    action='store_true',
+                                    default=False)
 
     # wal-push operator section
-    wal_push_parser = subparsers.add_parser(
-        'wal-push', help='push a WAL file to S3',
-        parents=[wal_fetchpush_parent])
+    wal_push_parser = subparsers.add_parser('wal-push', 
+                                            help='push a WAL file to S3',
+                                            parents=[wal_fetchpush_parent])
 
-    wal_push_parser.add_argument(
-        '--pool-size', '-p', type=int, default=8,
-        help='Set the maximum number of concurrent transfers')
+    wal_push_parser.add_argument('--pool-size', '-p', 
+                                 help='Set the maximum number of concurrent transfers',
+                                 type=int, 
+                                 default=8)
 
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
 
     # backup-list operator section
-    backup_list_parser.add_argument(
-        'QUERY', nargs='?', default=None,
-        help='a string qualifying backups to list')
-    backup_list_parser.add_argument(
-        '--detail', default=False, action='store_true',
-        help='show more detailed information about every backup')
+    backup_list_parser.add_argument('QUERY', 
+                                    help='a string qualifying backups to list',
+                                    nargs='?', 
+                                    default=None)
+
+    backup_list_parser.add_argument('--detail',  
+                                    help='show more detailed information about every backup',
+                                    action='store_true',
+                                    default=False)
 
     # wal-fetch operator section
-    wal_fetch_parser = subparsers.add_parser(
-        'wal-fetch', help='fetch a WAL file from S3',
-        parents=[wal_fetchpush_parent])
+    wal_fetch_parser = subparsers.add_parser('wal-fetch', 
+                                             help='fetch a WAL file from S3',
+                                             parents=[wal_fetchpush_parent])
+
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
 
     # delete subparser section
-    delete_parser = subparsers.add_parser(
-        'delete', help=('operators to destroy specified data in S3'))
-    delete_parser.add_argument('--dry-run', '-n', action='store_true',
+    delete_parser = subparsers.add_parser('delete', 
+                                          help='operators to destroy specified data in S3')
+
+    delete_parser.add_argument('--dry-run', '-n', 
                                help=('Only print what would be deleted, '
-                                     'do not actually delete anything'))
-    delete_parser.add_argument('--confirm', action='store_true',
+                                     'do not actually delete anything'),
+                               action='store_true')
+
+    delete_parser.add_argument('--confirm', 
                                help=('Actually delete data.  '
                                      'By default, a dry run is performed.  '
-                                     'Overridden by --dry-run.'))
+                                     'Overridden by --dry-run.'),
+                               action='store_true')
+
     delete_subparsers = delete_parser.add_subparsers(
         title='delete subcommands',
         description=('All operators that may delete data are contained '
@@ -237,28 +259,26 @@ def main(argv=None):
         dest='delete_subcommand')
 
     # delete 'before' operator
-    delete_before_parser = delete_subparsers.add_parser(
-        'before', help=('Delete all backups and WAL segments strictly before '
+    delete_before_parser = delete_subparsers.add_parser('before', 
+                  help=('Delete all backups and WAL segments strictly before '
                         'the given base backup name or WAL segment number.  '
                         'The passed backup is *not* deleted.'))
-    delete_before_parser.add_argument(
-        'BEFORE_SEGMENT_EXCLUSIVE',
-        help='A WAL segment number or base backup name')
+
+    delete_before_parser.add_argument('BEFORE_SEGMENT_EXCLUSIVE',
+                  help='A WAL segment number or base backup name')
 
     # delete old versions operator
-    delete_subparsers.add_parser(
-        'old-versions',
-        help=('Delete all old versions of WAL-E backup files.  One probably '
-              'wants to ensure that they take a new backup with the new '
-              'format first.  '
-              'This is useful after a WAL-E major release upgrade.'))
+    delete_subparsers.add_parser('old-versions',
+                  help=('Delete all old versions of WAL-E backup files.  One probably '
+                        'wants to ensure that they take a new backup with the new '
+                        'format first.  '
+                        'This is useful after a WAL-E major release upgrade.'))
 
     # delete *everything* operator
-    delete_subparsers.add_parser(
-        'everything',
-        help=('Delete all data in the current WAL-E context.  '
-              'Typically this is only appropriate when decommissioning an '
-              'entire WAL-E archive.'))
+    delete_subparsers.add_parser('everything',
+                 help=('Delete all data in the current WAL-E context.  '
+                       'Typically this is only appropriate when decommissioning an '
+                       'entire WAL-E archive.'))
 
     # Okay, parse some arguments, finally
     args = parser.parse_args()
@@ -343,7 +363,8 @@ def main(argv=None):
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
-                pool_size=args.pool_size)
+                pool_size=args.pool_size,
+                all_tablespaces=args.all_tablespaces)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT,

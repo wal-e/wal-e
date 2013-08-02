@@ -89,7 +89,7 @@ class S3Backup(object):
         sys.stdout.flush()
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
-                                  version, pool_size, rate_limit=None):
+                                  version, pool_size, all_tablespaces=False, rate_limit=None):
         """
         Upload to s3_url_prefix from pg_cluster_dir
 
@@ -117,7 +117,7 @@ class S3Backup(object):
         (which affect upload throughput) would help.
 
         """
-        parts = tar_partition.partition(pg_cluster_dir)
+        parts = tar_partition.partition(pg_cluster_dir, all_tablespaces)
 
         backup_s3_prefix = ('{0}/basebackups_{1}/'
                             'base_{file_name}_{file_offset}'
