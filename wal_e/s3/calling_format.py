@@ -179,6 +179,11 @@ class CallingInfo(object):
             else:
                 raise
         else:
+            # An empty, successful get location returns an empty
+            # string to mean S3-Classic/US-Standard.
+            if loc == '':
+                loc = 'us-standard'
+
             self.region = loc
             self.ordinary_endpoint = _S3_REGIONS[loc]
 
