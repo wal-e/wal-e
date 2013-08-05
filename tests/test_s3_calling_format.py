@@ -112,6 +112,28 @@ def test_real_get_location():
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
+def test_classic_get_location():
+    """Exercise get location on a s3-classic bucket."""
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    bucket_name = ('wal-e-test.classic.get.location.' +
+                   aws_access_key_id.lower())
+
+    cinfo = calling_format.from_bucket_name(bucket_name)
+
+    with FreshBucket(bucket_name,
+                     host='s3.amazonaws.com',
+                     calling_format=connection.OrdinaryCallingFormat()) as fb:
+        fb.create()
+        conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+
+        assert cinfo.region == 'us-standard'
+        assert cinfo.calling_format is connection.OrdinaryCallingFormat
+        assert conn.host == 's3.amazonaws.com'
+
+
+@pytest.mark.skipif("no_real_s3_credentials()")
 def test_subdomain_compatible():
     """Exercise a case where connecting is region-oblivious."""
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
