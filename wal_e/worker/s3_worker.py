@@ -29,7 +29,8 @@ from wal_e.retries import retry, retry_with_count
 from wal_e.s3 import calling_format
 from wal_e.worker import s3_deleter
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+
+logger = log_help.WalELogger(__name__)
 
 
 generic_weird_key_hint_message = ('This means an unexpected key was found in '

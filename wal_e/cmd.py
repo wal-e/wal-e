@@ -38,7 +38,6 @@ from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 log_help.configure(
     format='%(name)-12s %(levelname)-8s %(message)s')
 
-logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
 
 
 def external_program_check(
@@ -199,10 +198,25 @@ def main(argv=None):
 
     backup_push_parser.add_argument('--all-tablespaces',
                                     help=('Include all tablespaces - '
-                                          'not just the ones directly mounted under ${PGDATA} '),
+                                          'not just the ones directly mounted under ${PGDATA}.'
+                                          'Note that when you run backup-fetch later you should'
+                                          ' use "/" for ${PGDATA} so the tablespaces end up back'
+                                          ' in their expected locations.'),
                                     dest='all_tablespaces',
                                     action='store_true',
                                     default=False)
+
+    backup_push_parser.add_argument('--include-conf',
+                                    help=('Include all configuration files as well - '),
+                                    dest='exclude_conf',
+                                    action='store_false',
+                                    default=True)
+
+    backup_push_parser.add_argument('--include-xlog',
+                                    help=('Include all pg_xlog files as well - '),
+                                    dest='exclude_xlog',
+                                    action='store_false',
+                                    default=True)
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser('wal-push', 
@@ -213,6 +227,12 @@ def main(argv=None):
                                  help='Set the maximum number of concurrent transfers',
                                  type=int, 
                                  default=8)
+
+    wal_push_parser.add_argument('--no-info', 
+                                 help='Suppress the s3_worker INFO log entries',
+                                 dest=info_logging,
+                                 action='store_false',
+                                 default=True)
 
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
@@ -292,6 +312,14 @@ def main(argv=None):
         print pkgutil.get_data('wal_e', 'VERSION').strip()
         sys.exit(0)
 
+    # Set the logging level for the root logger, let the others inherit this setting:
+    info_logging = args.info_logging
+
+    if info_logging:
+        logger = log_help.WalELogger(__name__, level=logging.INFO)
+    else:
+        logger = log_help.WalELogger(__name__, level=logging.WARN)
+
     # Attempt to read a few key parameters from environment variables
     # *or* the command line, enforcing a precedence order and
     # complaining should the required parameter not be defined in
@@ -364,7 +392,9 @@ def main(argv=None):
                 rate_limit=rate_limit,
                 while_offline=while_offline,
                 pool_size=args.pool_size,
-                all_tablespaces=args.all_tablespaces)
+                all_tablespaces=args.all_tablespaces,
+                exclude_conf=args.exclude_conf,
+                exclude_xlog=args.exclude_xlog)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT,
