@@ -293,7 +293,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         yield partition
 
 
-def partition(pg_cluster_dir, all_tablespaces=False, exclude_conf=False):
+def partition(pg_cluster_dir, all_tablespaces=False, exclude_conf=False, exclude_xlog=False):
     def raise_walk_error(e):
         raise e
 
