@@ -136,7 +136,7 @@ def main(argv=None):
 
     parser.add_argument('--no-info', 
                          help='Suppress the s3_worker INFO log entries',
-                         dest=info_logging,
+                         dest='info_logging',
                          action='store_false',
                          default=True)
 
