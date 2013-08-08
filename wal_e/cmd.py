@@ -35,11 +35,6 @@ from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
 
-log_help.configure(
-    format='%(name)-12s %(levelname)-8s %(message)s')
-
-
-
 def external_program_check(
     to_check=frozenset([PSQL_BIN, LZOP_BIN, PV_BIN])):
     """
@@ -139,6 +134,12 @@ def main(argv=None):
                              'Can also be defined via environment variable '
                              'WALE_GPG_KEY_ID')
 
+    parser.add_argument('--no-info', 
+                         help='Suppress the s3_worker INFO log entries',
+                         dest=info_logging,
+                         action='store_false',
+                         default=True)
+
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
@@ -228,12 +229,6 @@ def main(argv=None):
                                  type=int, 
                                  default=8)
 
-    wal_push_parser.add_argument('--no-info', 
-                                 help='Suppress the s3_worker INFO log entries',
-                                 dest=info_logging,
-                                 action='store_false',
-                                 default=True)
-
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
@@ -319,6 +314,9 @@ def main(argv=None):
         logger = log_help.WalELogger(__name__, level=logging.INFO)
     else:
         logger = log_help.WalELogger(__name__, level=logging.WARN)
+
+    log_help.configure(format='%(name)-12s %(levelname)-8s %(message)s')
+
 
     # Attempt to read a few key parameters from environment variables
     # *or* the command line, enforcing a precedence order and
