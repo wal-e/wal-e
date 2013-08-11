@@ -79,7 +79,8 @@ class StreamPadFileObj(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return self.close()
+        self.close()
+        return False
 
 
 class TarMemberTooBigError(Exception):
