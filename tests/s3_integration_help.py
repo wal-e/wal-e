@@ -92,9 +92,8 @@ class FreshBucket(object):
 
     def __exit__(self, typ, value, traceback):
         if not self.created_bucket:
-            return
+            return False
 
         insistent_bucket_delete(self.conn, self.bucket_name)
 
-        if typ:
-            raise typ, value, traceback
+        return False
