@@ -5,7 +5,6 @@ base backups of the PostgreSQL data directory.
 
 """
 
-
 def gevent_monkey(*args, **kwargs):
     import gevent.monkey
     gevent.monkey.patch_socket(dns=True, aggressive=True)
@@ -26,6 +25,7 @@ import textwrap
 import traceback
 
 import wal_e.log_help as log_help
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 from wal_e import subprocess
 from wal_e.exception import UserException
@@ -34,6 +34,7 @@ from wal_e.piper import popen_sp
 from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
 from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
+
 
 def external_program_check(
     to_check=frozenset([PSQL_BIN, LZOP_BIN, PV_BIN])):
@@ -133,12 +134,6 @@ def main(argv=None):
                         help='GPG key ID to encrypt to. (Also needed when decrypting.)  '
                              'Can also be defined via environment variable '
                              'WALE_GPG_KEY_ID')
-
-    parser.add_argument('--no-info', 
-                         help='Suppress the s3_worker INFO log entries',
-                         dest='info_logging',
-                         action='store_false',
-                         default=True)
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -306,14 +301,6 @@ def main(argv=None):
 
         print pkgutil.get_data('wal_e', 'VERSION').strip()
         sys.exit(0)
-
-    # Set the logging level for the root logger, let the others inherit this setting:
-    info_logging = args.info_logging
-
-    if info_logging:
-        logger = log_help.WalELogger(__name__, level=logging.INFO)
-    else:
-        logger = log_help.WalELogger(__name__, level=logging.WARN)
 
     log_help.configure(format='%(name)-12s %(levelname)-8s %(message)s')
 

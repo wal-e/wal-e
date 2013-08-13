@@ -30,7 +30,7 @@ from wal_e.s3 import calling_format
 from wal_e.worker import s3_deleter
 
 
-logger = log_help.WalELogger(__name__)
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 generic_weird_key_hint_message = ('This means an unexpected key was found in '

@@ -6,7 +6,7 @@ from boto.s3 import connection
 from wal_e import log_help
 
 
-logger = log_help.WalELogger(__name__)
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 _S3_REGIONS = {
