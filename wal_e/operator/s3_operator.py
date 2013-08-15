@@ -62,7 +62,9 @@ class S3Backup(object):
 
         return bl    
 
-    def backup_list(self, query, detail):
+    
+
+    def backup_list(self, query, detail, header = True):
         """
         Lists base backups and basic information about them
 
@@ -86,12 +88,35 @@ class S3Backup(object):
 
         # TODO: support switchable formats for difference needs.
         w_csv = csv.writer(sys.stdout, dialect='excel-tab')
-        w_csv.writerow(BackupInfo._fields)
+        if header:
+            w_csv.writerow(BackupInfo._fields)
 
         for backup_info in bl_iter:
             w_csv.writerow(backup_info)
 
         sys.stdout.flush()
+
+    def most_recent_backup(self, query, detail):
+#        self.backup_list('LATEST',detail,False)
+
+        import time
+
+        from wal_e.storage.s3_storage import BackupInfo
+
+        s3_conn = self.new_connection()
+
+        bl = s3_worker.BackupList(s3_conn,
+                                  s3_storage.StorageLayout(self.s3_prefix),
+                                  detail)
+
+        bl_iter = bl.find_all('LATEST')
+
+        for backup_info in bl_iter:
+        #    w_csv.writerow(backup_info)
+            last_modified = backup_info[1]
+            lmt = time.strptime(last_modified,'%Y-%m-%dT%H:%M:%S.000Z')
+            print time.strftime('%s',lmt)
+    
 
     def _s3_upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
                                   version, pool_size, rate_limit=None):

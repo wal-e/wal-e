@@ -175,6 +175,9 @@ def main(argv=None):
     backup_list_parser = subparsers.add_parser(
         'backup-list', parents=[backup_list_nodetail_parent],
         help='list backups in S3')
+    backup_list_parser = subparsers.add_parser(
+        'most-recent-backup', parents=[backup_list_nodetail_parent],
+        help='get info about most recent backup in S3')
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3',
         parents=[backup_fetchpush_parent])
@@ -321,6 +324,8 @@ def main(argv=None):
                 pool_size=args.pool_size)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
+        elif subcommand == 'most-recent-backup':
+            backup_cxt.most_recent_backup(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
             if args.while_offline:
                 # we need to query pg_config first for the
