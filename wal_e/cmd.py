@@ -4,6 +4,7 @@ archiving on S3: it handles pushing and fetching of WAL segments and
 base backups of the PostgreSQL data directory.
 
 """
+import sys
 
 
 def gevent_monkey(*args, **kwargs):
@@ -16,12 +17,33 @@ def gevent_monkey(*args, **kwargs):
 # sadly it cannot be used (easily) in WAL-E.
 gevent_monkey()
 
+# Instate a cipher suite that bans a series of weak and slow ciphers.
+# Both RC4 (weak) DES (weak and slow) have been seen with default
+# cipher suites on both Ubuntu Raring and Ubuntu Precise,
+# respectively.
+#
+# Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
+if sys.version_info >= (2, 7):
+    def ssl_monkey():
+        import ssl
+
+        original = ssl.wrap_socket
+
+        def wrap_socket_monkey(*args, **kwargs):
+            # Use the OpenSSL 'HIGH' meta-setting, but also ban RC4,
+            # DES, 3DES, and on the authentication side anonymous key
+            # key exchange (e.g. ADH) explicitly.
+            kwargs['ciphers'] = 'HIGH:!aNULL:!RC4:!DES:!3DES'
+            return original(*args, **kwargs)
+
+        ssl.wrap_socket = wrap_socket_monkey
+
+    ssl_monkey()
 
 import argparse
 import logging
 import os
 import re
-import sys
 import textwrap
 import traceback
 
