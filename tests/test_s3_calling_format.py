@@ -250,3 +250,35 @@ def test_str_repr_call_info():
         "<class 'boto.s3.connection.OrdinaryCallingFormat'>, "
         "'us-standard', 's3.amazonaws.com')"
     )
+
+
+@pytest.mark.skipif("no_real_s3_credentials()")
+@pytest.mark.skipif("sys.version_info < (2, 7)")
+def test_cipher_suites():
+    # Imported for its side effects of setting up ssl cipher suites
+    # and gevent.
+    from wal_e import cmd
+
+    # Quiet pyflakes.
+    assert cmd
+
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    cinfo = calling_format.from_bucket_name('irrelevant')
+    conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+
+    # Warm up the pool and the connection in it; new_http_connection
+    # seems to be a more natural choice, but leaves the '.sock'
+    # attribute null.
+    conn.get_all_buckets()
+    htcon = conn._pool.get_http_connection('s3.amazonaws.com', True)
+
+    chosen_cipher_suite = htcon.sock.cipher()[0].split('-')
+
+    # Test for the expected cipher suite.
+    #
+    # This can change or vary on different platforms somewhat
+    # harmlessly, but do the simple thing and insist on an exact match
+    # for now.
+    assert chosen_cipher_suite == ['AES256', 'SHA']
