@@ -7,9 +7,11 @@ def no_real_s3_credentials():
 
     Phrased in the negative to make it read better with 'skipif'.
     """
+    if os.getenv('WALE_S3_INTEGRATION_TESTS') != 'TRUE':
+        return True
+
     for e_var in ('AWS_ACCESS_KEY_ID',
-                  'AWS_SECRET_ACCESS_KEY',
-                  'WALE_S3_INTEGRATION_TESTS'):
+                  'AWS_SECRET_ACCESS_KEY'):
         if os.getenv(e_var) is None:
             return True
 
