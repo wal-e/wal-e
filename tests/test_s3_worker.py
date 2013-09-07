@@ -19,11 +19,7 @@ boto_supports_certs = boto_supports_certs
 
 @pytest.mark.skipif("no_real_s3_credentials()")
 def test_301_redirect():
-    """Integration test for bucket naming issues
-
-    AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
-    this test.
-    """
+    """Integration test for bucket naming issues this test."""
     import boto.s3.connection
 
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
@@ -42,11 +38,7 @@ def test_301_redirect():
 @pytest.mark.skipif("no_real_s3_credentials()")
 @pytest.mark.skipif("not boto_supports_certs()")
 def test_get_bucket_vs_certs():
-    """Integration test for bucket naming issues
-
-    AWS credentials and WALE_S3_INTEGRATION_TESTS must be set to run
-    this test.
-    """
+    """Integration test for bucket naming issues."""
     import boto.s3.connection
 
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')

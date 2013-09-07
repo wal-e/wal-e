@@ -3,6 +3,10 @@ import os
 
 
 def no_real_s3_credentials():
+    """Helps skip integration tests without live credentials.
+
+    Phrased in the negative to make it read better with 'skipif'.
+    """
     for e_var in ('AWS_ACCESS_KEY_ID',
                   'AWS_SECRET_ACCESS_KEY',
                   'WALE_S3_INTEGRATION_TESTS'):
