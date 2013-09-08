@@ -1,6 +1,9 @@
 import os
 import pytest
 
+from wal_e.worker import BackupList
+from wal_e.storage import s3_storage
+
 from boto.s3.connection import (
     OrdinaryCallingFormat,
     SubdomainCallingFormat,
@@ -57,3 +60,19 @@ def test_get_bucket_vs_certs():
     with pytest.raises(boto.https_connection.InvalidCertificateException):
         with FreshBucket(bucket_name, calling_format=SubdomainCallingFormat()):
             pass
+
+
+@pytest.mark.skipif("no_real_s3_credentials()")
+def test_empty_latest_listing():
+    """Test listing a 'backup-list LATEST' on an empty prefix."""
+
+    bucket_name = 'wal-e-test-empty-listing'
+    layout = s3_storage.StorageLayout('s3://{0}/test-prefix'
+                                      .format(bucket_name))
+
+    with FreshBucket(bucket_name, host='s3.amazonaws.com',
+                     calling_format=OrdinaryCallingFormat()) as fb:
+        fb.create()
+        bl = BackupList(fb.conn, layout, False)
+        found = list(bl.find_all('LATEST'))
+        assert len(found) == 0
