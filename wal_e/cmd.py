@@ -402,8 +402,11 @@ def main(argv=None):
         # code management.
         if backup_cxt.exceptions:
             for exc in backup_cxt.exceptions[:-1]:
-                logger.log(level=exc.severity,
-                           msg=exc.msg, detail=exc.detail, hint=exc.hint)
+                if isinstance(exc, UserException):
+                    logger.log(level=exc.severity,
+                               msg=exc.msg, detail=exc.detail, hint=exc.hint)
+                else:
+                    logger.error(msg=exc)
 
             raise backup_cxt.exceptions[-1]
 
