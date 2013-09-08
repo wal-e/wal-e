@@ -443,7 +443,6 @@ class BackupList(object):
             all_backups = list(iter(self))
 
             if not all_backups:
-                yield None
                 return
 
             assert len(all_backups) > 0
