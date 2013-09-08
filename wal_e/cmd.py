@@ -403,14 +403,13 @@ def main(argv=None):
         if backup_cxt.exceptions:
             for exc in backup_cxt.exceptions[:-1]:
                 logger.log(level=exc.severity,
-                           msg=log_help.WalELogger
-                           .fmt_logline(exc.msg, exc.detail, exc.hint))
+                           msg=exc.msg, detail=exc.detail, hint=exc.hint)
+
             raise backup_cxt.exceptions[-1]
 
     except UserException, e:
         logger.log(level=e.severity,
-                   msg=log_help.WalELogger
-                   .fmt_logline(e.msg, e.detail, e.hint))
+                   msg=e.msg, detail=e.detail, hint=e.hint)
         sys.exit(1)
     except Exception, e:
         logger.critical(
