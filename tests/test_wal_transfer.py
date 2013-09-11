@@ -1,3 +1,4 @@
+import gevent
 import pytest
 
 from wal_e import worker
@@ -177,6 +178,43 @@ def test_multi_pipeline_fail():
             # -- one can't know very much about the final state of
             # segment.
             assert indeterminate(seg)
+
+
+def test_finally_execution():
+    """When one segment fails ensure parallel segments clean up."""
+    segBad = FakeWalSegment('1' * 8 * 3)
+    segOK = FakeWalSegment('2' * 8 * 3)
+
+    class CleanupCheckingUploader(object):
+        def __init__(self):
+            self.cleaned_up = False
+
+        def __call__(self, segment):
+            if segment is segOK:
+                try:
+                    while True:
+                        gevent.sleep(0)
+                finally:
+                    self.cleaned_up = True
+
+            elif segment is segBad:
+                raise Explosion('fail')
+
+            else:
+                assert False, 'Expect only two segments'
+
+            segment._uploaded = True
+            return segment
+
+    uploader = CleanupCheckingUploader()
+    group = worker.WalTransferGroup(uploader)
+    group.start(segOK)
+    group.start(segBad)
+
+    with pytest.raises(Explosion):
+        group.join()
+
+    assert uploader.cleaned_up is True
 
 
 def test_start_after_join():

@@ -91,6 +91,15 @@ class WalTransferGroup(object):
         self.expect = 0
         self.closed = False
 
+        # Maintain a list of running greenlets for gevent.killall.
+        #
+        # Abrupt termination of WAL-E (e.g. calling exit, as seen with
+        # a propagated error) will not result in clean-ups
+        # (e.g. 'finally' clauses) being run, so it's necessary to
+        # retain the greenlets, inject asynchronous exceptions, and
+        # then wait on termination.
+        self.greenlets = set([])
+
     def join(self):
         """Wait for transfer to exit, raising errors as necessary."""
         self.closed = True
@@ -100,6 +109,15 @@ class WalTransferGroup(object):
             self.expect -= 1
 
             if val is not None:
+                # Kill all the running greenlets, waiting for them to
+                # clean up and exit.
+                #
+                # As a fail-safe against indefinite blocking of
+                # gevent.killall, time out after a liberal amount of
+                # time.  This is not expected to ever occur except for
+                # bugs and very dire situations, so do not take pains
+                # to convert it into a UserException or anything.
+                gevent.killall(self.greenlets, block=True, timeout=60)
                 raise val
 
     def start(self, segment):
@@ -111,6 +129,7 @@ class WalTransferGroup(object):
 
         g = gevent.Greenlet(self.transferer, segment)
         g.link(self._complete_execution)
+        self.greenlets.add(g)
 
         # Increment .expect before starting the greenlet, or else a
         # very unlucky .join could be fooled as to when pool is
@@ -128,6 +147,7 @@ class WalTransferGroup(object):
         # exception, if any, to fail the entire transfer in event of
         # trouble.
         assert g.ready()
+        self.greenlets.remove(g)
 
         placed = UserCritical(msg='placeholder bogus exception',
                               hint='report a bug')
