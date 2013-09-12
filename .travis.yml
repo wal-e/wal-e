@@ -1,0 +1,8 @@
+language: python
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq libevent-dev lzop pv gnupg
+install: pip install -q tox
+script: tox
+notifications:
+  email: false
