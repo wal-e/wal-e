@@ -25,7 +25,7 @@ def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
         (Compress, and optionally encrypt) """
     commands = []
     if rate_limit is not None:
-        commands.append(PipeViwerRateLimitFilter(rate_limit))
+        commands.append(PipeViewerRateLimitFilter(rate_limit))
     commands.append(LZOCompressionFilter())
 
     if gpg_key is not None:
@@ -163,7 +163,7 @@ class PipelineCommand(object):
                 .format(" ".join(self._command), retcode))
 
 
-class PipeViwerRateLimitFilter(PipelineCommand):
+class PipeViewerRateLimitFilter(PipelineCommand):
     """ Limit the rate of transfer through a pipe using pv """
     def __init__(self, rate_limit, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
