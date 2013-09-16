@@ -18,9 +18,7 @@ def gevent_monkey(*args, **kwargs):
 gevent_monkey()
 
 # Instate a cipher suite that bans a series of weak and slow ciphers.
-# Both RC4 (weak) DES (weak and slow) have been seen with default
-# cipher suites on both Ubuntu Raring and Ubuntu Precise,
-# respectively.
+# Both RC4 (weak) 3DES (slow) have been seen in use.
 #
 # Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
 if sys.version_info >= (2, 7):
