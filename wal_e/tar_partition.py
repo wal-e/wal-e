@@ -45,9 +45,9 @@ import errno
 import os
 import tarfile
 
+import logging
 import wal_e.log_help as log_help
-
-logger = log_help.WalELogger(__name__)
+logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
 class StreamPadFileObj(object):
@@ -294,7 +294,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         yield partition
 
 
-def partition(pg_cluster_dir):
+def partition(pg_cluster_dir, all_tablespaces=False, exclude_conf=False, exclude_xlog=False):
     def raise_walk_error(e):
         raise e
 
@@ -308,24 +308,66 @@ def partition(pg_cluster_dir):
                                os.path.abspath(pg_cluster_dir))
 
         # Do not capture any WAL files, although we do want to
-        # capture the WAL directory or symlink
-        if is_cluster_toplevel:
-            if 'pg_xlog' in dirnames:
+        # capture the WAL directory name or symlink
+        if exclude_xlog and is_cluster_toplevel and 'pg_xlog' in dirnames:
                 dirnames.remove('pg_xlog')
                 matches.append(os.path.join(root, 'pg_xlog'))
 
+        # Do not capture any TEMP Space files, although we do want to
+        # capture the directory name or symlink
+        if 'pgsql_tmp' in dirnames:
+                dirnames.remove('pgsql_tmp')
+                matches.append(os.path.join(root, 'pgsql_tmp'))
+
         for filename in filenames:
-            if is_cluster_toplevel and filename in ('postmaster.pid',
-                                                    'postgresql.conf'):
+
+            if is_cluster_toplevel and filename in ('postmaster.pid', 'postmaster.opts'):
                 # Do not include the postmaster pid file or the
                 # configuration file in the backup.
                 pass
+
+            elif exclude_conf and is_cluster_toplevel and filename in ('postgresql.conf', 'pg_hba.conf', 'recovery.conf', 'pg_ident.conf'):
+
+                pass
+
             else:
+
                 matches.append(os.path.join(root, filename))
 
         # Special case for empty directories
         if not filenames:
             matches.append(root)
+
+        # Special case for tablespaces
+        if root == (pg_cluster_dir + '/pg_tblspc'):
+                for tablespace in dirnames:
+
+                    ts_path = os.path.join(root, tablespace)
+
+                    if os.path.islink(ts_path) and os.path.isdir(ts_path):
+
+                        # Add the symlinks to the tablespace directories
+                        # (regardless of whether we are backing them up now):
+                        matches.append(ts_path)
+             
+                        # If we are backing them up, walk them separately:
+                        if all_tablespaces:
+
+		             ts_walker = os.walk(os.readlink(ts_path))
+                             for ts_root, ts_dirnames, ts_filenames in ts_walker:
+
+                                 if 'pgsql_tmp' in ts_dirnames:
+                                     ts_dirnames.remove('pgsql_tmp')
+                                     matches.append(os.path.join(ts_root, 'pgsql_tmp'))
+
+                                 for ts_filename in ts_filenames:
+                                     matches.append(os.path.join(ts_root, ts_filename))
+
+				 # pick up the empty directories:
+                                 if not ts_filenames:
+				     matches.append(ts_root)	
+                                 
+
 
     # Absolute upload paths are used for telling lzop what to
     # compress.
@@ -334,6 +376,10 @@ def partition(pg_cluster_dir):
     # Computed to subtract out extra extraneous absolute path
     # information when storing on S3.
     common_local_prefix = os.path.commonprefix(local_abspaths)
+
+    # If we ended up with a broken directory, fall back to root:
+    if not os.path.isdir(common_local_prefix):
+        common_local_prefix = '/'
 
     parts = _segmentation_guts(
         common_local_prefix, local_abspaths,
