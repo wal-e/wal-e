@@ -3,7 +3,6 @@ import gevent
 import gevent.pool
 import itertools
 import json
-import logging
 import os
 import sys
 
@@ -21,7 +20,7 @@ from wal_e.storage import s3_storage
 from wal_e.worker import PgBackupStatements
 from wal_e.worker import PgControlDataParser
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+logger = log_help.WalELogger(__name__)
 
 # Provides guidence in object names as to the version of the file
 # structure.

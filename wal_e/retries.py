@@ -1,5 +1,4 @@
 import functools
-import logging
 import sys
 import traceback
 
@@ -7,7 +6,7 @@ import gevent
 
 import wal_e.log_help as log_help
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+logger = log_help.WalELogger(__name__)
 
 
 def generic_exception_processor(exc_tup, **kwargs):
