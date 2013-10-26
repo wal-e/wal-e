@@ -254,11 +254,13 @@ def _do_lzop_s3_put(aws_access_key_id, aws_secret_access_key,
         return kib_per_second
 
 
-def write_and_close_thread(key, stream):
+def write_and_return_error(key, stream):
     try:
         key.get_contents_to_file(stream)
-    finally:
         stream.flush()
+    except Exception, e:
+        return e
+    finally:
         stream.close()
 
 
@@ -312,37 +314,30 @@ def do_lzop_s3_get(aws_access_key_id, aws_secret_access_key,
 
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
-        missing_uri_hint = ('This can be normal when Postgres is trying to '
-                            'detect what timelines are available during '
-                            'restoration.')
         with open(path, 'wb') as decomp_out:
             key = uri_to_key(aws_access_key_id, aws_secret_access_key, s3_url)
-            if not key.exists():
-                # Do not retry if the key not present, this can happen
-                # under normal situations.
-                logger.info(
-                    msg='could not locate object while performing wal restore',
-                    detail=('The absolute URI that could not be located '
-                            'is {url}.'.format(url=s3_url)),
-                    hint=missing_uri_hint)
-                return False
 
             pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
-            g = gevent.spawn(write_and_close_thread, key, pipeline.stdin)
+            g = gevent.spawn(write_and_return_error, key, pipeline.stdin)
 
             try:
-                # Raise any exceptions from _write_and_close
-                g.get()
+                # Raise any exceptions from write_and_return_error
+                exc = g.get()
+                if exc is not None:
+                    raise exc
             except boto.exception.S3ResponseError, e:
                 if e.status == 404:
-                    # Short circuit any re-try attempts under certain race
-                    # conditions.
-                    logger.warn(
-                        msg=('could no longer locate object while performing '
-                             'wal restore'),
-                        detail=('The URI  at {url} no longer '
-                                'exists.'.format(url=s3_url)),
-                        hint=missing_uri_hint)
+                    # Do not retry if the key not present, this can happen
+                    # under normal situations.
+                    logger.info(
+                        msg=('could not locate object while performing wal '
+                             'restore'),
+                        detail=('The absolute URI that could not be located '
+                                'is {url}.'.format(url=s3_url)),
+                        hint=('This can be normal when Postgres is trying to '
+                              'detect what timelines are available during '
+                              'restoration.'))
+
                     return False
                 else:
                     raise
@@ -406,7 +401,7 @@ class BackupFetcher(object):
 
         key = self.bucket.get_key(part_abs_name)
         pipeline = get_download_pipeline(PIPE, PIPE, self.decrypt)
-        g = gevent.spawn(write_and_close_thread, key, pipeline.stdin)
+        g = gevent.spawn(write_and_return_error, key, pipeline.stdin)
         tar = tarfile.open(mode='r|', fileobj=pipeline.stdout)
 
         # TODO: replace with per-member file handling,
@@ -417,7 +412,9 @@ class BackupFetcher(object):
         tar.close()
 
         # Raise any exceptions from self._write_and_close
-        g.get()
+        exc = g.get()
+        if exc is not None:
+            raise exc
 
         pipeline.finish()
 
