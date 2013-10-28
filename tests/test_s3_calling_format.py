@@ -1,4 +1,5 @@
 import boto
+import inspect
 import os
 import pytest
 
@@ -272,7 +273,15 @@ def test_cipher_suites():
     # seems to be a more natural choice, but leaves the '.sock'
     # attribute null.
     conn.get_all_buckets()
-    htcon = conn._pool.get_http_connection('s3.amazonaws.com', True)
+
+    # Set up 'port' keyword argument for newer Botos that require it.
+    spec = inspect.getargspec(conn._pool.get_http_connection)
+    kw = {'host': 's3.amazonaws.com',
+          'is_secure': True}
+    if 'port' in spec.args:
+        kw['port'] = 443
+
+    htcon = conn._pool.get_http_connection(**kw)
 
     chosen_cipher_suite = htcon.sock.cipher()[0].split('-')
 
