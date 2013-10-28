@@ -365,3 +365,62 @@ Controlling the I/O of a Base Backup
 To reduce the read load on base backups, they are sent through the
 tool ``pv`` first.  To use this rate-limited-read mode, use the option
 --cluster-read-rate-limit as seen in ``wal-e backup-push``.
+
+
+Development
+-----------
+
+Development is heavily reliant on the tool tox_ being existent within
+the development environment.  All additional dependencies of WAL-E are
+managed by tox_.  In addition, the coding conventions are checked by
+the tox_ configuration included with WAL-E.
+
+To run the tests, one need only run::
+
+  $ tox
+
+However, if one does not have both Python 2.6 and 2.7 installed
+simultaneously (WAL-E supports both and tests both), there will be
+errors in running tox_ as seen previously.  One can restrict the test
+to the Python of one's choice to avoid that::
+
+  $ tox -e py27
+
+To run a somewhat more lengthy suite of integration tests that
+communicate with AWS S3, one might run tox_ like this::
+
+  $ WALE_S3_INTEGRATION_TESTS=TRUE	\
+    AWS_ACCESS_KEY_ID=[AKIA...]		\
+    AWS_SECRET_ACCESS_KEY=[...]		\
+    tox -- -n 8
+
+Looking carefully at the above, notice the ``-n 8`` added the tox_
+invocation.  This ``-n 8`` is after a ``--`` that indicates to tox_
+that the subsequent arguments are for the underlying test program, not
+tox_ itself.
+
+This is to enable parallel test execution, which makes the integration
+tests complete a small fraction of the time it would take otherwise.
+It is a design requirement of new tests that parallel execution not be
+sacrificed.
+
+The above invocation tests WAL-E with every test environment
+defined in ``tox.ini``.  When iterating, testing all of those is
+typically not a desirable use of time, so one can restrict the
+integration test to one virtual environment, in a combination of
+features seen in all the previous examples::
+
+  $ WALE_S3_INTEGRATION_TESTS=TRUE	\
+    AWS_ACCESS_KEY_ID=[AKIA...]		\
+    AWS_SECRET_ACCESS_KEY=[...]		\
+    tox -e py27 -- -n 8
+
+Finally, the test framework used is pytest_.  If possible, do not
+submit Python unittest_ style tests: those tend to be more verbose and
+anemic in power; however, any automated testing is better than a lack
+thereof, so if you are familiar with unittest_, do not let the
+preference for pytest_ idiom be an impediment to submitting code.
+
+.. _tox: https://pypi.python.org/pypi/tox
+.. _pytest: https://pypi.python.org/pypi/pytest
+.. _unittest: http://docs.python.org/2/library/unittest.html
