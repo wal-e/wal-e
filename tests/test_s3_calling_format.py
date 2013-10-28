@@ -272,7 +272,16 @@ def test_cipher_suites():
     # seems to be a more natural choice, but leaves the '.sock'
     # attribute null.
     conn.get_all_buckets()
-    htcon = conn._pool.get_http_connection('s3.amazonaws.com', True)
+
+    # Newer versions of boto require an argument for the 'port'
+    # parameter, and older versions *cannot* tolerate such an
+    # argument.
+    kws = {'host': 's3.amazonaws.com',
+           'is_secure': True}
+    if 'port' in conn._pool.get_http_connection.func_code.co_varnames:
+        kws[port] = 443
+
+    htcon = conn._pool.get_http_connection(**kws)
 
     chosen_cipher_suite = htcon.sock.cipher()[0].split('-')
 
