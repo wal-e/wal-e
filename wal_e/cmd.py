@@ -320,6 +320,15 @@ def build_parser():
         'BEFORE_SEGMENT_EXCLUSIVE',
         help='A WAL segment number or base backup name')
 
+    # delete 'retain' operator
+    delete_retain_parser = delete_subparsers.add_parser(
+        'retain', help=('Delete backups and WAL segments older than the '
+                        'NUM_TO_RETAIN oldest base backup. This will leave '
+                        'NUM_TO_RETAIN working backups in place.'))
+    delete_retain_parser.add_argument(
+        'NUM_TO_RETAIN', type=int,
+        help='The number of base backups to retain')
+
     # delete old versions operator
     delete_subparsers.add_parser(
         'old-versions',
@@ -531,6 +540,9 @@ def main(argv=None):
                 backup_cxt.delete_old_versions(is_dry_run_really)
             elif args.delete_subcommand == 'everything':
                 backup_cxt.delete_all(is_dry_run_really)
+            elif args.delete_subcommand == 'retain':
+                backup_cxt.delete_with_retention(is_dry_run_really,
+                                                 args.NUM_TO_RETAIN)
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
                 assert segment_info is not None
