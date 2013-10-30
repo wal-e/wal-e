@@ -417,3 +417,11 @@ class _DeleteFromContext(object):
 
         if self.deleter:
             self.deleter.close()
+
+    def delete_with_retention(self, num_to_retain):
+        """
+        Retain the num_to_retain most recent backups and delete all data
+        before them.
+        """
+        # TODO (drobinson): Implement this functionality.
+        raise NotImplementedError()

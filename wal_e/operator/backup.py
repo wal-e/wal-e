@@ -331,6 +331,11 @@ class Backup(object):
         delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
         delete_cxt.delete_before(segment_info)
 
+    def delete_with_retention(self, dry_run, num_to_retain):
+        conn = self.new_connection()
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
+        delete_cxt.delete_with_retention(num_to_retain)
+
     def _backup_list(self, detail):
         conn = self.new_connection()
         bl = self.worker.BackupList(conn, self.layout, detail)
