@@ -33,9 +33,8 @@ class S3Backup(object):
 
     """
 
-    def __init__(self,
-                 aws_access_key_id, aws_secret_access_key, s3_prefix,
-                 gpg_key_id):
+    def __init__(self, s3_prefix, gpg_key_id, aws_access_key_id=None,
+                aws_secret_access_key=None):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.gpg_key_id = gpg_key_id
