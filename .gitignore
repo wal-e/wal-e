@@ -23,6 +23,7 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+.cache
 
 #Translations
 *.mo
@@ -54,3 +55,6 @@ Session.vim
 
 # Virtualenv
 .env
+
+# rope ignores
+.ropeproject

@@ -25,32 +25,35 @@ WAL-E has four critical operators:
 * wal-fetch
 * wal-push
 
-Of these, the "push" operators send things to S3, and "fetch"
-operators get things from S3.  "wal" operators send/get write ahead
+Of these, the "push" operators send things to storage and "fetch"
+operators get things from storage.  "wal" operators send/get write ahead
 log, and "backup" send/get a hot backup of the base database that WAL
 segments can be applied to.
 
 All of these operators work in a context of three important
 environment-variable based settings:
 
-* AWS_ACCESS_KEY_ID
-* AWS_SECRET_ACCESS_KEY
-* WALE_S3_PREFIX
+* AWS_ACCESS_KEY_ID or WABS_ACCOUNT_NAME
+* AWS_SECRET_ACCESS_KEY or WABS_ACCESS_KEY
+* WALE_S3_PREFIX or WALE_WABS_PREFIX
 
-With the exception of AWS_SECRET_ACCESS_KEY, all of these can be
-specified as arguments as well.  The AWS_* variables are the standard
-access-control keying system provided by Amazon.
+With the exception of AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY,
+all of these can be specified as arguments as well.  The AWS_*
+variables are the standard access-control keying system provided
+by Amazon, where the WABS_* are the standard access credentials defined
+by Windows Azure.
 
-The WALE_S3_PREFIX can be thought of as a context whereby this program
-operates on a single database cluster at a time.  Generally, for any
-one database the WALE_S3_PREFIX will be the same between all four
-operators.  This context-driven approach attempts to help users avoid
-errors such as one database overwriting the WAL segments of another,
-as long as the WALE_S3_PREFIX is set uniquely for each database.
+The WALE_S3_PREFIX and WALE_WABS_PREFIX (_PREFIX) variables can be thought
+of as a context whereby this program operates on a single database cluster at
+a time.  Generally, for any one database the _PREFIX will be the same
+between all four operators.  This context-driven approach attempts
+to help users avoid errors such as one database overwriting the WAL segments
+of another, as long as the _PREFIX is set uniquely for each database. Use
+whichever variable is appropriate for the store you are using.
 
 .. IMPORTANT::
-   Ensure that all servers have different WALE_S3_PREFIXes set.  Reuse
-   of a value between two servers will likely cause unrecoverable
+   Ensure that all servers have different _PREFIXes set.
+   Reuse of a value between two servers will likely cause unrecoverable
    backups.
 
 
@@ -72,7 +75,23 @@ will attempt to resolve them:
 
 * gevent>=0.13.1
 * boto>=2.2.0
+* azure==0.7.0
 * argparse, if not on Python 2.7
+
+Backend Blob Store
+--------
+
+The storage backend is determined by the defined _PREFIX. Prefixes with
+the scheme ``s3`` will be directed towards S3, where those with the scheme
+``wabs`` will be directed towards Windows Azure Blob Service.
+
+Example S3 Prefix:
+
+  s3://some-bucket/directory/or/whatever
+
+Example WABS Prefix:
+
+  wabs://some-container/directory/or/whatever
 
 
 Examples
@@ -85,11 +104,11 @@ Pushing a base backup to S3::
     --s3-prefix=s3://some-bucket/directory/or/whatever	\
     backup-push /var/lib/my/database
 
-Sending a WAL segment to S3::
+Sending a WAL segment to WABS::
 
-  $ AWS_SECRET_ACCESS_KEY=... wal-e			\
-    -k AWS_ACCESS_KEY_ID				\
-    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+  $ WABS_ACCESS_KEY=... wal-e			\
+    -a WABS_ACCOUNT_NAME				\
+    --wabs-prefix=wabs://some-bucket/directory/or/whatever	\
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
 
 It is generally recommended that one use some sort of environment
@@ -97,12 +116,12 @@ variable management with WAL-E: working with it this way is less verbose,
 less prone to error, and less likely to expose secret information in
 logs.
 
-At this time, AWS_SECRET_KEY is the only secret value, and recording
-it frequently in logs is not recommended.  The tool has never and
-should never accept secret information in argv to avoid process table
-security problems.  However, the user running PostgreSQL (typically
-'postgres') must be able to run a program that can access this secret
-information, as part of its archive_command_.
+At this time, AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY are the only
+secret values, and recording it frequently in logs is not recommended.
+The tool has never and should never accept secret information in argv
+to avoid process table security problems.  However, the user running
+PostgreSQL (typically 'postgres') must be able to run a program that
+can access this secret information, as part of its archive_command_.
 
 .. _archive_command: http://www.postgresql.org/docs/8.3/static/runtime-config-wal.html#GUC-ARCHIVE-COMMAND>
 
@@ -111,12 +130,24 @@ to setting environment variables.  One can prepare an
 envdir-compatible directory like so::
 
   # Assumption: the group is trusted to read secret information
+  # S3 Setup
   $ umask u=rwx,g=rx,o=
   $ mkdir -p /etc/wal-e.d/env
   $ echo "secret-key-content" > /etc/wal-e.d/env/AWS_SECRET_ACCESS_KEY
   $ echo "access-key" > /etc/wal-e.d/env/AWS_ACCESS_KEY_ID
   $ echo 's3://some-bucket/directory/or/whatever' > \
     /etc/wal-e.d/env/WALE_S3_PREFIX
+  $ chown -R root:postgres /etc/wal-e.d
+
+
+  # Assumption: the group is trusted to read secret information
+  # WABS Setup
+  $ umask u=rwx,g=rx,o=
+  $ mkdir -p /etc/wal-e.d/env
+  $ echo "secret-key-content" > /etc/wal-e.d/env/WABS_ACCESS_KEY
+  $ echo "access-key" > /etc/wal-e.d/env/WABS_ACCOUNT_NAME
+  $ echo 'wabs://some-container/directory/or/whatever' > \
+    /etc/wal-e.d/env/WALE_WABS_PREFIX
   $ chown -R root:postgres /etc/wal-e.d
 
 After having done this preparation, it is possible to run WAL-E
@@ -171,10 +202,11 @@ can be used::
     /var/lib/my/database base_LONGWALNUMBER_POSITION_NUMBER"
 
 One can find the name of available backups via the experimental
-``backup-list`` operator, or using one's S3 browsing program of
-choice, by looking at the ``S3PREFIX/basebackups_NNN/...`` directory.
+``backup-list`` operator, or using one's remote data store browsing
+program of choice, by looking at the ``PREFIX/basebackups_NNN/...``
+directory.
 
-it is also likely one will need to provide a ``recovery.conf`` file,
+It is also likely one will need to provide a ``recovery.conf`` file,
 as documented in the PostgreSQL manual, to recover the base backup, as
 WAL files will need to be downloaded to make the hot-backup taken with
 backup-push.  The WAL-E's ``wal-fetch`` subcommand is designed to be
@@ -193,7 +225,7 @@ maintenance of WAL-E archived databases.  Unlike the critical four
 operators for taking and restoring backups (``backup-push``,
 ``backup-fetch``, ``wal-push``, ``wal-fetch``) that must reside on the
 database machine, these commands can be productively run from any
-computer with ``WALE_S3_PREFIX`` and the necessary credentials to
+computer with the appropriate _PREFIX set and the necessary credentials to
 manipulate or read data there.
 
 
@@ -270,7 +302,7 @@ delete
 ''''''
 
 ``delete`` contains additional subcommands that are used for deleting
-data from S3 for various reasons.  These commands are organized
+data from storage for various reasons.  These commands are organized
 separately because the ``delete`` subcommand itself takes options that
 apply to any subcommand that does deletion, such as ``--confirm``.
 
@@ -285,7 +317,7 @@ specific circumstance to avoid operator error.  Should a dry-run be
 performed, ``wal-e`` will instead simply report every key it would
 otherwise delete if it was not running in dry-run mode, along with
 prominent HINT-lines for every key noting that nothing was actually
-deleted from S3.
+deleted from the blob store.
 
 To *actually* delete any data, one must pass ``--confirm`` to ``wal-e
 delete``.  If one passes both ``--dry-run`` and ``--confirm``, a dry
@@ -324,23 +356,23 @@ environment variable configuration for clarity:
 Compression and Temporary Files
 -------------------------------
 
-All assets pushed to S3 are run through the program "lzop" which
+All assets pushed to storage are run through the program "lzop" which
 compresses the object using the very fast lzo compression algorithm.
 It takes roughly 2 CPU seconds to compress a gigabyte, which when
-sending things to S3 at about 25MB/s occupies about 5% CPU time.
+sending things to storage at about 25MB/s occupies about 5% CPU time.
 Compression ratios are expected to make file sizes 50% or less of the
 original file size in most cases, making backups and restorations
 considerably faster.
 
-Because S3 requires the Content-Length header of a stored object to be
-set up-front, it is necessary to completely finish compressing an
-entire input file and storing the compressed output in a temporary
-file.  Thus, the temporary file directory needs to be big enough and
-fast enough to support this, although this tool is designed to avoid
-calling fsync(), so some memory can be leveraged.
+Because storage services generally require the Content-Length header
+of a stored object to be set up-front, it is necessary to completely
+finish compressing an entire input file and storing the compressed
+output in a temporary file.  Thus, the temporary file directory needs
+to be big enough and fast enough to support this, although this tool
+is designed to avoid calling fsync(), so some memory can be leveraged.
 
 Base backups first have their files consolidated into disjoint tar
-files of limited length to avoid the relatively large per-file S3
+files of limited length to avoid the relatively large per-file transfer
 overhead.  This has the effect of making base backups and restores
 much faster when many small relations and ancillary files are
 involved.
@@ -389,9 +421,12 @@ to the Python of one's choice to avoid that::
 To run a somewhat more lengthy suite of integration tests that
 communicate with AWS S3, one might run tox_ like this::
 
-  $ WALE_S3_INTEGRATION_TESTS=TRUE	\
-    AWS_ACCESS_KEY_ID=[AKIA...]		\
-    AWS_SECRET_ACCESS_KEY=[...]		\
+  $ WALE_S3_INTEGRATION_TESTS=TRUE  	\
+    AWS_ACCESS_KEY_ID=[AKIA...] 		\
+    AWS_SECRET_ACCESS_KEY=[...] 		\
+    WALE_WABS_INTEGRATION_TESTS=TRUE	\
+    WABS_ACCOUNT_NAME=[...] 			\
+    WABS_ACCESS_KEY=[...] 				\
     tox -- -n 8
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
@@ -410,9 +445,12 @@ typically not a desirable use of time, so one can restrict the
 integration test to one virtual environment, in a combination of
 features seen in all the previous examples::
 
-  $ WALE_S3_INTEGRATION_TESTS=TRUE	\
-    AWS_ACCESS_KEY_ID=[AKIA...]		\
-    AWS_SECRET_ACCESS_KEY=[...]		\
+  $ WALE_S3_INTEGRATION_TESTS=TRUE  	\
+    AWS_ACCESS_KEY_ID=[AKIA...] 		\
+    AWS_SECRET_ACCESS_KEY=[...] 		\
+    WALE_WABS_INTEGRATION_TESTS=TRUE	\
+    WABS_ACCOUNT_NAME=[...] 			\
+    WABS_ACCESS_KEY=[...] 				\
     tox -e py27 -- -n 8
 
 Finally, the test framework used is pytest_.  If possible, do not

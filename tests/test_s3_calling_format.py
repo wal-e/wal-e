@@ -8,8 +8,8 @@ from s3_integration_help import (
     FreshBucket,
     no_real_s3_credentials,
 )
-from wal_e.s3 import calling_format
-from wal_e.s3.calling_format import (
+from wal_e.blobstore.s3 import calling_format
+from wal_e.blobstore.s3.calling_format import (
     _is_mostly_subdomain_compatible,
     _is_ipv4_like,
 )
@@ -60,7 +60,7 @@ def test_us_standard_default_for_bogus():
     WAL-E.
     """
     for bn in SUBDOMAIN_BOGUS:
-        cinfo = calling_format.from_bucket_name(bn)
+        cinfo = calling_format.from_store_name(bn)
         assert cinfo.region == 'us-standard'
 
 
@@ -73,13 +73,13 @@ def test_cert_validation_sensitivity():
     """
     for bn in SUBDOMAIN_OK:
         if '.' not in bn:
-            cinfo = calling_format.from_bucket_name(bn)
+            cinfo = calling_format.from_store_name(bn)
             assert (cinfo.calling_format ==
                     boto.s3.connection.SubdomainCallingFormat)
         else:
             assert '.' in bn
 
-            cinfo = calling_format.from_bucket_name(bn)
+            cinfo = calling_format.from_store_name(bn)
             assert (cinfo.calling_format == connection.OrdinaryCallingFormat)
             assert cinfo.region is None
             assert cinfo.ordinary_endpoint is None
@@ -99,7 +99,7 @@ def test_real_get_location():
     bucket_name = ('wal-e-test-us-west-1.get.location.' +
                    aws_access_key_id.lower())
 
-    cinfo = calling_format.from_bucket_name(bucket_name)
+    cinfo = calling_format.from_store_name(bucket_name)
 
     with FreshBucket(bucket_name,
                      host='s3-us-west-1.amazonaws.com',
@@ -121,7 +121,7 @@ def test_classic_get_location():
     bucket_name = ('wal-e-test.classic.get.location.' +
                    aws_access_key_id.lower())
 
-    cinfo = calling_format.from_bucket_name(bucket_name)
+    cinfo = calling_format.from_store_name(bucket_name)
 
     with FreshBucket(bucket_name,
                      host='s3.amazonaws.com',
@@ -140,7 +140,7 @@ def test_subdomain_compatible():
     aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
     bucket_name = 'wal-e-test-us-west-1-no-dots' + aws_access_key.lower()
 
-    cinfo = calling_format.from_bucket_name(bucket_name)
+    cinfo = calling_format.from_store_name(bucket_name)
 
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -198,7 +198,7 @@ def test_get_location_errors(monkeypatch):
 
     with FreshBucket(bucket_name,
                      calling_format=connection.OrdinaryCallingFormat()):
-        cinfo = calling_format.from_bucket_name(bucket_name)
+        cinfo = calling_format.from_store_name(bucket_name)
 
         # Provoke a 403 when trying to get the bucket location.
         monkeypatch.setattr(boto.s3.bucket.Bucket, 'get_location', just_403)
@@ -207,7 +207,7 @@ def test_get_location_errors(monkeypatch):
         assert cinfo.region == 'us-standard'
         assert cinfo.calling_format is connection.OrdinaryCallingFormat
 
-        cinfo = calling_format.from_bucket_name(bucket_name)
+        cinfo = calling_format.from_store_name(bucket_name)
 
         # Provoke an unhandled S3ResponseError, in this case 404 not
         # found.
@@ -228,7 +228,7 @@ def test_str_repr_call_info():
     if boto.__version__ <= '2.2.0':
         pytest.skip('Class name output is unstable on older boto versions')
 
-    cinfo = calling_format.from_bucket_name('hello-world')
+    cinfo = calling_format.from_store_name('hello-world')
     assert repr(cinfo) == str(cinfo)
     assert repr(cinfo) == (
         "CallingInfo(hello-world, "
@@ -236,7 +236,7 @@ def test_str_repr_call_info():
         "None, None)"
     )
 
-    cinfo = calling_format.from_bucket_name('hello.world')
+    cinfo = calling_format.from_store_name('hello.world')
     assert repr(cinfo) == str(cinfo)
     assert repr(cinfo) == (
         "CallingInfo(hello.world, "
@@ -244,7 +244,7 @@ def test_str_repr_call_info():
         "None, None)"
     )
 
-    cinfo = calling_format.from_bucket_name('Hello-World')
+    cinfo = calling_format.from_store_name('Hello-World')
     assert repr(cinfo) == str(cinfo)
     assert repr(cinfo) == (
         "CallingInfo(Hello-World, "
@@ -266,7 +266,7 @@ def test_cipher_suites():
     aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
 
-    cinfo = calling_format.from_bucket_name('irrelevant')
+    cinfo = calling_format.from_store_name('irrelevant')
     conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
 
     # Warm up the pool and the connection in it; new_http_connection
