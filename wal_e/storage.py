@@ -3,7 +3,8 @@
 Blob Storage Abstraction
 
 This module is used to define and provide accessors to the logical
-structure and metadata for an S3 WAL-E prefix.
+structure and metadata for an S3 or Windows Azure Blob Storage
+backed WAL-E prefix.
 
 """
 import collections
@@ -58,12 +59,13 @@ BackupInfo = collections.namedtuple('BackupInfo',
 
 OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
 
-SUPPORTED_STORE_SCHEMES = ('s3',)
+SUPPORTED_STORE_SCHEMES = ('s3', 'wabs')
 
 
 class StorageLayout(object):
     """
-    Encapsulates and defines S3 URL path manipulations for WAL-E
+    Encapsulates and defines S3 or Windows Azure Blob Service URL
+    path manipulations for WAL-E
 
     S3:
 
@@ -89,6 +91,30 @@ class StorageLayout(object):
     >>> sl.store_name()
     'foo'
 
+    WABS:
+
+    Without a trailing slash
+    >>> sl = StorageLayout('wabs://foo/bar')
+    >>> sl.is_s3
+    False
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.store_name()
+    'foo'
+
+    With a trailing slash
+    >>> sl = StorageLayout('wabs://foo/bar/')
+    >>> sl.is_s3
+    False
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.store_name()
+    'foo'
+
     """
 
     def __init__(self, prefix, version=CURRENT_VERSION):
@@ -98,9 +124,9 @@ class StorageLayout(object):
 
         if url_tup.scheme not in SUPPORTED_STORE_SCHEMES:
             raise wal_e.exception.UserException(
-                msg='bad S3 URL scheme passed',
-                detail=('The scheme {0} was passed when "s3" was expected.'
-                        .format(url_tup.scheme)))
+                msg='bad S3 or Windows Azure Blob Storage URL scheme passed',
+                detail=('The scheme {0} was passed when "s3" or "wabs" '
+                        'was expected.'.format(url_tup.scheme)))
 
         for scheme in SUPPORTED_STORE_SCHEMES:
             setattr(self, 'is_%s' % scheme, scheme == url_tup.scheme)
@@ -161,7 +187,7 @@ class StorageLayout(object):
         return self.wal_directory() + wal_file_name
 
     def store_name(self):
-        """Return the target bucket name.
+        """Return either the bucket name (S3) or the account name (Azure).
         """
         return self._url_tup.netloc
 

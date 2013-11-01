@@ -127,7 +127,8 @@ class Backup(object):
         p.join(raise_error=True)
 
     def database_backup(self, data_directory, *args, **kwargs):
-        """Uploads a PostgreSQL file cluster to S3
+        """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
+        Service
 
         Mechanism: just wraps _upload_pg_cluster_dir with
         start/stop backup actions with exception handling.
@@ -218,7 +219,7 @@ class Backup(object):
 
     def wal_archive(self, wal_path, concurrency=1):
         """
-        Uploads a WAL file to S3
+        Uploads a WAL file to S3 or Windows Azure Blob Service
 
         This code is intended to typically be called from Postgres's
         archive_command feature.
@@ -256,7 +257,7 @@ class Backup(object):
 
     def wal_restore(self, wal_name, wal_destination):
         """
-        Downloads a WAL file from S3
+        Downloads a WAL file from S3 or Windows Azure Blob Service
 
         This code is intended to typically be called from Postgres's
         restore_command feature.
@@ -331,13 +332,13 @@ class Backup(object):
         of pooled processes involves doing a full sequential scan of the
         uncompressed Postgres heap file that is pipelined into lzo. Once
         lzo is completely finished (necessary to have access to the file
-        size) the file is sent to S3.
+        size) the file is sent to S3 or WABS.
 
         TODO: Investigate an optimization to decouple the compression and
         upload steps to make sure that the most efficient possible use of
         pipelining of network and disk resources occurs.  Right now it
         possible to bounce back and forth between bottlenecking on reading
-        from the database block device and subsequently the S3 sending
+        from the database block device and subsequently the S3/WABS sending
         steps should the processes be at the same stage of the upload
         pipeline: this can have a very negative impact on being able to
         make full use of system resources.
@@ -425,5 +426,10 @@ def get_backup_context(layout, *args):
         *args (argument list): remaining arguments to function will
             be pass to the Backup constructor.
     """
-    from wal_e.operator.s3_operator import S3Backup
-    return S3Backup(*args)
+    if layout.is_s3:
+        from wal_e.operator.s3_operator import S3Backup
+        op = S3Backup(*args)
+    elif layout.is_wabs:
+        from wal_e.operator.wabs_operator import WABSBackup
+        op = WABSBackup(*args)
+    return op

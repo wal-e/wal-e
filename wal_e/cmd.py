@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """WAL-E is a program to assist in performing PostgreSQL continuous
-archiving on S3: it handles pushing and fetching of WAL segments and
-base backups of the PostgreSQL data directory.
+archiving on S3 or Windows Azure Blob Service (WABS): it handles pushing
+and fetching of WAL segments and base backups of the PostgreSQL data directory.
 
 """
 import sys
@@ -174,12 +174,24 @@ def build_parser():
                         help='public AWS access key. Can also be defined in '
                         'an environment variable. If both are defined, '
                         'the one defined in the programs arguments takes '
-                        'precedence.')
+                        'precedence. Left in place for backwards '
+                        'compatibility, please switch to --storage-account.')
+
+    parser.add_argument('-a', '--wabs-account-name',
+                        help='Account name of Windows Azure Blob Service '
+                        'account. Can also be defined in an environment'
+                        'variable. If both are defined, the one defined'
+                        'in the programs arguments takes precedence.')
 
     parser.add_argument('--s3-prefix',
                         help='S3 prefix to run all commands against.  '
                         'Can also be defined via environment variable '
                         'WALE_S3_PREFIX.')
+
+    parser.add_argument('--wabs-prefix',
+                        help='Storage prefix to run all commands against.  '
+                        'Can also be defined via environment variable '
+                        'WALE_WABS_PREFIX.')
 
     parser.add_argument(
         '--gpg-key-id',
@@ -219,13 +231,13 @@ def build_parser():
                                       help='Path to a WAL segment to upload')
 
     backup_fetch_parser = subparsers.add_parser(
-        'backup-fetch', help='fetch a hot backup from S3',
+        'backup-fetch', help='fetch a hot backup from S3 or WABS',
         parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
     backup_list_parser = subparsers.add_parser(
         'backup-list', parents=[backup_list_nodetail_parent],
-        help='list backups in S3')
+        help='list backups in S3 or WABS')
     backup_push_parser = subparsers.add_parser(
-        'backup-push', help='pushing a fresh hot backup to S3',
+        'backup-push', help='pushing a fresh hot backup to S3 or WABS',
         parents=[backup_fetchpush_parent])
     backup_push_parser.add_argument(
         '--cluster-read-rate-limit',
@@ -244,7 +256,7 @@ def build_parser():
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
-        'wal-push', help='push a WAL file to S3',
+        'wal-push', help='push a WAL file to S3 or WABS',
         parents=[wal_fetchpush_parent])
 
     wal_push_parser.add_argument(
@@ -265,14 +277,14 @@ def build_parser():
 
     # wal-fetch operator section
     wal_fetch_parser = subparsers.add_parser(
-        'wal-fetch', help='fetch a WAL file from S3',
+        'wal-fetch', help='fetch a WAL file from S3 or WABS',
         parents=[wal_fetchpush_parent])
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
 
     # delete subparser section
     delete_parser = subparsers.add_parser(
-        'delete', help=('operators to destroy specified data in S3'))
+        'delete', help='operators to destroy specified data in S3 or WABS')
     delete_parser.add_argument('--dry-run', '-n', action='store_true',
                                help=('Only print what would be deleted, '
                                      'do not actually delete anything'))
@@ -317,32 +329,42 @@ def validate_args(args, subcommand):
     # *or* the command line, enforcing a precedence order and
     # complaining should the required parameter not be defined in
     # either location.
-    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    def _check_env(primary, secondary):
+        return os.getenv(primary, os.getenv(secondary))
+
+    # AWS_SECRET_ACCESS_KEY still checked for backwards compatibility.
+    secret_key = _check_env('WABS_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
         logger.error(
-            msg='no AWS_SECRET_ACCESS_KEY defined',
-            hint='Define the environment variable AWS_SECRET_ACCESS_KEY.')
+            msg=('no secret key defined! You must define either '
+                 'WABS_ACCESS_KEY or AWS_SECRET_ACCESS_KEY'),
+            hint=('Define one of the WABS_ACCESS_KEY or '
+                  'AWS_SECRET_ACCESS_KEY environment variables.'))
         sys.exit(1)
 
-    prefix = args.s3_prefix or os.getenv('WALE_S3_PREFIX')
+    prefix = (args.s3_prefix or args.storage_prefix
+              or _check_env('WALE_WABS_PREFIX', 'WALE_S3_PREFIX'))
 
     if prefix is None:
         logger.error(
             msg='no storage prefix defined',
-            hint=('Either set the --s3-prefix option or define the '
-                  'environment variable WALE_S3_PREFIX.'))
+            hint=('Either set one of the --wabs-prefix or --s3-prefix '
+                  'options or define one of the WALE_WABS_PREFIX or '
+                  'WALE_S3_PREFIX environment variables.'))
         sys.exit(1)
 
-    if args.aws_access_key_id is None:
-        access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    if args.aws_access_key_id is None and args.storage_account is None:
+        access_key = _check_env('WABS_ACCOUNT_NAME', 'AWS_ACCESS_KEY_ID')
         if access_key is None:
             logger.error(
-                msg='no storage prefix defined',
-                hint=('Either set the --aws-access-key-id option or define '
-                      'the environment variable AWS_ACCESS_KEY_ID.'))
+                msg='no storage access key ID defined',
+                hint=('Either set one of the --wabs-account --s3-account '
+                      'options or define one of the WABS_ACCOUNT_NAME or '
+                      'AWS_ACCESS_KEY_ID environment varialbes.'))
             sys.exit(1)
     else:
-        access_key = args.aws_access_key_id
+        access_key = args.wabs_account_name or args.aws_access_key_id
     return secret_key, access_key, prefix
 
 
@@ -430,10 +452,10 @@ def main(argv=None):
             if args.dry_run is False and args.confirm is True:
                 # Actually delete data *only* if there are *no* --dry-runs
                 # present and --confirm is present.
-                logger.info(msg='deleting data in S3')
+                logger.info(msg='deleting data in the store')
                 is_dry_run_really = False
             else:
-                logger.info(msg='performing dry run of S3 data deletion')
+                logger.info(msg='performing dry run of data deletion')
                 is_dry_run_really = True
 
                 import boto.s3.key

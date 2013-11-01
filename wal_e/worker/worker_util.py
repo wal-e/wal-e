@@ -17,7 +17,7 @@ def do_lzop_put(access_key, secret_key, url, local_path, gpg_key):
     Compress and upload a given local path.
 
     :type url: string
-    :param url: A s3://bucket/key style URL that is the destination
+    :param url: A (s3|wabs)://bucket/key style URL that is the destination
 
     :type local_path: string
     :param local_path: a path to a file to be compressed
@@ -46,7 +46,7 @@ def do_lzop_put(access_key, secret_key, url, local_path, gpg_key):
 
 def do_lzop_get(access_key, secret_key, url, path, decrypt):
     """
-    Get and decompress an S3 URL
+    Get and decompress an S3 or WABS URL
 
     This streams the content directly to lzop; the compressed version
     is never stored on disk.
