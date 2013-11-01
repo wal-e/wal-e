@@ -1,16 +1,17 @@
 import gevent
 import pytest
+from collections import namedtuple
 
+from azure.storage import BlobService
 from gevent import coros
 
-from boto.s3 import bucket
-from boto.s3 import key
-
 from wal_e import exception
-from wal_e.worker.s3 import s3_deleter
+from wal_e.worker.wabs import wabs_deleter
+
+B = namedtuple('Blob', ['name'])
 
 
-class BucketDeleteKeysCollector(object):
+class ContainerDeleteKeysCollector(object):
     """A callable to stand-in for bucket.delete_keys
 
     Used to test that given keys are bulk-deleted.
@@ -31,12 +32,12 @@ class BucketDeleteKeysCollector(object):
         self.exc = exc
         self._exc_protect.release()
 
-    def __call__(self, keys):
+    def __call__(self, container, key):
         self._exc_protect.acquire()
 
         try:
             if self.exc:
-                self.aborted_keys.extend(keys)
+                self.aborted_keys.append(key)
 
                 # Prevent starvation/livelock with a polling process
                 # by yielding.
@@ -46,7 +47,7 @@ class BucketDeleteKeysCollector(object):
         finally:
             self._exc_protect.release()
 
-        self.deleted_keys.extend(keys)
+        self.deleted_keys.append(key)
 
 
 @pytest.fixture
@@ -57,30 +58,10 @@ def collect(monkeypatch):
     to boto properly.
     """
 
-    collect = BucketDeleteKeysCollector()
-    monkeypatch.setattr(bucket.Bucket, 'delete_keys', collect)
+    collect = ContainerDeleteKeysCollector()
+    monkeypatch.setattr(BlobService, 'delete_blob', collect)
 
     return collect
-
-
-@pytest.fixture
-def b():
-    return bucket.Bucket(name='test-bucket-name')
-
-
-@pytest.fixture(autouse=True)
-def never_use_single_delete(monkeypatch):
-    """Detect any mistaken uses of single-key deletion.
-
-    Older wal-e versions used one-at-a-time deletions.  This is just
-    to help ensure that use of this API (through the nominal boto
-    symbol) is detected.
-    """
-    def die():
-        assert False
-
-    monkeypatch.setattr(key.Key, 'delete', die)
-    monkeypatch.setattr(bucket.Bucket, 'delete_key', die)
 
 
 @pytest.fixture(autouse=True)
@@ -114,42 +95,41 @@ def test_fast_sleep():
 
 def test_construction():
     """The constructor basically works."""
-    s3_deleter.Deleter()
+    wabs_deleter.Deleter('test', 'ing')
 
 
 def test_close_error():
     """Ensure that attempts to use a closed Deleter results in an error."""
 
-    d = s3_deleter.Deleter()
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
     d.close()
 
     with pytest.raises(exception.UserCritical):
         d.delete('no value should work')
 
 
-def test_processes_one_deletion(b, collect):
-    # Mock up a key and bucket
+def test_processes_one_deletion(collect):
     key_name = 'test-key-name'
-    k = key.Key(bucket=b, name=key_name)
+    b = B(name=key_name)
 
-    d = s3_deleter.Deleter()
-    d.delete(k)
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
+    d.delete(b)
     d.close()
 
     assert collect.deleted_keys == [key_name]
 
 
-def test_processes_many_deletions(b, collect):
+def test_processes_many_deletions(collect):
     # Generate a target list of keys in a stable order
     target = sorted(['test-key-' + str(x) for x in range(20001)])
 
     # Construct boto S3 Keys from the generated names and delete them
     # all.
-    keys = [key.Key(bucket=b, name=key_name) for key_name in target]
-    d = s3_deleter.Deleter()
+    blobs = [B(name=key_name) for key_name in target]
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
 
-    for k in keys:
-        d.delete(k)
+    for b in blobs:
+        d.delete(b)
 
     d.close()
 
@@ -159,14 +139,14 @@ def test_processes_many_deletions(b, collect):
     assert sorted(collect.deleted_keys) == target
 
 
-def test_retry_on_normal_error(b, collect):
+def test_retry_on_normal_error(collect):
     """Ensure retries are processed for most errors."""
     key_name = 'test-key-name'
-    k = key.Key(bucket=b, name=key_name)
+    b = B(name=key_name)
 
     collect.inject(StandardError('Normal error'))
-    d = s3_deleter.Deleter()
-    d.delete(k)
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
+    d.delete(b)
 
     # Since delete_keys will fail over and over again, aborted_keys
     # should grow quickly.
@@ -185,10 +165,10 @@ def test_retry_on_normal_error(b, collect):
     assert collect.deleted_keys == [key_name]
 
 
-def test_no_retry_on_keyboadinterrupt(b, collect):
+def test_no_retry_on_keyboadinterrupt(collect):
     """Ensure that KeyboardInterrupts are forwarded."""
     key_name = 'test-key-name'
-    k = key.Key(bucket=b, name=key_name)
+    b = B(name=key_name)
 
     # If vanilla KeyboardInterrupt is used, then sending SIGINT to the
     # test can cause it to pass improperly, so use a subtype instead.
@@ -196,10 +176,10 @@ def test_no_retry_on_keyboadinterrupt(b, collect):
         pass
 
     collect.inject(MarkedKeyboardInterrupt('SIGINT, probably'))
-    d = s3_deleter.Deleter()
+    d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
 
     with pytest.raises(MarkedKeyboardInterrupt):
-        d.delete(k)
+        d.delete(b)
 
         # Exactly when coroutines are scheduled is non-deterministic,
         # so spin while yielding to provoke the

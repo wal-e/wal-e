@@ -41,9 +41,9 @@ class NonBlockPipeFileWrap(object):
         while size is None or accum.tell() < size:
             try:
                 if size is None:
-                    max_read = 4096
+                    max_read = 512
                 else:
-                    max_read = min(4096, size - accum.tell())
+                    max_read = min(512, size - accum.tell())
 
                 chunk = self._fp.read(max_read)
 
@@ -68,7 +68,7 @@ class NonBlockPipeFileWrap(object):
             try:
                 # self._fp.write() doesn't return anything, so use
                 # os.write.
-                bytes_written += os.write(self._fp.fileno(), buf.read(4096))
+                bytes_written += os.write(self._fp.fileno(), buf.read(512))
             except IOError, ex:
                 if ex[0] != errno.EAGAIN:
                     raise

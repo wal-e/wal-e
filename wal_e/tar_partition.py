@@ -162,6 +162,26 @@ class TarPartition(list):
             else:
                 raise
 
+    @staticmethod
+    def tarfile_extract(fileobj, dest_path):
+        """Extract a tarfile described by a file object to a specified path.
+
+        Args:
+            fileobj (file): File object wrapping the target tarfile.
+            dest_path (str): Path to extract the contents of the tarfile to.
+        """
+        # Though this method doesn't fit cleanly into the TarPartition object,
+        # tarballs are only ever extracted for partitions so the logic jives
+        # for the most part.
+        tar = tarfile.open(mode='r|', fileobj=fileobj)
+
+        # TODO: replace with per-member file handling,
+        # extractall very much warned against in the docs, and
+        # seems to have changed between Python 2.6 and Python
+        # 2.7.
+        tar.extractall(dest_path)
+        tar.close()
+
     def tarfile_write(self, fileobj):
         tar = None
         try:

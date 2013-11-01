@@ -191,7 +191,7 @@ class CallingInfo(object):
         return _conn_help(host=self.ordinary_endpoint)
 
 
-def from_bucket_name(bucket_name):
+def from_store_name(bucket_name):
     """Construct a CallingInfo value from a bucket name.
 
     This is useful to encapsulate the ugliness of setting up S3

@@ -6,7 +6,7 @@ import traceback
 from gevent import queue
 from os import path
 from wal_e.exception import UserCritical
-from wal_e.storage import s3_storage
+from wal_e import storage
 
 
 class WalSegment(object):
@@ -66,7 +66,7 @@ class WalSegment(object):
             # more likely to change than that of the WAL segments,
             # which are bulky and situated in a particular place for
             # crash recovery.
-            match = re.match(s3_storage.SEGMENT_READY_REGEXP, status)
+            match = re.match(storage.SEGMENT_READY_REGEXP, status)
 
             if match:
                 seg_name = match.groupdict()['filename']

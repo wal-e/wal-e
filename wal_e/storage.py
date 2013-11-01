@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-S3 Storage Abstraction
+Blob Storage Abstraction
 
 This module is used to define and provide accessors to the logical
-structure and metadata for an S3-backed WAL-E prefix.
+structure and metadata for an S3 or Windows Azure Blob Storage
+backed WAL-E prefix.
 
 """
-
 import collections
 
 import wal_e.exception
@@ -59,27 +59,60 @@ BackupInfo = collections.namedtuple('BackupInfo',
 
 OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
 
+SUPPORTED_STORE_SCHEMES = ('s3', 'wabs')
+
 
 class StorageLayout(object):
     """
-    Encapsulates and defines S3 URL path manipulations for WAL-E
+    Encapsulates and defines S3 or Windows Azure Blob Service URL
+    path manipulations for WAL-E
+
+    S3:
 
     Without a trailing slash
     >>> sl = StorageLayout('s3://foo/bar')
+    >>> sl.is_s3
+    True
     >>> sl.basebackups()
     'bar/basebackups_005/'
     >>> sl.wal_directory()
     'bar/wal_005/'
-    >>> sl.bucket_name()
+    >>> sl.store_name()
     'foo'
 
     With a trailing slash
     >>> sl = StorageLayout('s3://foo/bar/')
+    >>> sl.is_s3
+    True
     >>> sl.basebackups()
     'bar/basebackups_005/'
     >>> sl.wal_directory()
     'bar/wal_005/'
-    >>> sl.bucket_name()
+    >>> sl.store_name()
+    'foo'
+
+    WABS:
+
+    Without a trailing slash
+    >>> sl = StorageLayout('wabs://foo/bar')
+    >>> sl.is_s3
+    False
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.store_name()
+    'foo'
+
+    With a trailing slash
+    >>> sl = StorageLayout('wabs://foo/bar/')
+    >>> sl.is_s3
+    False
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.store_name()
     'foo'
 
     """
@@ -89,25 +122,32 @@ class StorageLayout(object):
 
         url_tup = urlparse(prefix)
 
-        if url_tup.scheme != 's3':
+        if url_tup.scheme not in SUPPORTED_STORE_SCHEMES:
             raise wal_e.exception.UserException(
-                msg='bad S3 URL scheme passed',
-                detail='The scheme {0} was passed when "s3" was expected.'
-                .format(url_tup.scheme))
+                msg='bad S3 or Windows Azure Blob Storage URL scheme passed',
+                detail=('The scheme {0} was passed when "s3" or "wabs" '
+                        'was expected.'.format(url_tup.scheme)))
+
+        for scheme in SUPPORTED_STORE_SCHEMES:
+            setattr(self, 'is_%s' % scheme, scheme == url_tup.scheme)
 
         self._url_tup = url_tup
 
         # S3 api requests absolutely cannot contain a leading slash.
-        s3_api_prefix = url_tup.path.lstrip('/')
+        api_path_prefix = url_tup.path.lstrip('/')
 
         # Also canonicalize a trailing slash onto the prefix, should
         # none already exist. This only applies if we actually have a
         # prefix, i.e., our objects are not being created in the bucket's
         # root.
-        if s3_api_prefix and s3_api_prefix[-1] != '/':
-            self._s3_api_prefix = s3_api_prefix + '/'
+        if api_path_prefix and api_path_prefix[-1] != '/':
+            self._api_path_prefix = api_path_prefix + '/'
         else:
-            self._s3_api_prefix = s3_api_prefix
+            self._api_path_prefix = api_path_prefix
+
+    @property
+    def scheme(self):
+        return self._url_tup.scheme
 
     def _error_on_unexpected_version(self):
         if self.VERSION != CURRENT_VERSION:
@@ -115,7 +155,7 @@ class StorageLayout(object):
                              'operator is not implemented')
 
     def basebackups(self):
-        return self._s3_api_prefix + 'basebackups_' + self.VERSION + '/'
+        return self._api_path_prefix + 'basebackups_' + self.VERSION + '/'
 
     def basebackup_directory(self, backup_info):
         self._error_on_unexpected_version()
@@ -140,11 +180,21 @@ class StorageLayout(object):
                 part_name)
 
     def wal_directory(self):
-        return self._s3_api_prefix + 'wal_' + self.VERSION + '/'
+        return self._api_path_prefix + 'wal_' + self.VERSION + '/'
 
     def wal_path(self, wal_file_name):
         self._error_on_unexpected_version()
         return self.wal_directory() + wal_file_name
 
-    def bucket_name(self):
+    def store_name(self):
+        """Return either the bucket name (S3) or the account name (Azure).
+        """
         return self._url_tup.netloc
+
+    def key_name(self, key):
+        return key.name.lstrip('/')
+
+    def key_last_modified(self, key):
+        if hasattr(key, 'last_modified'):
+            return key.last_modified
+        return key.properties.last_modified
