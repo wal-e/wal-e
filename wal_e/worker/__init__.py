@@ -6,10 +6,10 @@ from wal_e.worker.wal_transfer import WalSegment
 from wal_e.worker.wal_transfer import WalTransferGroup
 
 __all__ = [
-    PgBackupStatements,
-    PgControlDataParser,
-    TarUploadPool,
-    WalSegment,
-    WalTransferGroup,
-    BackupList,
+    "PgBackupStatements",
+    "PgControlDataParser",
+    "TarUploadPool",
+    "WalSegment",
+    "WalTransferGroup",
+    "BackupList",
 ]
