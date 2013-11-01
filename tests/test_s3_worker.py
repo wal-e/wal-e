@@ -1,9 +1,9 @@
 import os
 import pytest
 
-from wal_e.storage import s3_storage
-from wal_e.worker import BackupList
-from wal_e.worker.s3_worker import do_lzop_s3_get
+from wal_e import storage
+from wal_e.blobstore.s3 import do_lzop_get
+from wal_e.worker.s3 import BackupList
 
 from boto.s3.connection import (
     OrdinaryCallingFormat,
@@ -60,8 +60,8 @@ def test_empty_latest_listing():
     """Test listing a 'backup-list LATEST' on an empty prefix."""
 
     bucket_name = 'wal-e-test-empty-listing'
-    layout = s3_storage.StorageLayout('s3://{0}/test-prefix'
-                                      .format(bucket_name))
+    layout = storage.StorageLayout('s3://{0}/test-prefix'
+                                   .format(bucket_name))
 
     with FreshBucket(bucket_name, host='s3.amazonaws.com',
                      calling_format=OrdinaryCallingFormat()) as fb:
@@ -80,7 +80,7 @@ def test_404_termination(tmpdir):
         fb.create()
 
         target = unicode(tmpdir.join('target'))
-        ret = do_lzop_s3_get(os.getenv('AWS_ACCESS_KEY_ID'),
+        ret = do_lzop_get(os.getenv('AWS_ACCESS_KEY_ID'),
                              os.getenv('AWS_SECRET_ACCESS_KEY'),
                              's3://' + bucket_name + '/not-exist.lzo',
                              target, False)

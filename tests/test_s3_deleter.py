@@ -7,7 +7,7 @@ from boto.s3 import bucket
 from boto.s3 import key
 
 from wal_e import exception
-from wal_e.worker import s3_deleter
+from wal_e.worker.s3 import s3_deleter
 
 
 class BucketDeleteKeysCollector(object):
