@@ -10,14 +10,14 @@ from wal_e.worker.pg.wal_transfer import WalSegment
 from wal_e.worker.pg.wal_transfer import WalTransferGroup
 
 __all__ = [
-    PgBackupStatements,
-    PgControlDataParser,
-    TarUploadPool,
-    WalSegment,
-    WalTransferGroup,
-    WalUploader,
-    PartitionUploader,
-    uri_put_file,
-    do_lzop_get,
-    do_lzop_put,
+    "PgBackupStatements",
+    "PgControlDataParser",
+    "TarUploadPool",
+    "WalSegment",
+    "WalTransferGroup",
+    "WalUploader",
+    "PartitionUploader",
+    "uri_put_file",
+    "do_lzop_get",
+    "do_lzop_put",
 ]
