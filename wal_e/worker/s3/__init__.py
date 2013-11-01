@@ -5,9 +5,9 @@ from wal_e.worker.s3.s3_worker import DeleteFromContext
 from wal_e.worker.s3.s3_deleter import Deleter
 
 __all__ = [
-    Deleter,
-    TarPartitionLister,
-    BackupFetcher,
-    BackupList,
-    DeleteFromContext,
+    "Deleter",
+    "TarPartitionLister",
+    "BackupFetcher",
+    "BackupList",
+    "DeleteFromContext",
 ]
