@@ -343,7 +343,7 @@ def validate_args(args, subcommand):
                   'AWS_SECRET_ACCESS_KEY environment variables.'))
         sys.exit(1)
 
-    prefix = (args.s3_prefix or args.storage_prefix
+    prefix = (args.s3_prefix or args.wabs_prefix
               or _check_env('WALE_WABS_PREFIX', 'WALE_S3_PREFIX'))
 
     if prefix is None:
@@ -354,7 +354,7 @@ def validate_args(args, subcommand):
                   'WALE_S3_PREFIX environment variables.'))
         sys.exit(1)
 
-    if args.aws_access_key_id is None and args.storage_account is None:
+    if args.aws_access_key_id is None and args.wabs_account_name is None:
         access_key = _check_env('WABS_ACCOUNT_NAME', 'AWS_ACCESS_KEY_ID')
         if access_key is None:
             logger.error(

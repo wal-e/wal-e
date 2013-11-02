@@ -16,5 +16,5 @@ class WABSBackup(Backup):
         url_tup = urlparse(self.prefix)
         container_name = url_tup.netloc
         self.cinfo = wabs.calling_format.from_store_name(container_name)
-        from wal_e.worker import wabs_worker
+        from wal_e.worker.wabs import wabs_worker
         self.worker = wabs_worker
