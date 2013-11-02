@@ -42,24 +42,36 @@ class SegmentNumber(collections.namedtuple('SegmentNumber',
         assert len(self.seg) == 8
         return int(self.log + self.seg, 16)
 
+OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
+
+SUPPORTED_STORE_SCHEMES = ('s3', 'wabs')
+
+
 # Exhaustively enumerates all possible metadata about a backup.  These
 # may not always all be filled depending what access method is used to
 # get information, in which case the unfilled items should be given a
 # None value.  If an item was intended to be fetch, but could not be
 # after some number of retries and timeouts, the field should be
 # filled with the string 'timeout'.
-BackupInfo = collections.namedtuple('BackupInfo',
-                                    ['name',
-                                     'last_modified',
-                                     'expanded_size_bytes',
-                                     'wal_segment_backup_start',
-                                     'wal_segment_offset_backup_start',
-                                     'wal_segment_backup_stop',
-                                     'wal_segment_offset_backup_stop'])
+class BackupInfo(object):
+    _fields = ['name',
+               'last_modified',
+               'expanded_size_bytes',
+               'wal_segment_backup_start',
+               'wal_segment_offset_backup_start',
+               'wal_segment_backup_stop',
+               'wal_segment_offset_backup_stop']
 
-OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
+    def __init__(self, **kwargs):
+        for field in self._fields:
+            setattr(self, field, kwargs.get(field, None))
 
-SUPPORTED_STORE_SCHEMES = ('s3', 'wabs')
+        self.layout = kwargs['layout']
+        self.spec = kwargs.get('spec', None)
+        self._details_loaded = False
+
+    def load_detail(self, conn):
+        raise NotImplementedError()
 
 
 class StorageLayout(object):
@@ -166,8 +178,10 @@ class StorageLayout(object):
 
     def basebackup_sentinel(self, backup_info):
         self._error_on_unexpected_version()
-        return (self.basebackup_directory(backup_info) +
-                '_backup_stop_sentinel.json')
+        basebackup = self.basebackup_directory(backup_info)
+        # need to strip the trailing slash on the base backup dir
+        # to correctly point to the sentinel
+        return (basebackup.rstrip('/') + '_backup_stop_sentinel.json')
 
     def basebackup_tar_partition_directory(self, backup_info):
         self._error_on_unexpected_version()
@@ -198,3 +212,14 @@ class StorageLayout(object):
         if hasattr(key, 'last_modified'):
             return key.last_modified
         return key.properties.last_modified
+
+
+def get_backup_info(layout, **kwargs):
+    kwargs['layout'] = layout
+    if layout.is_s3:
+        from wal_e.storage.s3_storage import S3BackupInfo
+        bi = S3BackupInfo(**kwargs)
+    elif layout.is_wabs:
+        from wal_e.storage.wabs_storage import WABSBackupInfo
+        bi = WABSBackupInfo(**kwargs)
+    return bi

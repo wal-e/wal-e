@@ -215,6 +215,88 @@ file like this::
 
     restore_command = 'envdir /etc/wal-e.d/env wal-e wal-fetch "%f" "%p"'
 
+.. WARNING::
+   If the archived database contains user defined tablespaces please review
+   the ``backup-fetch`` section below before utilizing that command.
+
+
+Primary Commands
+----------------
+``backup-push``, ``backup-fetch``, ``wal-push``, ``wal-fetch`` represent
+the primary functionality of WAL-E and must reside on the database machine.
+Unlike ``wal-push`` and ``wal-fetch`` commands, which function as described
+above, the``backup-push`` and ``backup-fetch`` require a little additional
+explination.
+
+backup-push
+'''''''''''
+
+By default ``backup-push`` will include all user defined tablespaces in
+the database backup. please see the ``backup-fetch`` section below for
+WAL-E's tablespace restoration behavior.
+
+backup-fetch
+''''''''''''
+
+There are two possible scenarios in which ``backup-fetch`` is run:
+
+No User Defined Tablespaces Existed in Backup
+*********************************************
+
+If the archived database *did not* contain any user defined tablespaces
+at the time of backup it is safe to execute ``backup-fetch`` with no
+additional work by following previous examples.
+
+User Defined Tablespaces Existed in Backup
+******************************************
+
+If the archived database *did* contain user defined tablespaces at the
+time of backup you there are specific behaviors of WAL-E you must be
+aware of:
+
+User-directed Restore
+"""""""""""""""""""""
+
+WAL-E expects that tablespace symlinks will be in place prior to a
+``backup-fetch`` run. This means prepare your target path by insuring
+``${PG_CLUSTER_DIRECTORY}/pg_tblspc`` contains all required symlinks
+before restoration time. If any expected symlink does not exist
+``backup-fetch`` will fail.
+
+Blind Restoration
+"""""""""""""""""
+
+If you are unable to reproduce tablespace storage structures prior to
+running ``backup-fetch`` you can set the option flag ``--blind-restore``.
+This will direct WAL-E to skip the symlink verification process and place
+all data directly in the ``${PG_CLUSTER_DIRECTORY}/pg_tblspc`` path.
+
+Automatic Storage Directory and Symlink Creation
+""""""""""""""""""""""""""""""""""""""""""""""""
+
+Optionally, you can provide a restoration specification file to WAL-E
+using the ``backup-fetch`` ``--restore-spec RESTORE_SPEC`` option.
+This spec must be valid JSON and contain all contained tablespaces
+as well as the target storage path they require, and the symlink
+postgres expects for the tablespace. Here is an example for a
+cluster with a single tablespace::
+
+    {
+        "12345": {
+            "loc": "/data/postgres/tablespaces/tblspc001/",
+            "link": "pg_tblspc/12345"
+        },
+        "tablespaces": [
+            "12345"
+        ],
+    }
+
+Given this information WAL-E will create the data storage directory
+and symlink it appropriately in ``${PG_CLUSTER_DIRECTORY}/pg_tblspc``.
+
+.. WARNING::
+   ``"link"`` properties of tablespaces in the restore specification
+   must contain the ``pg_tblspc`` prefix, it will not be added for you.
 
 Auxiliary Commands
 ------------------
@@ -296,7 +378,6 @@ wal_segment_offset_backup_stop    The offset in the last WAL segment
    request per backup, rather than one web request per thousand
    backups or so) than ``backup-list``, and often (but not always) the
    information in the regular ``backup-list`` is all one needs.
-
 
 delete
 ''''''

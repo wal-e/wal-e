@@ -49,6 +49,11 @@ import wal_e.log_help as log_help
 
 logger = log_help.WalELogger(__name__)
 
+PG_CONF = ('postgresql.conf',
+           'pg_hba.conf',
+           'recovery.conf',
+           'pg_ident.conf')
+
 
 class StreamPadFileObj(object):
     """
@@ -224,12 +229,10 @@ def _segmentation_guts(root, file_paths, max_partition_size):
     These TarPartitions are disjoint and roughly below the prescribed
     size.
     """
-
     # Canonicalize root to include the trailing slash, since root is
     # intended to be a directory anyway.
     if not root.endswith(os.path.sep):
         root += os.path.sep
-
     # Ensure that the root path is a directory before continuing.
     if not os.path.isdir(root):
         raise TarBadRootError(root=root)
@@ -250,6 +253,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         partition = TarPartition(partition_number)
 
         for file_path in file_paths:
+
             # Ensure tar members exist within a shared root before
             # continuing.
             if not file_path.startswith(root):
@@ -317,28 +321,44 @@ def _segmentation_guts(root, file_paths, max_partition_size):
 def partition(pg_cluster_dir):
     def raise_walk_error(e):
         raise e
+    if not pg_cluster_dir.endswith(os.path.sep):
+        pg_cluster_dir += os.path.sep
 
     # Accumulates a list of archived files while walking the file
     # system.
     matches = []
+    # Maintain a manifest of archived files. Tra
+    spec = {'base_prefix': pg_cluster_dir,
+            'tablespaces': []}
 
     walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
-
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
-        if is_cluster_toplevel:
+        if is_cluster_toplevel and 'pg_xlog' in dirnames:
             if 'pg_xlog' in dirnames:
                 dirnames.remove('pg_xlog')
                 matches.append(os.path.join(root, 'pg_xlog'))
 
+        # Do not capture any TEMP Space files, although we do want to
+        # capture the directory name or symlink
+        if 'pgsql_tmp' in dirnames:
+                dirnames.remove('pgsql_tmp')
+                matches.append(os.path.join(root, 'pgsql_tmp'))
+        if 'pg_stat_tmp' in dirnames:
+                dirnames.remove('pg_stat_tmp')
+                matches.append(os.path.join(root, 'pg_stat_tmp'))
+
         for filename in filenames:
             if is_cluster_toplevel and filename in ('postmaster.pid',
-                                                    'postgresql.conf'):
+                                                    'postmaster.opts'):
                 # Do not include the postmaster pid file or the
                 # configuration file in the backup.
+                pass
+            elif is_cluster_toplevel and filename in PG_CONF:
+                # Do not include config files in the backup
                 pass
             else:
                 matches.append(os.path.join(root, filename))
@@ -347,16 +367,50 @@ def partition(pg_cluster_dir):
         if not filenames:
             matches.append(root)
 
-    # Absolute upload paths are used for telling lzop what to
-    # compress.
-    local_abspaths = [os.path.abspath(match) for match in matches]
+        # Special case for tablespaces
+        if root == os.path.join(pg_cluster_dir, 'pg_tblspc'):
+            for tablespace in dirnames:
+                ts_path = os.path.join(root, tablespace)
+                ts_name = os.path.basename(ts_path)
 
-    # Computed to subtract out extra extraneous absolute path
-    # information when storing on S3.
-    common_local_prefix = os.path.commonprefix(local_abspaths)
+                if os.path.islink(ts_path) and os.path.isdir(ts_path):
+                    ts_loc = os.readlink(ts_path)
+                    ts_walker = os.walk(ts_path)
+                    if not ts_loc.endswith(os.path.sep):
+                        ts_loc += os.path.sep
+
+                    if ts_name not in spec['tablespaces']:
+                        spec['tablespaces'].append(ts_name)
+                        link_start = len(spec['base_prefix'])
+                        spec[ts_name] = {
+                            'loc': ts_loc,
+                            # Link path is relative to base_prefix
+                            'link': ts_path[link_start:]
+                        }
+
+                    for ts_root, ts_dirnames, ts_filenames in ts_walker:
+                        if 'pgsql_tmp' in ts_dirnames:
+                            ts_dirnames.remove('pgsql_tmp')
+                            matches.append(os.path.join(ts_root, 'pgsql_tmp'))
+
+                        for ts_filename in ts_filenames:
+                            matches.append(os.path.join(ts_root, ts_filename))
+
+                        # pick up the empty directories:
+                        if not ts_filenames:
+                            matches.append(ts_root)
+
+    # Absolute upload paths are used for telling lzop what to compress. We
+    # must evaluate tablespace storage dirs separately from core file to handle
+    # the case where a common prefix does not exist between the two.
+    local_abspaths = [os.path.abspath(match) for match in matches]
+    # Common local prefix is the prefix removed from the path all tar members.
+    # Core files first
+    local_prefix = os.path.commonprefix(local_abspaths)
+    if not local_prefix.endswith(os.path.sep):
+        local_prefix += os.path.sep
 
     parts = _segmentation_guts(
-        common_local_prefix, local_abspaths,
-        PARTITION_MAX_SZ)
+        local_prefix, matches, PARTITION_MAX_SZ)
 
-    return parts
+    return spec, parts
