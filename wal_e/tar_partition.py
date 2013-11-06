@@ -180,11 +180,17 @@ class TarPartition(list):
         # for the most part.
         tar = tarfile.open(mode='r|', fileobj=fileobj)
 
-        # TODO: replace with per-member file handling,
-        # extractall very much warned against in the docs, and
-        # seems to have changed between Python 2.6 and Python
-        # 2.7.
-        tar.extractall(dest_path)
+        # Iterate through each member of the tarfile individually. We must
+        # approach it this way because we are dealing with a pipe and the
+        # getmembers() method will consume it before we extract any data.
+        for member in tar:
+            # NOTE:: these verifications may be a bit paranoid, but
+            # NOTE:: isn't paranoia a good thing?
+            # Verify the member location is a relative path
+            assert not member.name.startswith('/')
+            # Verify path does not contain '..'
+            assert all([c != '..' for c in os.path.split(member.name)])
+            tar.extract(member, path=dest_path)
         tar.close()
 
     def tarfile_write(self, fileobj):
