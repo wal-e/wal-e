@@ -21,6 +21,8 @@ from wal_e.worker import (WalSegment,
                           do_lzop_get)
 import wal_e.log_help as log_help
 
+# File mode on directories created during restore process
+DEFAULT_DIR_MODE = 0700
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = storage.CURRENT_VERSION
@@ -47,7 +49,7 @@ class Backup(object):
 
         """
         import csv
-        from wal_e.storage import BackupInfo
+        from wal_e.storage.base import BackupInfo
         bl = self._backup_list(detail)
 
         # If there is no query, return an exhaustive list, otherwise
@@ -61,12 +63,13 @@ class Backup(object):
         w_csv = csv.writer(sys.stdout, dialect='excel-tab')
         w_csv.writerow(BackupInfo._fields)
 
-        for backup_info in bl_iter:
-            w_csv.writerow(backup_info)
+        for bi in bl_iter:
+            w_csv.writerow([getattr(bi, k) for k in BackupInfo._fields])
 
         sys.stdout.flush()
 
-    def database_fetch(self, pg_cluster_dir, backup_name, pool_size):
+    def database_fetch(self, pg_cluster_dir, backup_name,
+                       blind_restore, restore_spec, pool_size):
         if os.path.exists(os.path.join(pg_cluster_dir, 'postmaster.pid')):
             hint = ('Shut down postgres. If there is a stale lockfile, '
                     'then remove it after being very sure postgres is not '
@@ -99,7 +102,32 @@ class Backup(object):
         assert backups[0] is not None
 
         backup_info = backups[0]
+        backup_info.load_detail(self.new_connection())
         layout.basebackup_tar_partition_directory(backup_info)
+
+        if restore_spec is not None:
+            if restore_spec != 'SOURCE':
+                if not os.path.isfile(restore_spec):
+                    raise UserException(
+                        msg='Restore specification does not exist',
+                        detail='File not found: %s'.format(restore_spec),
+                        hint=('Provide valid json-formatted restoration '
+                              'specification, or pseudo-name "SOURCE" to '
+                              'restore using the specification from the '
+                              'backup progenitor.'))
+                with open(restore_spec, 'r') as fs:
+                    spec = json.load(fs)
+                backup_info.spec.update(spec)
+            if 'base_prefix' not in spec or not spec['base_prefix']:
+                backup_info.spec['base_prefix'] = pg_cluster_dir
+            self._build_restore_paths(backup_info.spec)
+        else:
+            # If the user hasn't passed in a restoration specification
+            # use pg_cluster_dir as the resore prefix
+            backup_info.spec['base_prefix'] = pg_cluster_dir
+
+        if not blind_restore:
+            self._verify_restore_paths(backup_info.spec)
 
         connections = []
         for i in xrange(pool_size):
@@ -112,7 +140,8 @@ class Backup(object):
         fetchers = []
         for i in xrange(pool_size):
             fetchers.append(self.worker.BackupFetcher(
-                connections[i], layout, backup_info, pg_cluster_dir,
+                connections[i], layout, backup_info,
+                backup_info.spec['base_prefix'],
                 (self.gpg_key_id is not None)))
         assert len(fetchers) == pool_size
 
@@ -163,9 +192,10 @@ class Backup(object):
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
 
-            uploaded_to, expanded_size_bytes = self._upload_pg_cluster_dir(
+            ret_tuple = self._upload_pg_cluster_dir(
                 start_backup_info, data_directory, version=version, *args,
                 **kwargs)
+            spec, uploaded_to, expanded_size_bytes = ret_tuple
             upload_good = True
         finally:
             if not upload_good:
@@ -197,7 +227,8 @@ class Backup(object):
                      stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
                      stop_backup_info['file_offset'],
-                 'expanded_size_bytes': expanded_size_bytes},
+                 'expanded_size_bytes': expanded_size_bytes,
+                 'spec': spec},
                 sentinel_content)
 
             # XXX: should use the storage operators.
@@ -349,7 +380,7 @@ class Backup(object):
         (which affect upload throughput) would help.
 
         """
-        parts = tar_partition.partition(pg_cluster_dir)
+        spec, parts = tar_partition.partition(pg_cluster_dir)
 
         backup_prefix = ('{0}/basebackups_{1}/'
                          'base_{file_name}_{file_offset}'
@@ -377,6 +408,7 @@ class Backup(object):
                      self.secret_key,
                      extended_version_url, StringIO(version),
                      content_encoding='text/plain')
+
         logger.info(msg='postgres version metadata upload complete')
 
         uploader = PartitionUploader(
@@ -397,7 +429,7 @@ class Backup(object):
         # raised to signal failure of the upload.
         pool.join()
 
-        return backup_prefix, total_size
+        return spec, backup_prefix, total_size
 
     def _exception_gather_guard(self, fn):
         """
@@ -416,6 +448,41 @@ class Backup(object):
                 self.exceptions.append(e)
 
         return wrapper
+
+    def _build_restore_paths(self, restor_spec):
+        path_prefix = restor_spec['base_prefix']
+        tblspc_prefix = os.path.join(path_prefix, 'pg_tblspc')
+
+        if not os.path.isdir(path_prefix):
+            os.mkdir(path_prefix, DEFAULT_DIR_MODE)
+            os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
+
+        for tblspc in restor_spec['tablespaces']:
+            dest = os.path.join(path_prefix,
+                                restor_spec[tblspc]['link'])
+            source = restor_spec[tblspc]['loc']
+            if not os.path.isdir(source):
+                os.mkdir(source, DEFAULT_DIR_MODE)
+            os.symlink(source, dest)
+
+    def _verify_restore_paths(self, restor_spec):
+        path_prefix = restor_spec['base_prefix']
+        bad_links = []
+        for tblspc in restor_spec['tablespaces']:
+            tblspc_link = os.path.join(path_prefix, 'pg_tblspc', tblspc)
+            valid = os.path.islink(tblspc_link) and os.path.isdir(tblspc_link)
+            if not valid:
+                bad_links.append(tblspc)
+
+        if bad_links:
+            raise UserException(
+                msg='Symlinks for some tablespaces not found or created.',
+                detail=('Symlinks for the following tablespaces were not '
+                        'found: {spaces}'.format(spaces=', '.join(bad_links))),
+                hint=('Ensure all required symlinks are created prior to '
+                      'running backup-fetch, or use --blind-restore to '
+                      'ignore symlinking. Alternatively supply a restore '
+                      'spec to have WAL-E create tablespace symlinks for you'))
 
 
 def get_backup_context(layout, *args):

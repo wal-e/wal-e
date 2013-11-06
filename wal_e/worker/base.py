@@ -1,7 +1,6 @@
 import gevent
 from gevent import queue
 import re
-import json
 
 from wal_e import exception
 from wal_e import storage
@@ -172,28 +171,19 @@ class _BackupList(object):
                     # request-per.
                     groups = match.groupdict()
 
-                    detail_dict = {'wal_segment_backup_stop': None,
-                                   'wal_segment_offset_backup_stop': None,
-                                   'expanded_size_bytes': None}
-                    if self.detail:
-                        try:
-                            # This costs one web request
-                            detail_dict.update(
-                                json.loads(self._backup_detail(key)))
-                        except gevent.Timeout:
-                            # NB: do *not* overwite "key" in this
-                            # scope, which is being used to mean a "s3
-                            # key", as this will cause later code to
-                            # blow up.
-                            for k in detail_dict:
-                                detail_dict[k] = 'timeout'
-
-                    info = storage.BackupInfo(
+                    info = storage.get_backup_info(
+                        self.layout,
                         name='base_{filename}_{offset}'.format(**groups),
                         last_modified=self.layout.key_last_modified(key),
                         wal_segment_backup_start=groups['filename'],
-                        wal_segment_offset_backup_start=groups['offset'],
-                        **detail_dict)
+                        wal_segment_offset_backup_start=groups['offset'])
+
+                    if self.detail:
+                        try:
+                            # This costs one web request
+                            info.load_detail(self.conn)
+                        except gevent.Timeout:
+                            pass
 
                     yield info
 

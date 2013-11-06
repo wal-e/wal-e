@@ -42,6 +42,15 @@ def uri_put_file(access_key, secret_key, uri, fp, content_encoding=None):
     return _Key(size=len(data))
 
 
+def uri_get_file(access_key, secret_key, uri, conn=None):
+    assert uri.startswith('wabs://')
+    url_tup = urlparse(uri)
+
+    if conn is None:
+        conn = BlobService(access_key, secret_key, protocol='https')
+    return conn.get_blob(url_tup.netloc, url_tup.path)
+
+
 def do_lzop_get(access_key, secret_key, url, path, decrypt):
     """
     Get and decompress a S3 URL

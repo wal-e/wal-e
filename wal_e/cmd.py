@@ -266,6 +266,19 @@ def build_parser():
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
+    backup_fetch_parser.add_argument(
+        '--blind-restore',
+        help='Restore from backup without verification of tablespace symlinks',
+        dest='blind_restore',
+        action='store_true',
+        default=False)
+
+    backup_fetch_parser.add_argument(
+        '--restore-spec',
+        help=('Specification for the directory structure of the database '
+              'restoration (optional, see README for more information).'),
+        type=str,
+        default=None)
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -408,6 +421,8 @@ def main(argv=None):
             backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
+                blind_restore=args.blind_restore,
+                restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
