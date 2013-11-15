@@ -67,7 +67,7 @@ class BackupInfo(object):
             setattr(self, field, kwargs.get(field, None))
 
         self.layout = kwargs['layout']
-        self.spec = kwargs.get('spec', None)
+        self.spec = kwargs.get('spec', {})
         self._details_loaded = False
 
     def load_detail(self, conn):
