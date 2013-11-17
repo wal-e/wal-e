@@ -346,7 +346,6 @@ def validate_args(args, subcommand):
     def _check_env(primary, secondary):
         return os.getenv(primary, os.getenv(secondary))
 
-    # AWS_SECRET_ACCESS_KEY still checked for backwards compatibility.
     secret_key = _check_env('WABS_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY')
     if secret_key is None:
         logger.error(
