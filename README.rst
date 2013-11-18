@@ -393,7 +393,7 @@ one resubmits the same deletion command several times, with or without
 canceling other deletions that may be concurrent.
 
 These commands have a ``dry-run`` mode that is the default.  The
-command is basically optimize to not delete data except in a very
+command is basically optimized for not deleting data except in a very
 specific circumstance to avoid operator error.  Should a dry-run be
 performed, ``wal-e`` will instead simply report every key it would
 otherwise delete if it was not running in dry-run mode, along with
