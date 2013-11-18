@@ -17,13 +17,14 @@ logger = log_help.WalELogger(__name__)
 
 class WalUploader(object):
     def __init__(self, layout, creds, gpg_key_id):
+        self.layout = layout
         self.creds = creds
         self.gpg_key_id = gpg_key_id
         self.blobstore = get_blobstore(layout)
 
     def __call__(self, segment):
         url = '{0}/wal_{1}/{2}.lzo'.format(
-            self.creds.prefix, storage.CURRENT_VERSION, segment.name)
+            self.layout.prefix, storage.CURRENT_VERSION, segment.name)
 
         logger.info(msg='begin archiving a file',
                     detail=('Uploading "{wal_path}" to "{url}".'
