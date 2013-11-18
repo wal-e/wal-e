@@ -320,7 +320,7 @@ class Backup(object):
         for obsolete_version in storage.OBSOLETE_VERSIONS:
             self.delete_all(dry_run, self.layout)
 
-    def delete_all(self, dry_run, layout=None):
+    def delete_all(self, dry_run):
         conn = self.new_connection()
         delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
         delete_cxt.delete_everything()
