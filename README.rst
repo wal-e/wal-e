@@ -74,7 +74,7 @@ This software also has Python dependencies; installing with setup.py
 will attempt to resolve them:
 
 * gevent>=0.13.1
-* boto>=2.2.0
+* boto>=2.6.0
 * azure==0.7.0
 * argparse, if not on Python 2.7
 

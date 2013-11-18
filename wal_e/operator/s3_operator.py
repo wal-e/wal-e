@@ -10,15 +10,13 @@ class S3Backup(Backup):
 
     """
 
-    def __init__(self,
-                 aws_access_key_id, aws_secret_access_key, prefix, gpg_key_id):
-        super(S3Backup, self).__init__(
-            aws_access_key_id, aws_secret_access_key, prefix, gpg_key_id)
+    def __init__(self, layout, creds, gpg_key_id):
+        super(S3Backup, self).__init__(layout, creds, gpg_key_id)
 
         # Create a CallingInfo that will figure out region and calling
         # format issues and cache some of the determinations, if
         # necessary.
-        url_tup = urlparse(self.prefix)
+        url_tup = urlparse(layout.prefix)
         bucket_name = url_tup.netloc
         self.cinfo = s3.calling_format.from_store_name(bucket_name)
         from wal_e.worker.s3 import s3_worker

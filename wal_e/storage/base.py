@@ -161,6 +161,10 @@ class StorageLayout(object):
     def scheme(self):
         return self._url_tup.scheme
 
+    @property
+    def prefix(self):
+        return self._api_path_prefix
+
     def _error_on_unexpected_version(self):
         if self.VERSION != CURRENT_VERSION:
             raise ValueError('Backwards compatibility of this '

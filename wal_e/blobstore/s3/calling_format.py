@@ -109,7 +109,7 @@ class CallingInfo(object):
     def __str__(self):
         return repr(self)
 
-    def connect(self, aws_access_key_id, aws_secret_access_key):
+    def connect(self, creds):
         """Return a boto S3Connection set up with great care.
 
         This includes TLS settings, calling format selection, and
@@ -124,8 +124,9 @@ class CallingInfo(object):
         def _conn_help(*args, **kwargs):
             return _connect_secureish(
                 *args,
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
+                aws_access_key_id=creds.access_key_id,
+                aws_secret_access_key=creds.secret_access_key,
+                security_token=creds.security_token,
                 calling_format=self.calling_format(),
                 **kwargs)
 

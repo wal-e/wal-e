@@ -16,16 +16,14 @@ logger = log_help.WalELogger(__name__)
 
 
 class WalUploader(object):
-    def __init__(self, access_key, secret_key, prefix, gpg_key_id):
-        self.access_key = access_key
-        self.secret_key = secret_key
-        self.prefix = prefix
+    def __init__(self, layout, creds, gpg_key_id):
+        self.creds = creds
         self.gpg_key_id = gpg_key_id
-        self.blobstore = get_blobstore(storage.StorageLayout(prefix))
+        self.blobstore = get_blobstore(layout)
 
     def __call__(self, segment):
         url = '{0}/wal_{1}/{2}.lzo'.format(
-            self.prefix, storage.CURRENT_VERSION, segment.name)
+            self.creds.prefix, storage.CURRENT_VERSION, segment.name)
 
         logger.info(msg='begin archiving a file',
                     detail=('Uploading "{wal_path}" to "{url}".'
@@ -37,9 +35,7 @@ class WalUploader(object):
                                 'state': 'begin'})
 
         # Upload and record the rate at which it happened.
-        kib_per_second = do_lzop_put(self.access_key,
-                                     self.secret_key,
-                                     url, segment.path,
+        kib_per_second = do_lzop_put(self.creds, url, segment.path,
                                      self.gpg_key_id)
 
         logger.info(msg='completed archiving to a file ',
@@ -50,18 +46,15 @@ class WalUploader(object):
                                 'key': url,
                                 'rate': kib_per_second,
                                 'seg': segment.name,
-                                'prefix': self.prefix,
+                                'prefix': self.creds.prefix,
                                 'state': 'complete'})
 
         return segment
 
 
 class PartitionUploader(object):
-    def __init__(self,
-                 access_key, secret_key, backup_prefix, rate_limit, gpg_key):
-        self.backup_prefix = backup_prefix
-        self.access_key = access_key
-        self.secret_key = secret_key
+    def __init__(self, creds, backup_prefix, rate_limit, gpg_key):
+        self.creds = creds
         self.backup_prefix = backup_prefix
         self.rate_limit = rate_limit
         self.gpg_key = gpg_key
@@ -126,8 +119,7 @@ class PartitionUploader(object):
             @retry(retry_with_count(log_volume_failures_on_error))
             def put_file_helper():
                 tf.seek(0)
-                return self.blobstore.uri_put_file(
-                    self.access_key, self.secret_key, url, tf)
+                return self.blobstore.uri_put_file(self.creds, url, tf)
 
             # Actually do work, retrying if necessary, and timing how long
             # it takes.

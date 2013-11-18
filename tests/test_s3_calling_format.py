@@ -8,6 +8,7 @@ from s3_integration_help import (
     FreshBucket,
     no_real_s3_credentials,
 )
+from wal_e.blobstore.s3 import Credentials
 from wal_e.blobstore.s3 import calling_format
 from wal_e.blobstore.s3.calling_format import (
     _is_mostly_subdomain_compatible,
@@ -93,11 +94,10 @@ def test_real_get_location():
     that would otherwise break TLS, test sniffing the right endpoint
     so it can be used to address the bucket.
     """
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
 
-    bucket_name = ('wal-e-test-us-west-1.get.location.' +
-                   aws_access_key_id.lower())
+    bucket_name = 'wal-e-test-us-west-1.get.location'
 
     cinfo = calling_format.from_store_name(bucket_name)
 
@@ -105,7 +105,7 @@ def test_real_get_location():
                      host='s3-us-west-1.amazonaws.com',
                      calling_format=connection.OrdinaryCallingFormat()) as fb:
         fb.create(location='us-west-1')
-        conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+        conn = cinfo.connect(creds)
 
         assert cinfo.region == 'us-west-1'
         assert cinfo.calling_format is connection.OrdinaryCallingFormat
@@ -115,11 +115,10 @@ def test_real_get_location():
 @pytest.mark.skipif("no_real_s3_credentials()")
 def test_classic_get_location():
     """Exercise get location on a s3-classic bucket."""
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
 
-    bucket_name = ('wal-e-test.classic.get.location.' +
-                   aws_access_key_id.lower())
+    bucket_name = 'wal-e-test.classic.get.location'
 
     cinfo = calling_format.from_store_name(bucket_name)
 
@@ -127,7 +126,7 @@ def test_classic_get_location():
                      host='s3.amazonaws.com',
                      calling_format=connection.OrdinaryCallingFormat()) as fb:
         fb.create()
-        conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+        conn = cinfo.connect(creds)
 
         assert cinfo.region == 'us-standard'
         assert cinfo.calling_format is connection.OrdinaryCallingFormat
@@ -137,19 +136,18 @@ def test_classic_get_location():
 @pytest.mark.skipif("no_real_s3_credentials()")
 def test_subdomain_compatible():
     """Exercise a case where connecting is region-oblivious."""
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    bucket_name = 'wal-e-test-us-west-1-no-dots' + aws_access_key.lower()
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
+
+    bucket_name = 'wal-e-test-us-west-1-no-dots'
 
     cinfo = calling_format.from_store_name(bucket_name)
-
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
 
     with FreshBucket(bucket_name,
                      host='s3-us-west-1.amazonaws.com',
                      calling_format=connection.OrdinaryCallingFormat()) as fb:
         fb.create(location='us-west-1')
-        conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+        conn = cinfo.connect(creds)
 
         assert cinfo.region is None
         assert cinfo.calling_format is connection.SubdomainCallingFormat
@@ -193,8 +191,8 @@ def test_get_location_errors(monkeypatch):
         raise boto.exception.S3ResponseError(status=404,
                                              reason=None, body=None)
 
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
 
     with FreshBucket(bucket_name,
                      calling_format=connection.OrdinaryCallingFormat()):
@@ -202,7 +200,7 @@ def test_get_location_errors(monkeypatch):
 
         # Provoke a 403 when trying to get the bucket location.
         monkeypatch.setattr(boto.s3.bucket.Bucket, 'get_location', just_403)
-        cinfo.connect(aws_access_key_id, aws_secret_access_key)
+        cinfo.connect(creds)
 
         assert cinfo.region == 'us-standard'
         assert cinfo.calling_format is connection.OrdinaryCallingFormat
@@ -215,7 +213,7 @@ def test_get_location_errors(monkeypatch):
                             unhandled_404)
 
         with pytest.raises(boto.exception.S3ResponseError) as e:
-            cinfo.connect(aws_access_key_id, aws_secret_access_key)
+            cinfo.connect(creds)
 
         assert e.value.status == 404
 
@@ -263,11 +261,10 @@ def test_cipher_suites():
     # Quiet pyflakes.
     assert cmd
 
-    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
     cinfo = calling_format.from_store_name('irrelevant')
-    conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+    conn = cinfo.connect(creds)
 
     # Warm up the pool and the connection in it; new_http_connection
     # seems to be a more natural choice, but leaves the '.sock'

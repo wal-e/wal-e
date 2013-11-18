@@ -76,9 +76,9 @@ import traceback
 import wal_e.log_help as log_help
 
 from wal_e import subprocess
+from wal_e.exception import UserCritical
 from wal_e.exception import UserException
 from wal_e import storage
-from wal_e import operator
 from wal_e.piper import popen_sp
 from wal_e.worker.pg import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
@@ -337,47 +337,86 @@ def build_parser():
     return parser
 
 
-def validate_args(args, subcommand):
-    # Attempt to read a few key parameters from environment variables
-    # *or* the command line, enforcing a precedence order and
-    # complaining should the required parameter not be defined in
-    # either location.
-
-    def _check_env(primary, secondary):
-        return os.getenv(primary, os.getenv(secondary))
-
-    secret_key = _check_env('WABS_ACCESS_KEY', 'AWS_SECRET_ACCESS_KEY')
-    if secret_key is None:
-        logger.error(
-            msg=('no secret key defined! You must define either '
-                 'WABS_ACCESS_KEY or AWS_SECRET_ACCESS_KEY'),
-            hint=('Define one of the WABS_ACCESS_KEY or '
-                  'AWS_SECRET_ACCESS_KEY environment variables.'))
-        sys.exit(1)
-
+def configure_backup_cxt(args):
+    # Try to find some WAL-E prefix to store data in.
     prefix = (args.s3_prefix or args.wabs_prefix
-              or _check_env('WALE_WABS_PREFIX', 'WALE_S3_PREFIX'))
+              or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX'))
 
     if prefix is None:
-        logger.error(
+        raise UserException(
             msg='no storage prefix defined',
             hint=('Either set one of the --wabs-prefix or --s3-prefix '
                   'options or define one of the WALE_WABS_PREFIX or '
                   'WALE_S3_PREFIX environment variables.'))
-        sys.exit(1)
 
-    if args.aws_access_key_id is None and args.wabs_account_name is None:
-        access_key = _check_env('WABS_ACCOUNT_NAME', 'AWS_ACCESS_KEY_ID')
+    store = storage.StorageLayout(prefix)
+
+    # GPG can be optionally layered atop of every backend, so a common
+    # code path suffices.
+    gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
+    if gpg_key_id is not None:
+        external_program_check([GPG_BIN])
+
+    # Define some hint-text generator to help the user with consistent
+    # language between storage backends when possible.
+    def _opt_env_hint(optname):
+        option = '--' + optname.lower()
+        env = optname.replace('-', '_').upper()
+
+        return ('Pass "{0}" or set the environment variable "{1}".'
+                .format(option, env))
+
+    def _env_hint(optname):
+        env = optname.replace('-', '_').upper()
+        return 'Set the environment variable {0}.'.format(env)
+
+    # Enumeration of reading in configuration for all supported
+    # backend data stores, yielding value adhering to the
+    # 'operator.Backup' protocol.
+    if store.is_s3:
+        access_key = args.aws_access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
         if access_key is None:
-            logger.error(
-                msg='no storage access key ID defined',
-                hint=('Either set one of the --wabs-account --s3-account '
-                      'options or define one of the WABS_ACCOUNT_NAME or '
-                      'AWS_ACCESS_KEY_ID environment varialbes.'))
-            sys.exit(1)
+            raise UserException(
+                msg='AWS Access Key credential is required but not provided',
+                hint=(_opt_env_hint('aws-access-key-id')))
+
+        secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        if secret_key is None:
+            raise UserException(
+                msg='AWS Secret Key credential is required but not provided',
+                hint=_env_hint('aws-secret-access-key'))
+
+        security_token = os.getenv('AWS_SECURITY_TOKEN')
+
+        from wal_e.blobstore import s3
+        from wal_e.operator.s3_operator import S3Backup
+
+        creds = s3.Credentials(access_key, secret_key, security_token)
+
+        return S3Backup(store, creds, gpg_key_id)
+    elif store.is_wabs:
+        account_name = args.wabs_account_name or os.getenv('WABS_ACCOUNT_NAME')
+        if account_name is None:
+            raise UserException(
+                msg='WABS account name is undefined',
+                hint=_opt_env_hint('wabs-account-name'))
+
+        access_key = os.getenv('WABS_ACCESS_KEY')
+        if access_key is None:
+            raise UserException(
+                msg='WABS access key credential is required but not provided',
+                hint=_env_hint('wabs-access-key'))
+
+        from wal_e.blobstore import wabs
+        from wal_e.operator.wabs_operator import WABSBackup
+
+        creds = wabs.Credentials(account_name, access_key)
+
+        return WABSBackup(store, creds, gpg_key_id)
     else:
-        access_key = args.wabs_account_name or args.aws_access_key_id
-    return secret_key, access_key, prefix
+        raise UserCritical(
+            msg='no unsupported blob stores should get here',
+            hint='Report a bug.')
 
 
 def main(argv=None):
@@ -399,22 +438,9 @@ def main(argv=None):
         print pkgutil.get_data('wal_e', 'VERSION').strip()
         sys.exit(0)
 
-    secret_key, access_key, prefix = validate_args(args, subcommand)
-
-    # This will be None if we're not encrypting
-    gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
-
-    store = storage.StorageLayout(prefix)
-    backup_cxt = operator.get_backup_context(store,
-                                             access_key,
-                                             secret_key,
-                                             prefix,
-                                             gpg_key_id)
-
-    if gpg_key_id is not None:
-        external_program_check([GPG_BIN])
-
     try:
+        backup_cxt = configure_backup_cxt(args)
+
         if subcommand == 'backup-fetch':
             external_program_check([LZOP_BIN])
             backup_cxt.database_fetch(

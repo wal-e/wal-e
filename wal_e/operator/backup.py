@@ -31,17 +31,14 @@ logger = log_help.WalELogger(__name__)
 
 class Backup(object):
 
-    def __init__(self, access_key, secret_key, prefix, gpg_key_id):
-        self.access_key = access_key
-        self.secret_key = secret_key
+    def __init__(self, layout, creds, gpg_key_id):
+        self.layout = layout
+        self.creds = creds
         self.gpg_key_id = gpg_key_id
-
-        # Canonicalize the storage prefix by stripping any trailing slash
-        self.prefix = prefix.rstrip('/')
         self.exceptions = []
 
     def new_connection(self):
-        return self.cinfo.connect(self.access_key, self.secret_key)
+        return self.cinfo.connect(self.creds)
 
     def backup_list(self, query, detail):
         """
@@ -79,7 +76,6 @@ class Backup(object):
                 detail='Found a postmaster.pid lockfile, and aborting',
                 hint=hint)
 
-        layout = storage.StorageLayout(self.prefix)
         bl = self._backup_list(False)
         backups = list(bl.find_all(backup_name))
 
@@ -103,7 +99,7 @@ class Backup(object):
 
         backup_info = backups[0]
         backup_info.load_detail(self.new_connection())
-        layout.basebackup_tar_partition_directory(backup_info)
+        self.layout.basebackup_tar_partition_directory(backup_info)
 
         if restore_spec is not None:
             if restore_spec != 'SOURCE':
@@ -134,13 +130,13 @@ class Backup(object):
             connections.append(self.new_connection())
 
         partition_iter = self.worker.TarPartitionLister(
-            connections[0], layout, backup_info)
+            connections[0], self.layout, backup_info)
 
         assert len(connections) == pool_size
         fetchers = []
         for i in xrange(pool_size):
             fetchers.append(self.worker.BackupFetcher(
-                connections[i], layout, backup_info,
+                connections[i], self.layout, backup_info,
                 backup_info.spec['base_prefix'],
                 (self.gpg_key_id is not None)))
         assert len(fetchers) == pool_size
@@ -238,10 +234,9 @@ class Backup(object):
             # bump).
             sentinel_content.seek(0)
 
-            uri_put_file(
-                self.access_key, self.secret_key,
-                uploaded_to + '_backup_stop_sentinel.json',
-                sentinel_content, content_encoding='application/json')
+            uri_put_file(self.creds,
+                         uploaded_to + '_backup_stop_sentinel.json',
+                         sentinel_content, content_encoding='application/json')
         else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
@@ -262,9 +257,7 @@ class Backup(object):
         # in archive_status.
         xlog_dir = os.path.dirname(wal_path)
         segment = WalSegment(wal_path, explicit=True)
-        uploader = WalUploader(self.access_key,
-                               self.secret_key,
-                               self.prefix, self.gpg_key_id)
+        uploader = WalUploader(self.layout, self.creds, self.gpg_key_id)
         group = WalTransferGroup(uploader)
         group.start(segment)
 
@@ -305,19 +298,18 @@ class Backup(object):
             structured={'action': 'wal-fetch',
                         'key': url,
                         'seg': wal_name,
-                        'prefix': self.prefix,
+                        'prefix': self.layout.prefix,
                         'state': 'begin'})
 
-        ret = do_lzop_get(
-            self.access_key, self.secret_key,
-            url, wal_destination, self.gpg_key_id is not None)
+        ret = do_lzop_get(self.creds, url, wal_destination,
+                          self.gpg_key_id is not None)
 
         logger.info(
             msg='complete wal restore',
             structured={'action': 'wal-fetch',
                         'key': url,
                         'seg': wal_name,
-                        'prefix': self.prefix,
+                        'prefix': self.layout.prefix,
                         'state': 'complete'})
 
         return ret
@@ -326,29 +318,21 @@ class Backup(object):
         assert storage.CURRENT_VERSION not in storage.OBSOLETE_VERSIONS
 
         for obsolete_version in storage.OBSOLETE_VERSIONS:
-            layout = storage.StorageLayout(self.prefix,
-                                           version=obsolete_version)
-            self.delete_all(dry_run, layout)
+            self.delete_all(dry_run, self.layout)
 
     def delete_all(self, dry_run, layout=None):
-        if layout is None:
-            layout = storage.StorageLayout(self.prefix)
-
         conn = self.new_connection()
-        delete_cxt = self.worker.DeleteFromContext(conn, layout, dry_run)
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
         delete_cxt.delete_everything()
 
     def delete_before(self, dry_run, segment_info):
-        layout = storage.StorageLayout(self.prefix)
         conn = self.new_connection()
-        delete_cxt = self.worker.DeleteFromContext(conn, layout, dry_run)
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
         delete_cxt.delete_before(segment_info)
 
     def _backup_list(self, detail):
         conn = self.new_connection()
-        bl = self.worker.BackupList(conn,
-                                    storage.StorageLayout(self.prefix),
-                                    detail)
+        bl = self.worker.BackupList(conn, self.layout, detail)
         return bl
 
     def _upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
@@ -384,7 +368,7 @@ class Backup(object):
 
         backup_prefix = ('{0}/basebackups_{1}/'
                          'base_{file_name}_{file_offset}'
-                         .format(self.prefix, FILE_STRUCTURE_VERSION,
+                         .format(self.layout.prefix, FILE_STRUCTURE_VERSION,
                                  **start_backup_info))
 
         if rate_limit is None:
@@ -404,16 +388,14 @@ class Backup(object):
             msg='start upload postgres version metadata',
             detail=('Uploading to {extended_version_url}.'
                     .format(extended_version_url=extended_version_url)))
-        uri_put_file(self.access_key,
-                     self.secret_key,
+        uri_put_file(self.creds,
                      extended_version_url, StringIO(version),
                      content_encoding='text/plain')
 
         logger.info(msg='postgres version metadata upload complete')
 
-        uploader = PartitionUploader(
-            self.access_key, self.secret_key,
-            backup_prefix, per_process_limit, self.gpg_key_id)
+        uploader = PartitionUploader(self.creds, backup_prefix,
+                                     per_process_limit, self.gpg_key_id)
 
         pool = TarUploadPool(uploader, pool_size)
 
@@ -485,20 +467,3 @@ class Backup(object):
                       'running backup-fetch, or use --blind-restore to '
                       'ignore symlinking. Alternatively supply a restore '
                       'spec to have WAL-E create tablespace symlinks for you'))
-
-
-def get_backup_context(layout, *args):
-    """Return backup context for a given storage layout.
-
-    Args:
-        layout (StorageLayout): Target storage layout.
-        *args (argument list): remaining arguments to function will
-            be pass to the Backup constructor.
-    """
-    if layout.is_s3:
-        from wal_e.operator.s3_operator import S3Backup
-        op = S3Backup(*args)
-    elif layout.is_wabs:
-        from wal_e.operator.wabs_operator import WABSBackup
-        op = WABSBackup(*args)
-    return op
