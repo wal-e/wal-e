@@ -22,8 +22,30 @@ def boto_supports_certs():
     return tuple(int(x) for x in boto.__version__.split('.')) >= (2, 6, 0)
 
 
-def apathetic_bucket_delete(bucket_name, *args, **kwargs):
+def _delete_keys(bucket, keys):
+    for name in keys:
+        while True:
+            try:
+                k = boto.s3.connection.Key(bucket, name)
+                bucket.delete_key(k)
+            except boto.exception.S3ResponseError, e:
+                if e.status == 404:
+                    # Key is already not present.  Continue the
+                    # deletion iteration.
+                    break
+
+                raise
+            else:
+                break
+
+
+def apathetic_bucket_delete(bucket_name, keys, *args, **kwargs):
     conn = boto.s3.connection.S3Connection(*args, **kwargs)
+    bucket = conn.lookup(bucket_name)
+
+    if bucket:
+        # Delete key names passed by the test code.
+        _delete_keys(conn.lookup(bucket_name), keys)
 
     try:
         conn.delete_bucket(bucket_name)
@@ -38,7 +60,13 @@ def apathetic_bucket_delete(bucket_name, *args, **kwargs):
     return conn
 
 
-def insistent_bucket_delete(conn, bucket_name):
+def insistent_bucket_delete(conn, bucket_name, keys):
+    bucket = conn.lookup(bucket_name)
+
+    if bucket:
+        # Delete key names passed by the test code.
+        _delete_keys(bucket, keys)
+
     while True:
         try:
             conn.delete_bucket(bucket_name)
@@ -70,8 +98,9 @@ def insistent_bucket_create(conn, bucket_name, *args, **kwargs):
 
 class FreshBucket(object):
 
-    def __init__(self, bucket_name, *args, **kwargs):
+    def __init__(self, bucket_name, keys=[], *args, **kwargs):
         self.bucket_name = bucket_name
+        self.keys = keys
         self.conn_args = args
         self.conn_kwargs = kwargs
         self.created_bucket = False
@@ -84,6 +113,7 @@ class FreshBucket(object):
         # Clean up a dangling bucket from a previous test run, if
         # necessary.
         self.conn = apathetic_bucket_delete(self.bucket_name,
+                                            self.keys,
                                             *self.conn_args,
                                             **self.conn_kwargs)
 
@@ -100,6 +130,6 @@ class FreshBucket(object):
         if not self.created_bucket:
             return False
 
-        insistent_bucket_delete(self.conn, self.bucket_name)
+        insistent_bucket_delete(self.conn, self.bucket_name, self.keys)
 
         return False

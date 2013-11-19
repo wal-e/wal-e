@@ -6,13 +6,13 @@ from wal_e.pipeline import get_upload_pipeline
 from wal_e.blobstore import get_blobstore
 
 
-def uri_put_file(access_key, secret_key, uri, fp, content_encoding=None):
+def uri_put_file(creds, uri, fp, content_encoding=None):
     blobstore = get_blobstore(storage.StorageLayout(uri))
-    return blobstore.uri_put_file(
-        access_key, secret_key, uri, fp, content_encoding=content_encoding)
+    return blobstore.uri_put_file(creds, uri, fp,
+                                  content_encoding=content_encoding)
 
 
-def do_lzop_put(access_key, secret_key, url, local_path, gpg_key):
+def do_lzop_put(creds, url, local_path, gpg_key):
     """
     Compress and upload a given local path.
 
@@ -35,7 +35,7 @@ def do_lzop_put(access_key, secret_key, url, local_path, gpg_key):
 
         clock_start = time.clock()
         tf.seek(0)
-        k = blobstore.uri_put_file(access_key, secret_key, url, tf)
+        k = blobstore.uri_put_file(creds, url, tf)
         clock_finish = time.clock()
 
         kib_per_second = format_kib_per_second(
@@ -44,7 +44,7 @@ def do_lzop_put(access_key, secret_key, url, local_path, gpg_key):
         return kib_per_second
 
 
-def do_lzop_get(access_key, secret_key, url, path, decrypt):
+def do_lzop_get(creds, url, path, decrypt):
     """
     Get and decompress an S3 or WABS URL
 
@@ -53,7 +53,7 @@ def do_lzop_get(access_key, secret_key, url, path, decrypt):
 
     """
     blobstore = get_blobstore(storage.StorageLayout(url))
-    return blobstore.do_lzop_get(access_key, secret_key, url, path, decrypt)
+    return blobstore.do_lzop_get(creds, url, path, decrypt)
 
 
 def format_kib_per_second(start, finish, amount_in_bytes):

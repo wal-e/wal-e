@@ -2,6 +2,7 @@ import os
 import pytest
 
 from wal_e import storage
+from wal_e.blobstore.s3 import Credentials
 from wal_e.blobstore.s3 import do_lzop_get
 from wal_e.worker.s3 import BackupList
 
@@ -74,14 +75,14 @@ def test_empty_latest_listing():
 @pytest.mark.skipif("no_real_s3_credentials()")
 def test_404_termination(tmpdir):
     bucket_name = 'wal-e-test-404-termination'
+    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                        os.getenv('AWS_SECRET_ACCESS_KEY'))
 
     with FreshBucket(bucket_name, host='s3.amazonaws.com',
                      calling_format=OrdinaryCallingFormat()) as fb:
         fb.create()
 
         target = unicode(tmpdir.join('target'))
-        ret = do_lzop_get(os.getenv('AWS_ACCESS_KEY_ID'),
-                             os.getenv('AWS_SECRET_ACCESS_KEY'),
-                             's3://' + bucket_name + '/not-exist.lzo',
-                             target, False)
+        ret = do_lzop_get(creds, 's3://' + bucket_name + '/not-exist.lzo',
+                          target, False)
         assert ret is False

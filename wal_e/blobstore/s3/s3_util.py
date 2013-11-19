@@ -24,19 +24,18 @@ if not boto.config.has_option('Boto', 'http_socket_timeout'):
     boto.config.set('Boto', 'http_socket_timeout', '5')
 
 
-def _uri_to_key(access_key, secret_key, uri, conn=None):
+def _uri_to_key(creds, uri, conn=None):
     assert uri.startswith('s3://')
     url_tup = urlparse(uri)
     bucket_name = url_tup.netloc
     cinfo = calling_format.from_store_name(bucket_name)
     if conn is None:
-        conn = cinfo.connect(access_key, secret_key)
+        conn = cinfo.connect(creds)
     bucket = boto.s3.bucket.Bucket(connection=conn, name=bucket_name)
     return boto.s3.key.Key(bucket=bucket, name=url_tup.path)
 
 
-def uri_put_file(access_key, secret_access, uri,
-                 fp, content_encoding=None, conn=None):
+def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
     # Per Boto 2.2.2, which will only read from the current file
     # position to the end.  This manifests as successfully uploaded
     # *empty* keys in S3 instead of the intended data because of how
@@ -47,7 +46,7 @@ def uri_put_file(access_key, secret_access, uri,
     # in mind, assert it as a precondition for using this procedure.
     assert fp.tell() == 0
 
-    k = _uri_to_key(access_key, secret_access, uri, conn=conn)
+    k = _uri_to_key(creds, uri, conn=conn)
 
     if content_encoding is not None:
         k.content_type = content_encoding
@@ -56,12 +55,12 @@ def uri_put_file(access_key, secret_access, uri,
     return k
 
 
-def uri_get_file(access_key, secret_access, uri, conn=None):
-    k = _uri_to_key(access_key, secret_access, uri, conn=conn)
+def uri_get_file(creds, uri, conn=None):
+    k = _uri_to_key(creds, uri, conn=conn)
     return k.get_contents_as_string()
 
 
-def do_lzop_get(access_key, secret_key, url, path, decrypt):
+def do_lzop_get(creds, url, path, decrypt):
     """
     Get and decompress a S3 URL
 
@@ -110,7 +109,7 @@ def do_lzop_get(access_key, secret_key, url, path, decrypt):
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
-            key = _uri_to_key(access_key, secret_key, url)
+            key = _uri_to_key(creds, url)
             pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
             g = gevent.spawn(write_and_return_error, key, pipeline.stdin)
 

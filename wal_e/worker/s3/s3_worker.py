@@ -23,6 +23,10 @@ from wal_e.worker.base import generic_weird_key_hint_message
 logger = log_help.WalELogger(__name__)
 
 
+def get_bucket(conn, name):
+    return conn.get_bucket(name, validate=False)
+
+
 class TarPartitionLister(object):
     def __init__(self, s3_conn, layout, backup_info):
         self.s3_conn = s3_conn
@@ -33,7 +37,7 @@ class TarPartitionLister(object):
         prefix = self.layout.basebackup_tar_partition_directory(
             self.backup_info)
 
-        bucket = self.s3_conn.get_bucket(self.layout.store_name())
+        bucket = get_bucket(self.s3_conn, self.layout.store_name())
         for key in bucket.list(prefix=prefix):
             url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
                                                 name=key.name)
@@ -55,7 +59,7 @@ class BackupFetcher(object):
         self.layout = layout
         self.local_root = local_root
         self.backup_info = backup_info
-        self.bucket = self.s3_conn.get_bucket(self.layout.store_name())
+        self.bucket = get_bucket(self.s3_conn, self.layout.store_name())
         self.decrypt = decrypt
 
     @retry()
@@ -88,7 +92,7 @@ class BackupList(_BackupList):
         return key.get_contents_as_string()
 
     def _backup_list(self, prefix):
-        bucket = self.conn.get_bucket(self.layout.store_name())
+        bucket = get_bucket(self.conn, self.layout.store_name())
         return bucket.list(prefix=prefix)
 
 
@@ -106,5 +110,5 @@ class DeleteFromContext(_DeleteFromContext):
         return key.bucket.name
 
     def _backup_list(self, prefix):
-        bucket = self.conn.get_bucket(self.layout.store_name())
+        bucket = get_bucket(self.conn, self.layout.store_name())
         return bucket.list(prefix=prefix)

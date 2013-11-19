@@ -22,7 +22,7 @@ logger = log_help.WalELogger(__name__)
 _Key = _namedtuple('_Key', ['size'])
 
 
-def uri_put_file(access_key, secret_key, uri, fp, content_encoding=None):
+def uri_put_file(creds, uri, fp, content_encoding=None):
     assert fp.tell() == 0
     data = fp.read()
 
@@ -34,7 +34,7 @@ def uri_put_file(access_key, secret_key, uri, fp, content_encoding=None):
     if content_encoding is not None:
         kwargs['x_ms_blob_content_encoding'] = content_encoding
 
-    conn = BlobService(access_key, secret_key, protocol='https')
+    conn = BlobService(creds.account_name, creds.account_key, protocol='https')
     conn.put_blob(url_tup.netloc, url_tup.path, data, **kwargs)
     # To maintain consistency with the S3 version of this function we must
     # return an object with a certain set of attributes.  Currently, that set
@@ -42,16 +42,17 @@ def uri_put_file(access_key, secret_key, uri, fp, content_encoding=None):
     return _Key(size=len(data))
 
 
-def uri_get_file(access_key, secret_key, uri, conn=None):
+def uri_get_file(creds, uri, conn=None):
     assert uri.startswith('wabs://')
     url_tup = urlparse(uri)
 
     if conn is None:
-        conn = BlobService(access_key, secret_key, protocol='https')
+        conn = BlobService(creds.account_name, creds.account_key,
+                           protocol='https')
     return conn.get_blob(url_tup.netloc, url_tup.path)
 
 
-def do_lzop_get(access_key, secret_key, url, path, decrypt):
+def do_lzop_get(creds, url, path, decrypt):
     """
     Get and decompress a S3 URL
 
@@ -62,7 +63,7 @@ def do_lzop_get(access_key, secret_key, url, path, decrypt):
     assert url.endswith('.lzo'), 'Expect an lzop-compressed file'
     assert url.startswith('wabs://')
 
-    conn = BlobService(access_key, secret_key)
+    conn = BlobService(creds.account_name, creds.account_key, protocol='https')
 
     def log_wal_fetch_failures_on_error(exc_tup, exc_processor_cxt):
         def standard_detail_message(prefix=''):
