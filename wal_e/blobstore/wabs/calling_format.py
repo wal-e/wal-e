@@ -20,11 +20,11 @@ class CallingInfo(object):
     def __str__(self):
         return repr(self)
 
-    def connect(self, account_name, account_key):
+    def connect(self, creds):
         """Return an azure BlobService instance.
         """
-        return BlobService(account_name=account_name,
-                           account_key=account_key,
+        return BlobService(account_name=creds.account_name,
+                           account_key=creds.account_key,
                            protocol='https')
 
 
