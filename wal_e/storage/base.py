@@ -154,8 +154,10 @@ class StorageLayout(object):
         # root.
         if api_path_prefix and api_path_prefix[-1] != '/':
             self._api_path_prefix = api_path_prefix + '/'
+            self._api_prefix = prefix + '/'
         else:
             self._api_path_prefix = api_path_prefix
+            self._api_prefix = prefix
 
     @property
     def scheme(self):
@@ -163,6 +165,10 @@ class StorageLayout(object):
 
     @property
     def prefix(self):
+        return self._api_prefix
+
+    @property
+    def path_prefix(self):
         return self._api_path_prefix
 
     def _error_on_unexpected_version(self):

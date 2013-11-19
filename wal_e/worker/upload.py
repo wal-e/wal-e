@@ -1,3 +1,4 @@
+import os
 import socket
 import tempfile
 import time
@@ -23,8 +24,10 @@ class WalUploader(object):
         self.blobstore = get_blobstore(layout)
 
     def __call__(self, segment):
-        url = '{0}/wal_{1}/{2}.lzo'.format(
-            self.layout.prefix, storage.CURRENT_VERSION, segment.name)
+        url = os.path.join(
+            self.layout.prefix,
+            'wal_{}'.format(storage.CURRENT_VERSION),
+            '{}.lzo'.format(segment.name))
 
         logger.info(msg='begin archiving a file',
                     detail=('Uploading "{wal_path}" to "{url}".'
@@ -32,7 +35,7 @@ class WalUploader(object):
                     structured={'action': 'push-wal',
                                 'key': url,
                                 'seg': segment.name,
-                                'prefix': self.prefix,
+                                'prefix': self.layout.path_prefix,
                                 'state': 'begin'})
 
         # Upload and record the rate at which it happened.
@@ -47,7 +50,7 @@ class WalUploader(object):
                                 'key': url,
                                 'rate': kib_per_second,
                                 'seg': segment.name,
-                                'prefix': self.layout.prefix,
+                                'prefix': self.layout.path_prefix,
                                 'state': 'complete'})
 
         return segment
@@ -80,8 +83,10 @@ class PartitionUploader(object):
 
             tf.flush()
 
-            url = '/'.join([self.backup_prefix, 'tar_partitions',
-                            'part_{number}.tar.lzo'.format(number=tpart.name)])
+            url = os.path.join(
+                self.backup_prefix,
+                'tar_partitions',
+                'part_{number}.tar.lzo'.format(number=tpart.name))
 
             logger.info(msg='begin uploading a base backup volume',
                         detail='Uploading to "{url}".'.format(url=url))

@@ -290,15 +290,17 @@ class Backup(object):
         basename(wal_path), so both are required.
 
         """
-        url = '{0}/wal_{1}/{2}.lzo'.format(
-            self.prefix, FILE_STRUCTURE_VERSION, wal_name)
+        url = os.path.join(
+            self.layout.prefix,
+            'wal_{}'.format(FILE_STRUCTURE_VERSION),
+            '{}.lzo'.format(wal_name))
 
         logger.info(
             msg='begin wal restore',
             structured={'action': 'wal-fetch',
                         'key': url,
                         'seg': wal_name,
-                        'prefix': self.layout.prefix,
+                        'prefix': self.layout.path_prefix,
                         'state': 'begin'})
 
         ret = do_lzop_get(self.creds, url, wal_destination,
@@ -309,7 +311,7 @@ class Backup(object):
             structured={'action': 'wal-fetch',
                         'key': url,
                         'seg': wal_name,
-                        'prefix': self.layout.prefix,
+                        'prefix': self.layout.path_prefix,
                         'state': 'complete'})
 
         return ret
@@ -366,11 +368,10 @@ class Backup(object):
         """
         spec, parts = tar_partition.partition(pg_cluster_dir)
 
-        backup_prefix = ('{0}/basebackups_{1}/'
-                         'base_{file_name}_{file_offset}'
-                         .format(self.layout.prefix, FILE_STRUCTURE_VERSION,
-                                 **start_backup_info))
-
+        backup_prefix = os.path.join(
+            self.layout.prefix,
+            'basebackups_{}'.format(FILE_STRUCTURE_VERSION),
+            'base_{file_name}_{file_offset}'.format(**start_backup_info))
         if rate_limit is None:
             per_process_limit = None
         else:
