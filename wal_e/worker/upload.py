@@ -47,7 +47,7 @@ class WalUploader(object):
                                 'key': url,
                                 'rate': kib_per_second,
                                 'seg': segment.name,
-                                'prefix': self.creds.prefix,
+                                'prefix': self.layout.prefix,
                                 'state': 'complete'})
 
         return segment
