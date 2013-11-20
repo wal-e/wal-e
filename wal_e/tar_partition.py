@@ -402,9 +402,15 @@ def partition(pg_cluster_dir):
                         for ts_filename in ts_filenames:
                             matches.append(os.path.join(ts_root, ts_filename))
 
-                        # pick up the empty directories:
-                        if not ts_filenames:
+                        # pick up the empty directories, make sure ts_root
+                        # isn't duplicated
+                        if not ts_filenames and ts_root not in matches:
                             matches.append(ts_root)
+
+                    # The symlink for this tablespace is now in the match list,
+                    # remove it.
+                    if ts_path in matches:
+                        matches.remove(ts_path)
 
     # Absolute upload paths are used for telling lzop what to compress. We
     # must evaluate tablespace storage dirs separately from core file to handle
