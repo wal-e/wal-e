@@ -81,9 +81,10 @@ will attempt to resolve them:
 Backend Blob Store
 ------------------
 
-The storage backend is determined by the defined _PREFIX. Prefixes with
-the scheme ``s3`` will be directed towards S3, where those with the scheme
-``wabs`` will be directed towards Windows Azure Blob Service.
+The storage backend is determined by the defined _PREFIX. Prefixes with the
+scheme ``s3`` will be directed towards S3, those with the scheme ``wabs`` will
+be directed towards Windows Azure Blob Service, and those with the scheme
+``swift`` will be directed towards an OpenStack Swift installation.
 
 Example S3 Prefix:
 
@@ -92,6 +93,10 @@ Example S3 Prefix:
 Example WABS Prefix:
 
   wabs://some-container/directory/or/whatever
+
+Example OpenStack Swift Prefix:
+
+  swift://some-container/directory/or/whatever
 
 
 Examples

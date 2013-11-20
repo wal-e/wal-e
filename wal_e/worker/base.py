@@ -359,9 +359,11 @@ class _DeleteFromContext(object):
         wal_key_depth = self.layout.wal_directory().count('/') + 1
         for key in self._backup_list(prefix=self.layout.wal_directory()):
             key_name = self.layout.key_name(key)
-            url = '{scm}://{bucket}/{name}'.format(scm=self.layout.scheme,
-                                                   bucket=key.bucket.name,
-                                                   name=key_name)
+            url = '{scm}://{bucket}/{name}'.format(
+                scm=self.layout.scheme,
+                bucket=self.layout.store_name(),
+                name=key_name
+            )
             key_parts = key_name.split('/')
             key_depth = len(key_parts)
             if key_depth != wal_key_depth:

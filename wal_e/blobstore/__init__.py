@@ -9,4 +9,7 @@ def get_blobstore(layout):
     elif layout.is_wabs:
         from wal_e.blobstore import wabs
         blobstore = wabs
+    elif layout.is_swift:
+        from wal_e.blobstore import swift
+        blobstore = swift
     return blobstore

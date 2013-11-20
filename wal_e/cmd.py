@@ -340,14 +340,18 @@ def build_parser():
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
     prefix = (args.s3_prefix or args.wabs_prefix
-              or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX'))
+              or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX')
+              or os.getenv('WALE_SWIFT_PREFIX'))
 
     if prefix is None:
         raise UserException(
             msg='no storage prefix defined',
-            hint=('Either set one of the --wabs-prefix or --s3-prefix '
-                  'options or define one of the WALE_WABS_PREFIX or '
-                  'WALE_S3_PREFIX environment variables.'))
+            hint=(
+                'Either set one of the --wabs-prefix or --s3-prefix options or'
+                ' define one of the WALE_WABS_PREFIX, WALE_S3_PREFIX, or '
+                'WALE_SWIFT_PREFIX environment variables.'
+            )
+        )
 
     store = storage.StorageLayout(prefix)
 
@@ -413,6 +417,18 @@ def configure_backup_cxt(args):
         creds = wabs.Credentials(account_name, access_key)
 
         return WABSBackup(store, creds, gpg_key_id)
+    elif store.is_swift:
+        from wal_e.blobstore import swift
+        from wal_e.operator.swift_operator import SwiftBackup
+
+        creds = swift.Credentials(
+            os.getenv('SWIFT_AUTHURL'),
+            os.getenv('SWIFT_USER'),
+            os.getenv('SWIFT_PASSWORD'),
+            os.getenv('SWIFT_TENANT'),
+            os.getenv('SWIFT_REGION'),
+        )
+        return SwiftBackup(store, creds, gpg_key_id)
     else:
         raise UserCritical(
             msg='no unsupported blob stores should get here',
@@ -517,6 +533,7 @@ def main(argv=None):
                 backup_cxt.delete_all(is_dry_run_really)
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
+                assert segment_info is not None
                 backup_cxt.delete_before(is_dry_run_really, segment_info)
             else:
                 assert False, 'Should be rejected by argument parsing.'
