@@ -1,3 +1,4 @@
+import os
 import gevent
 import socket
 from urlparse import urlparse
@@ -20,22 +21,45 @@ assert calling_format
 logger = log_help.WalELogger(__name__)
 
 _Key = _namedtuple('_Key', ['size'])
+WABS_CHUNK_SIZE = 4 * 1024 * 1024
 
 
 def uri_put_file(creds, uri, fp, content_encoding=None):
     assert fp.tell() == 0
-    data = fp.read()
-
     assert uri.startswith('wabs://')
+
     url_tup = urlparse(uri)
-    check_sum = base64.encodestring(md5(data).digest())
-    kwargs = dict(x_ms_blob_type='BlockBlob',
-                  content_md5=check_sum.strip('\n'))
+    kwargs = dict(x_ms_blob_type='BlockBlob')
     if content_encoding is not None:
         kwargs['x_ms_blob_content_encoding'] = content_encoding
 
     conn = BlobService(creds.account_name, creds.account_key, protocol='https')
-    conn.put_blob(url_tup.netloc, url_tup.path, data, **kwargs)
+    conn.put_blob(url_tup.netloc, url_tup.path, '', **kwargs)
+
+    def _upload_chunk(chunk, block_id):
+        check_sum = base64.encodestring(md5(chunk).digest()).strip('\n')
+        conn.put_block(url_tup.netloc, url_tup.path, chunk,
+                       block_id, content_md5=check_sum)
+
+    block_ids = []
+    length, index = 0, 0
+    pool_size = os.getenv('WABS_UPLOAD_POOL_SIZE', 5)
+    p = gevent.pool.Pool(size=pool_size)
+    while True:
+        data = fp.read(WABS_CHUNK_SIZE)
+        if data:
+            length += len(data)
+            block_id = base64.b64encode(str(index))
+            p.wait_available()
+            p.spawn(_upload_chunk, data, block_id)
+            block_ids.append(block_id)
+            index += 1
+        else:
+            p.join()
+            break
+
+    conn.put_block_list(url_tup.netloc, url_tup.path, block_ids)
+
     # To maintain consistency with the S3 version of this function we must
     # return an object with a certain set of attributes.  Currently, that set
     # of attributes consists of only 'size'
@@ -49,7 +73,26 @@ def uri_get_file(creds, uri, conn=None):
     if conn is None:
         conn = BlobService(creds.account_name, creds.account_key,
                            protocol='https')
-    return conn.get_blob(url_tup.netloc, url_tup.path)
+
+    # Determin the size of the target blob
+    props = conn.get_blob_properties(url_tup.netloc, url_tup.path)
+    blob_size = int(props['content-length'])
+
+    ret_size = 0
+    data = ''
+    while ret_size < blob_size:
+        ms_range = 'bytes={}-{}'.format(ret_size,
+                                        ret_size + WABS_CHUNK_SIZE - 1)
+        part = conn.get_blob(url_tup.netloc, url_tup.path, x_ms_range=ms_range)
+        length = len(part)
+        ret_size += length
+        data += part
+        if length > 0 and length < WABS_CHUNK_SIZE:
+            break
+        elif length == 0:
+            break
+
+    return data
 
 
 def do_lzop_get(creds, url, path, decrypt):
@@ -131,9 +174,8 @@ def do_lzop_get(creds, url, path, decrypt):
 
 
 def write_and_return_error(url, conn, stream):
-    url_tup = urlparse(url)
     try:
-        data = conn.get_blob(url_tup.netloc, url_tup.path)
+        data = uri_get_file(None, url, conn=conn)
         stream.write(data)
         stream.flush()
     except Exception, e:
