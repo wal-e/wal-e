@@ -290,10 +290,9 @@ class Backup(object):
         basename(wal_path), so both are required.
 
         """
-        url = os.path.join(
-            self.layout.prefix,
-            'wal_{}'.format(FILE_STRUCTURE_VERSION),
-            '{}.lzo'.format(wal_name))
+        # TODO :: Move arbitray path construction to StorageLayout Object
+        url = '{0}/wal_{1}/{2}.lzo'.format(
+            self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION, wal_name)
 
         logger.info(
             msg='begin wal restore',
@@ -368,10 +367,11 @@ class Backup(object):
         """
         spec, parts = tar_partition.partition(pg_cluster_dir)
 
-        backup_prefix = os.path.join(
-            self.layout.prefix,
-            'basebackups_{}'.format(FILE_STRUCTURE_VERSION),
-            'base_{file_name}_{file_offset}'.format(**start_backup_info))
+        # TODO :: Move arbitray path construction to StorageLayout Object
+        backup_prefix = '{0}/basebackups_{1}/base_{file_name}_{file_offset}'\
+                .format(self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION,
+                        **start_backup_info)
+
         if rate_limit is None:
             per_process_limit = None
         else:

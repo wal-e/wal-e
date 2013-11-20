@@ -1,4 +1,3 @@
-import os
 import socket
 import tempfile
 import time
@@ -24,10 +23,10 @@ class WalUploader(object):
         self.blobstore = get_blobstore(layout)
 
     def __call__(self, segment):
-        url = os.path.join(
-            self.layout.prefix,
-            'wal_{}'.format(storage.CURRENT_VERSION),
-            '{}.lzo'.format(segment.name))
+        # TODO :: Move arbitray path construction to StorageLayout Object
+        url = '{0}/wal_{1}/{2}.lzo'.format(self.layout.prefix.rstrip('/'),
+                                           storage.CURRENT_VERSION,
+                                           segment.name)
 
         logger.info(msg='begin archiving a file',
                     detail=('Uploading "{wal_path}" to "{url}".'
@@ -83,10 +82,9 @@ class PartitionUploader(object):
 
             tf.flush()
 
-            url = os.path.join(
-                self.backup_prefix,
-                'tar_partitions',
-                'part_{number}.tar.lzo'.format(number=tpart.name))
+            # TODO :: Move arbitray path construction to StorageLayout Object
+            url = '{0}/tar_partitions/part_{number}.tar.lzo'.format(
+                self.backup_prefix.rstrip('/'), number=tpart.name)
 
             logger.info(msg='begin uploading a base backup volume',
                         detail='Uploading to "{url}".'.format(url=url))
