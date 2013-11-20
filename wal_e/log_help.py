@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import os
 
+from os import path
 
 # Minimum logging level to emit logs for, inclusive.
 MINIMUM_LOG_LEVEL = logging.INFO
@@ -46,7 +47,25 @@ def configure(*args, **kwargs):
 
         print >>sys.stderr, s
 
-    syslog_address = kwargs.setdefault('syslog_address', '/dev/log')
+    places =  [
+        # Linux
+        '/dev/log',
+
+        # FreeBSD
+        '/var/run/log',
+
+        # Macintosh
+        '/var/run/syslog',
+    ]
+
+    default_syslog_address = places[0]
+    for p in places:
+        if path.exists(p):
+            default_syslog_address = p
+
+    syslog_address = kwargs.setdefault('syslog_address',
+                                       default_syslog_address)
+
     handlers = []
 
     if len(logging.root.handlers) == 0:
