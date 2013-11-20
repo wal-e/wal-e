@@ -55,7 +55,9 @@ def configure(*args, **kwargs):
     elif os.path.exists('/var/run/log'):
         default_syslog_address = '/var/run/log'
 
-    syslog_address = kwargs.setdefault('syslog_address', default_syslog_address)
+    syslog_address = kwargs.setdefault(
+        'syslog_address', default_syslog_address
+    )
     handlers = []
 
     if len(logging.root.handlers) == 0:
