@@ -62,6 +62,7 @@ def configure(*args, **kwargs):
     for p in places:
         if path.exists(p):
             default_syslog_address = p
+            break
 
     syslog_address = kwargs.setdefault('syslog_address',
                                        default_syslog_address)
