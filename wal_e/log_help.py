@@ -46,7 +46,16 @@ def configure(*args, **kwargs):
 
         print >>sys.stderr, s
 
-    syslog_address = kwargs.setdefault('syslog_address', '/dev/log')
+    # Linux
+    default_syslog_address = '/dev/log'
+    # OS X
+    if os.path.exists('/var/run/syslog'):
+        default_syslog_address = '/var/run/syslog'
+    # FreeBSD
+    elif os.path.exists('/var/run/log'):
+        default_syslog_address = '/var/run/log'
+
+    syslog_address = kwargs.setdefault('syslog_address', default_syslog_address)
     handlers = []
 
     if len(logging.root.handlers) == 0:
