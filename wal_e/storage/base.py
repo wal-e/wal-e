@@ -44,7 +44,7 @@ class SegmentNumber(collections.namedtuple('SegmentNumber',
 
 OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
 
-SUPPORTED_STORE_SCHEMES = ('s3', 'wabs')
+SUPPORTED_STORE_SCHEMES = ('s3', 'wabs', 'swift')
 
 
 # Exhaustively enumerates all possible metadata about a backup.  These
@@ -127,6 +127,19 @@ class StorageLayout(object):
     >>> sl.store_name()
     'foo'
 
+    Swift:
+
+    Without a trailing slash
+    >>> sl = StorageLayout('swift://foo/bar')
+    >>> sl.is_swift
+    True
+    >>> sl.basebackups()
+    'bar/basebackups_005/'
+    >>> sl.wal_directory()
+    'bar/wal_005/'
+    >>> sl.store_name()
+    'foo'
+
     """
 
     def __init__(self, prefix, version=CURRENT_VERSION):
@@ -136,9 +149,10 @@ class StorageLayout(object):
 
         if url_tup.scheme not in SUPPORTED_STORE_SCHEMES:
             raise wal_e.exception.UserException(
-                msg='bad S3 or Windows Azure Blob Storage URL scheme passed',
-                detail=('The scheme {0} was passed when "s3" or "wabs" '
-                        'was expected.'.format(url_tup.scheme)))
+                msg='bad S3, Windows Azure Blob Storage, or OpenStack Swift '
+                    'URL scheme passed',
+                detail=('The scheme {0} was passed when "s3", "wabs", or '
+                        '"swift" was expected.'.format(url_tup.scheme)))
 
         for scheme in SUPPORTED_STORE_SCHEMES:
             setattr(self, 'is_%s' % scheme, scheme == url_tup.scheme)
@@ -232,4 +246,7 @@ def get_backup_info(layout, **kwargs):
     elif layout.is_wabs:
         from wal_e.storage.wabs_storage import WABSBackupInfo
         bi = WABSBackupInfo(**kwargs)
+    elif layout.is_swift:
+        from wal_e.storage.swift_storage import SwiftBackupInfo
+        bi = SwiftBackupInfo(**kwargs)
     return bi
