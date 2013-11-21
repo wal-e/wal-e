@@ -47,7 +47,7 @@ def configure(*args, **kwargs):
 
         print >>sys.stderr, s
 
-    places =  [
+    places = [
         # Linux
         '/dev/log',
 
