@@ -5,13 +5,12 @@ Utilities for handling subprocesses.
 Mostly necessary only because of http://bugs.python.org/issue1652.
 
 """
-
+import os
 import copy
 import errno
 import fcntl
 import gevent
 import gevent.socket
-import os
 import signal
 import sys
 
@@ -23,6 +22,10 @@ from wal_e.subprocess import PIPE
 # This is not used in this module, but is imported by dependent
 # modules, so do this to quiet pyflakes.
 assert PIPE
+
+# Determine the maximum number of bytes that can be written atomically
+# to a pipe
+PIPE_BUF_BYTES = os.pathconf('.', os.pathconf_names['PC_PIPE_BUF'])
 
 
 class NonBlockPipeFileWrap(object):
@@ -40,9 +43,9 @@ class NonBlockPipeFileWrap(object):
         while size is None or accum.tell() < size:
             try:
                 if size is None:
-                    max_read = 4096
+                    max_read = PIPE_BUF_BYTES
                 else:
-                    max_read = min(4096, size - accum.tell())
+                    max_read = min(PIPE_BUF_BYTES, size - accum.tell())
 
                 chunk = self._fp.read(max_read)
 
@@ -67,7 +70,8 @@ class NonBlockPipeFileWrap(object):
             try:
                 # self._fp.write() doesn't return anything, so use
                 # os.write.
-                bytes_written += os.write(self._fp.fileno(), buf.read(4096))
+                bytes_written += os.write(self._fp.fileno(),
+                                          buf.read(PIPE_BUF_BYTES))
             except IOError, ex:
                 if ex[0] != errno.EAGAIN:
                     raise
