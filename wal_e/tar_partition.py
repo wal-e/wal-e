@@ -47,6 +47,8 @@ import tarfile
 
 import wal_e.log_help as log_help
 
+from wal_e.exception import UserException
+
 logger = log_help.WalELogger(__name__)
 
 PG_CONF = ('postgresql.conf',
@@ -95,13 +97,18 @@ class StreamPadFileObj(object):
         return False
 
 
-class TarMemberTooBigError(Exception):
+class TarMemberTooBigError(UserException):
     def __init__(self, member_name, limited_to, requested, *args, **kwargs):
         self.member_name = member_name
         self.max_size = limited_to
         self.requested = requested
 
-        Exception.__init__(self, *args, **kwargs)
+        msg = 'Attempted to archive a file that is too large.'
+        hint = ('There is a file in the postgres database directory that '
+                'is larger than %d bytes. If no such file exists, please '
+                'report this as a bug. In particular, '
+                'check %s.') % (limited_to, member_name)
+        UserException.__init__(self, msg=msg, hint=hint, *args, **kwargs)
 
 
 class TarBadRootError(Exception):
