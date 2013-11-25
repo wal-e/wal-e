@@ -106,8 +106,8 @@ class TarMemberTooBigError(UserException):
         msg = 'Attempted to archive a file that is too large.'
         hint = ('There is a file in the postgres database directory that '
                 'is larger than %d bytes. If no such file exists, please '
-                'report this as a bug. In particular, '
-                'check %s.') % (limited_to, member_name)
+                'report this as a bug. In particular, check %s, which appears '
+                'to be %d bytes.') % (limited_to, member_name, requested)
         UserException.__init__(self, msg=msg, hint=hint, *args, **kwargs)
 
 

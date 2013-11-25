@@ -7,5 +7,6 @@ def test_tar_member_too_big_error():
     assert a.msg == 'Attempted to archive a file that is too large.'
     hint = ('There is a file in the postgres database directory that '
             'is larger than 100 bytes. If no such file exists, please '
-            'report this as a bug. In particular, check file.dat.')
+            'report this as a bug. In particular, check file.dat, '
+            'which appears to be 150 bytes.')
     assert a.hint == hint
