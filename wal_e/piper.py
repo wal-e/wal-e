@@ -5,12 +5,12 @@ Utilities for handling subprocesses.
 Mostly necessary only because of http://bugs.python.org/issue1652.
 
 """
-import os
 import copy
 import errno
 import fcntl
 import gevent
 import gevent.socket
+import os
 import signal
 
 import sys
