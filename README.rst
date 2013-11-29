@@ -99,16 +99,16 @@ Examples
 
 Pushing a base backup to S3::
 
-  $ AWS_SECRET_ACCESS_KEY=... wal-e			\
-    -k AWS_ACCESS_KEY_ID				\
-    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+  $ AWS_SECRET_ACCESS_KEY=... wal-e                     \
+    -k AWS_ACCESS_KEY_ID                                \
+    --s3-prefix=s3://some-bucket/directory/or/whatever  \
     backup-push /var/lib/my/database
 
 Sending a WAL segment to WABS::
 
-  $ WABS_ACCESS_KEY=... wal-e			\
-    -a WABS_ACCOUNT_NAME				\
-    --wabs-prefix=wabs://some-bucket/directory/or/whatever	\
+  $ WABS_ACCESS_KEY=... wal-e                                   \
+    -a WABS_ACCOUNT_NAME                                        \
+    --wabs-prefix=wabs://some-bucket/directory/or/whatever      \
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
 
 It is generally recommended that one use some sort of environment
@@ -187,8 +187,8 @@ gaps in the WAL segments.
 Pulling a base backup from S3::
 
     $ sudo -u postgres bash -c                          \
-    "envdir /etc/wal-e.d/pull-env wal-e			\
-    --s3-prefix=s3://some-bucket/directory/or/whatever	\
+    "envdir /etc/wal-e.d/pull-env wal-e                 \
+    --s3-prefix=s3://some-bucket/directory/or/whatever  \
     backup-fetch /var/lib/my/database LATEST"
 
 This command makes use of the "LATEST" pseudo-name for a backup, which
@@ -196,9 +196,9 @@ queries S3 to find the latest complete backup.  Otherwise, a real name
 can be used::
 
     $ sudo -u postgres bash -c                          \
-    "envdir /etc/wal-e.d/pull-env wal-e			\
-    --s3-prefix=s3://some-bucket/directory/or/whatever	\
-    backup-fetch					\
+    "envdir /etc/wal-e.d/pull-env wal-e                 \
+    --s3-prefix=s3://some-bucket/directory/or/whatever  \
+    backup-fetch                                        \
     /var/lib/my/database base_LONGWALNUMBER_POSITION_NUMBER"
 
 One can find the name of available backups via the experimental
@@ -338,21 +338,21 @@ name                              The name of the backup, which can be
                                   ``backup-fetch`` commands.
 
 last_modified                     The date and time the backup was
-				  completed and uploaded, rendered in
-				  an ISO-compatible format with
-				  timezone information.
+                                  completed and uploaded, rendered in
+                                  an ISO-compatible format with
+                                  timezone information.
 
 wal_segment_backup_start          The wal segment number.  It is a
                                   24-character hexadecimal number.
                                   This information identifies the
-				  timeline and relative ordering of
-				  various backups.
+                                  timeline and relative ordering of
+                                  various backups.
 
 wal_segment_offset_backup_start   The offset in the WAL segment that
-				  this backup starts at.  This is
-				  mostly to avoid ambiguity in event
-				  of backups that may start in the
-				  same WAL segment.
+                                  this backup starts at.  This is
+                                  mostly to avoid ambiguity in event
+                                  of backups that may start in the
+                                  same WAL segment.
 ================================  ====================================
 
 Secondly, the fields that are filled in only when ``--detail`` is
@@ -362,16 +362,16 @@ passed:
         Header in CSV                           Meaning
 ================================  ====================================
 expanded_size_bytes               The decompressed size of the backup
-				  in bytes.
+                                  in bytes.
 
 wal_segment_backup_stop           The last WAL segment file required
-				  to bring this backup into a
-				  consistent state, and thus available
-				  for hot-standby.
+                                  to bring this backup into a
+                                  consistent state, and thus available
+                                  for hot-standby.
 
 wal_segment_offset_backup_stop    The offset in the last WAL segment
-				  file required to bring this backup
-				  into a consistent state.
+                                  file required to bring this backup
+                                  into a consistent state.
 ================================  ====================================
 
 .. [#why-detail-flag] ``backup-list --detail`` is slower (one web
@@ -502,12 +502,12 @@ to the Python of one's choice to avoid that::
 To run a somewhat more lengthy suite of integration tests that
 communicate with AWS S3, one might run tox_ like this::
 
-  $ WALE_S3_INTEGRATION_TESTS=TRUE  	\
-    AWS_ACCESS_KEY_ID=[AKIA...] 		\
-    AWS_SECRET_ACCESS_KEY=[...] 		\
-    WALE_WABS_INTEGRATION_TESTS=TRUE	\
-    WABS_ACCOUNT_NAME=[...] 			\
-    WABS_ACCESS_KEY=[...] 				\
+  $ WALE_S3_INTEGRATION_TESTS=TRUE      \
+    AWS_ACCESS_KEY_ID=[AKIA...]         \
+    AWS_SECRET_ACCESS_KEY=[...]         \
+    WALE_WABS_INTEGRATION_TESTS=TRUE    \
+    WABS_ACCOUNT_NAME=[...]             \
+    WABS_ACCESS_KEY=[...]               \
     tox -- -n 8
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
@@ -526,12 +526,12 @@ typically not a desirable use of time, so one can restrict the
 integration test to one virtual environment, in a combination of
 features seen in all the previous examples::
 
-  $ WALE_S3_INTEGRATION_TESTS=TRUE  	\
-    AWS_ACCESS_KEY_ID=[AKIA...] 		\
-    AWS_SECRET_ACCESS_KEY=[...] 		\
-    WALE_WABS_INTEGRATION_TESTS=TRUE	\
-    WABS_ACCOUNT_NAME=[...] 			\
-    WABS_ACCESS_KEY=[...] 				\
+  $ WALE_S3_INTEGRATION_TESTS=TRUE      \
+    AWS_ACCESS_KEY_ID=[AKIA...]         \
+    AWS_SECRET_ACCESS_KEY=[...]         \
+    WALE_WABS_INTEGRATION_TESTS=TRUE    \
+    WABS_ACCOUNT_NAME=[...]             \
+    WABS_ACCESS_KEY=[...]               \
     tox -e py27 -- -n 8
 
 Coverage testing can be used by combining any of these using
