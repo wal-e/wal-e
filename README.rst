@@ -79,7 +79,7 @@ will attempt to resolve them:
 * argparse, if not on Python 2.7
 
 Backend Blob Store
---------
+------------------
 
 The storage backend is determined by the defined _PREFIX. Prefixes with
 the scheme ``s3`` will be directed towards S3, where those with the scheme
