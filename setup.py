@@ -30,12 +30,6 @@ install_requires = [
     l for l in read('requirements.txt').split('\n')
     if l and not l.startswith('#')]
 
-tests_require = [
-    "pytest-capturelog>=0.7",
-    "pytest>=2.2.1",
-    "tox>=1.4.2",
-]
-
 if sys.version_info < (2, 7):
     install_requires.append('argparse>=0.8')
 
@@ -45,7 +39,6 @@ setup(
     packages=find_packages(),
 
     install_requires=install_requires,
-    tests_require=tests_require,
 
     # metadata for upload to PyPI
     author="Daniel Farina",
@@ -63,9 +56,6 @@ setup(
 
     # Include the VERSION file
     package_data={'wal_e': ['VERSION']},
-
-    # run tests
-    test_suite='runtests.runtests',
 
     # install
     entry_points={'console_scripts': ['wal-e=wal_e.cmd:main']})
