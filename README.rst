@@ -534,6 +534,10 @@ features seen in all the previous examples::
     WABS_ACCESS_KEY=[...] 				\
     tox -e py27 -- -n 8
 
+Coverage testing can be used by combining any of these using
+pytest-cov_, e.g.: ``tox -- --cov wal_e`` and
+``tox -- --cov wal_e --cov-report html; see htmlcov/index.html``.
+
 Finally, the test framework used is pytest_.  If possible, do not
 submit Python unittest_ style tests: those tend to be more verbose and
 anemic in power; however, any automated testing is better than a lack
@@ -543,3 +547,4 @@ preference for pytest_ idiom be an impediment to submitting code.
 .. _tox: https://pypi.python.org/pypi/tox
 .. _pytest: https://pypi.python.org/pypi/pytest
 .. _unittest: http://docs.python.org/2/library/unittest.html
+.. _pytest-cov: https://pypi.python.org/pypi/pytest-cov
