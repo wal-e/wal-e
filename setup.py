@@ -41,8 +41,10 @@ setup(
     install_requires=install_requires,
 
     # metadata for upload to PyPI
-    author="Daniel Farina",
-    author_email="daniel@heroku.com",
+    author="The WAL-E Contributors",
+    author_email="wal-e@googlegroups.com",
+    maintainer="Daniel Farina",
+    maintainer_email="daniel@heroku.com",
     description="PostgreSQL WAL-shipping for S3",
     long_description=read('README.rst'),
     classifiers=['Topic :: Database',
