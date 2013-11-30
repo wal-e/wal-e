@@ -229,102 +229,7 @@ class _DeleteFromContext(object):
             delete_horizon_segment_number.as_an_integer:
             self._maybe_delete_key(key, type_of_thing)
 
-    def _delete_wals_before(self, segment_info):
-        """
-        Delete all WAL files before segment_info.
-
-        Doesn't delete any base-backup data.
-        """
-        wal_key_depth = self.layout.wal_directory().count('/') + 1
-        for key in self._backup_list(prefix=self.layout.wal_directory()):
-            key_name = self.layout.key_name(key)
-            url = '{scm}://{bucket}/{name}'.format(scm=self.layout.scheme,
-                                                   bucket=key.bucket.name,
-                                                   name=key_name)
-            key_parts = key_name.split('/')
-            key_depth = len(key_parts)
-            if key_depth != wal_key_depth:
-                logger.warning(
-                    msg="skipping non-qualifying key in 'delete before'",
-                    detail=(
-                        'The unexpected key is "{0}", and it appears to be '
-                        'at an unexpected depth.'.format(url)),
-                    hint=generic_weird_key_hint_message)
-            elif key_depth == wal_key_depth:
-                segment_match = (re.match(storage.SEGMENT_REGEXP + r'\.lzo',
-                                          key_parts[-1]))
-                label_match = (re.match(storage.SEGMENT_REGEXP +
-                                        r'\.[A-F0-9]{8,8}.backup.lzo',
-                                        key_parts[-1]))
-                history_match = re.match(r'[A-F0-9]{8,8}\.history',
-                                         key_parts[-1])
-
-                all_matches = [segment_match, label_match, history_match]
-
-                non_matches = len(list(m for m in all_matches if m is None))
-
-                # These patterns are intended to be mutually
-                # exclusive, so either one should match or none should
-                # match.
-                assert non_matches in (len(all_matches) - 1, len(all_matches))
-                if non_matches == len(all_matches):
-                    logger.warning(
-                        msg="skipping non-qualifying key in 'delete before'",
-                        detail=('The unexpected key is "{0}", and it appears '
-                                'not to match the WAL file naming pattern.'
-                                .format(url)),
-                        hint=generic_weird_key_hint_message)
-                elif segment_match is not None:
-                    scanned_sn = self._groupdict_to_segment_number(
-                        segment_match.groupdict())
-                    self._delete_if_before(segment_info, scanned_sn, key,
-                                        'a wal file')
-                elif label_match is not None:
-                    scanned_sn = self._groupdict_to_segment_number(
-                        label_match.groupdict())
-                    self._delete_if_before(segment_info, scanned_sn, key,
-                                        'a backup history file')
-                elif history_match is not None:
-                    # History (timeline) files do not have any actual
-                    # WAL position information, so they are never
-                    # deleted.
-                    pass
-                else:
-                    assert False
-            else:
-                assert False
-
-    def delete_everything(self):
-        """
-        Delete everything in a storage layout
-
-        Named provocatively for a reason: can (and in fact intended
-        to) cause irrecoverable loss of data.  This can be used to:
-
-        * Completely obliterate data from old WAL-E versions
-          (i.e. layout.VERSION is an obsolete version)
-
-        * Completely obliterate all backups (from a decommissioned
-          database, for example)
-
-        """
-        for k in self._backup_list(prefix=self.layout.basebackups()):
-            self._maybe_delete_key(k, 'part of a base backup')
-
-        for k in self._backup_list(prefix=self.layout.wal_directory()):
-            self._maybe_delete_key(k, 'part of wal logs')
-
-        if self.deleter:
-            self.deleter.close()
-
-    def delete_before(self, segment_info):
-        """
-        Delete all base backups and WAL before a given segment
-
-        This is the most commonly-used deletion operator; to delete
-        old backups and WAL.
-
-        """
+    def _delete_base_backups_before(self, segment_info):
         base_backup_sentinel_depth = self.layout.basebackups().count('/') + 1
         version_depth = base_backup_sentinel_depth + 1
         volume_backup_depth = version_depth + 1
@@ -422,8 +327,108 @@ class _DeleteFromContext(object):
             else:
                 assert False
 
+    def _delete_wals_before(self, segment_info):
+        """
+        Delete all WAL files before segment_info.
+
+        Doesn't delete any base-backup data.
+        """
+        wal_key_depth = self.layout.wal_directory().count('/') + 1
+        for key in self._backup_list(prefix=self.layout.wal_directory()):
+            key_name = self.layout.key_name(key)
+            url = '{scm}://{bucket}/{name}'.format(scm=self.layout.scheme,
+                                                   bucket=key.bucket.name,
+                                                   name=key_name)
+            key_parts = key_name.split('/')
+            key_depth = len(key_parts)
+            if key_depth != wal_key_depth:
+                logger.warning(
+                    msg="skipping non-qualifying key in 'delete before'",
+                    detail=(
+                        'The unexpected key is "{0}", and it appears to be '
+                        'at an unexpected depth.'.format(url)),
+                    hint=generic_weird_key_hint_message)
+            elif key_depth == wal_key_depth:
+                segment_match = (re.match(storage.SEGMENT_REGEXP + r'\.lzo',
+                                          key_parts[-1]))
+                label_match = (re.match(storage.SEGMENT_REGEXP +
+                                        r'\.[A-F0-9]{8,8}.backup.lzo',
+                                        key_parts[-1]))
+                history_match = re.match(r'[A-F0-9]{8,8}\.history',
+                                         key_parts[-1])
+
+                all_matches = [segment_match, label_match, history_match]
+
+                non_matches = len(list(m for m in all_matches if m is None))
+
+                # These patterns are intended to be mutually
+                # exclusive, so either one should match or none should
+                # match.
+                assert non_matches in (len(all_matches) - 1, len(all_matches))
+                if non_matches == len(all_matches):
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the WAL file naming pattern.'
+                                .format(url)),
+                        hint=generic_weird_key_hint_message)
+                elif segment_match is not None:
+                    scanned_sn = self._groupdict_to_segment_number(
+                        segment_match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
+                                        'a wal file')
+                elif label_match is not None:
+                    scanned_sn = self._groupdict_to_segment_number(
+                        label_match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
+                                        'a backup history file')
+                elif history_match is not None:
+                    # History (timeline) files do not have any actual
+                    # WAL position information, so they are never
+                    # deleted.
+                    pass
+                else:
+                    assert False
+            else:
+                assert False
+
+    def delete_everything(self):
+        """
+        Delete everything in a storage layout
+
+        Named provocatively for a reason: can (and in fact intended
+        to) cause irrecoverable loss of data.  This can be used to:
+
+        * Completely obliterate data from old WAL-E versions
+          (i.e. layout.VERSION is an obsolete version)
+
+        * Completely obliterate all backups (from a decommissioned
+          database, for example)
+
+        """
+        for k in self._backup_list(prefix=self.layout.basebackups()):
+            self._maybe_delete_key(k, 'part of a base backup')
+
+        for k in self._backup_list(prefix=self.layout.wal_directory()):
+            self._maybe_delete_key(k, 'part of wal logs')
+
+        if self.deleter:
+            self.deleter.close()
+
+    def delete_before(self, segment_info):
+        """
+        Delete all base backups and WAL before a given segment
+
+        This is the most commonly-used deletion operator; to delete
+        old backups and WAL.
+
+        """
+
+        # This will delete all base backup data before segment_info.
+        self._delete_base_backups_before(segment_info)
+
         # This will delete all WAL segments before segment_info.
-        self._delete_wals_before(self, segment_info)
+        self._delete_wals_before(segment_info)
 
         if self.deleter:
             self.deleter.close()
@@ -432,6 +437,77 @@ class _DeleteFromContext(object):
         """
         Retain the num_to_retain most recent backups and delete all data
         before them.
+
         """
-        # TODO (drobinson): Implement this functionality.
-        raise NotImplementedError()
+        base_backup_sentinel_depth = self.layout.basebackups().count('/') + 1
+
+        # Sweep over base backup files, collecting sentinel files from
+        # completed backups.
+        completed_basebackups = []
+        for key in self._backup_list(prefix=self.layout.basebackups()):
+
+            key_name = self.layout.key_name(key)
+            key_parts = key_name.split('/')
+            key_depth = len(key_parts)
+            url = '{scheme}://{bucket}/{name}'.format(
+                scheme=self.layout.scheme,
+                bucket=self._container_name(key),
+                name=key_name)
+
+            if key_depth == base_backup_sentinel_depth:
+                # This is a key at the depth of a base-backup-sentinel file.
+                # Check to see if it matches the known form.
+                match = re.match(storage.COMPLETE_BASE_BACKUP_REGEXP,
+                                 key_parts[-1])
+
+                # If this isn't a base-backup-sentinel file, just ignore it.
+                if match is None:
+                    continue
+
+                # This key corresponds to a base-backup-sentinel file and
+                # represents a completed backup. Grab its segment number.
+                scanned_sn = \
+                    self._groupdict_to_segment_number(match.groupdict())
+                completed_basebackups.append(dict(
+                    scanned_sn=scanned_sn,
+                    url=url))
+
+        # Sort the base backups from newest to oldest.
+        basebackups = sorted(
+                        completed_basebackups,
+                        key=lambda backup: backup['scanned_sn'].as_an_integer,
+                        reverse=True)
+        last_retained = None
+        if len(basebackups) <= num_to_retain:
+            if len(basebackups) == 0:
+                logger.info(
+                    msg='Not deleting any data.',
+                    detail='No existing base backups.')
+            elif len(basebackups) == 1:
+                last_retained = basebackups[-1]
+                msg = 'Retaining existing base backup.'
+            else:
+                last_retained = basebackups[-1]
+                msg = "Retaining all %d base backups." % len(basebackups)
+            detail = None
+        else:
+            last_retained = basebackups[num_to_retain - 1]
+            num_deleting = len(basebackups) - num_to_retain
+            msg = "Deleting %d oldest base backups." % num_deleting
+            detail = "Found %d total base backups." % len(basebackups)
+        log_message = dict(msg=msg)
+        if detail is not None:
+            log_message['detail'] = detail
+        if last_retained is not None:
+            log_message['hint'] = \
+                "Deleting keys older than %s." % last_retained['url']
+        logger.info(**log_message)
+
+        # This will delete all base backup and WAL data before
+        # last_retained['scanned_sn'].
+        if last_retained is not None:
+            self._delete_base_backups_before(last_retained['scanned_sn'])
+            self._delete_wals_before(last_retained['scanned_sn'])
+
+        if self.deleter:
+            self.deleter.close()
