@@ -220,6 +220,15 @@ class _DeleteFromContext(object):
         else:
             assert False
 
+    def _groupdict_to_segment_number(self, d):
+        return storage.SegmentNumber(log=d['log'], seg=d['seg'])
+
+    def _delete_if_before(self, delete_horizon_segment_number,
+                            scanned_segment_number, key, type_of_thing):
+        if scanned_segment_number.as_an_integer < \
+            delete_horizon_segment_number.as_an_integer:
+            self._maybe_delete_key(key, type_of_thing)
+
     def delete_everything(self):
         """
         Delete everything in a storage layout
@@ -254,16 +263,6 @@ class _DeleteFromContext(object):
         base_backup_sentinel_depth = self.layout.basebackups().count('/') + 1
         version_depth = base_backup_sentinel_depth + 1
         volume_backup_depth = version_depth + 1
-
-        def groupdict_to_segment_number(d):
-            return storage.SegmentNumber(log=d['log'], seg=d['seg'])
-
-        def delete_if_before(delete_horizon_segment_number,
-                                scanned_segment_number,
-                                key, type_of_thing):
-            if scanned_segment_number.as_an_integer < \
-                delete_horizon_segment_number.as_an_integer:
-                self._maybe_delete_key(key, type_of_thing)
 
         # The base-backup sweep, deleting bulk data and metadata, but
         # not any wal files.
@@ -309,8 +308,8 @@ class _DeleteFromContext(object):
                     # the range of things to delete, and if that is
                     # the case, attempt deletion.
                     assert match is not None
-                    scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_before(segment_info, scanned_sn, key,
+                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup sentinel file')
             elif key_depth == version_depth:
                 match = re.match(
@@ -325,8 +324,8 @@ class _DeleteFromContext(object):
                         hint=generic_weird_key_hint_message)
                 else:
                     assert match is not None
-                    scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_before(segment_info, scanned_sn, key,
+                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
                                         'a extended version metadata file')
             elif key_depth == volume_backup_depth:
                 # This has the depth of a base-backup volume, so try
@@ -349,8 +348,8 @@ class _DeleteFromContext(object):
                         hint=generic_weird_key_hint_message)
                 else:
                     assert match is not None
-                    scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_before(segment_info, scanned_sn, key,
+                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup volume')
             else:
                 assert False
@@ -397,14 +396,14 @@ class _DeleteFromContext(object):
                                 .format(url)),
                         hint=generic_weird_key_hint_message)
                 elif segment_match is not None:
-                    scanned_sn = groupdict_to_segment_number(
+                    scanned_sn = self._groupdict_to_segment_number(
                         segment_match.groupdict())
-                    delete_if_before(segment_info, scanned_sn, key,
+                    self._delete_if_before(segment_info, scanned_sn, key,
                                         'a wal file')
                 elif label_match is not None:
-                    scanned_sn = groupdict_to_segment_number(
+                    scanned_sn = self._groupdict_to_segment_number(
                         label_match.groupdict())
-                    delete_if_before(segment_info, scanned_sn, key,
+                    self._delete_if_before(segment_info, scanned_sn, key,
                                         'a backup history file')
                 elif history_match is not None:
                     # History (timeline) files do not have any actual
