@@ -326,7 +326,7 @@ def build_parser():
                         'oldest base backup. This will leave N working '
                         'backups in place.'))
     delete_retain_parser.add_argument(
-        'N', type=int,
+        'NUM_TO_RETAIN', type=int,
         help='The number of base backups to retain')
 
     # delete old versions operator
@@ -525,7 +525,7 @@ def main(argv=None):
             elif args.delete_subcommand == 'everything':
                 backup_cxt.delete_all(is_dry_run_really)
             elif args.delete_subcommand == 'retain':
-                backup_cxt.delete_with_retention(is_dry_run_really, args.N)
+                backup_cxt.delete_with_retention(is_dry_run_really, args.NUM_TO_RETAIN)
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
                 backup_cxt.delete_before(is_dry_run_really, segment_info)
