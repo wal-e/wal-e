@@ -229,6 +229,71 @@ class _DeleteFromContext(object):
             delete_horizon_segment_number.as_an_integer:
             self._maybe_delete_key(key, type_of_thing)
 
+    def _delete_wals_before(self, segment_info):
+        """
+        Delete all WAL files before segment_info.
+
+        Doesn't delete any base-backup data.
+        """
+        wal_key_depth = self.layout.wal_directory().count('/') + 1
+        for key in self._backup_list(prefix=self.layout.wal_directory()):
+            key_name = self.layout.key_name(key)
+            url = '{scm}://{bucket}/{name}'.format(scm=self.layout.scheme,
+                                                   bucket=key.bucket.name,
+                                                   name=key_name)
+            key_parts = key_name.split('/')
+            key_depth = len(key_parts)
+            if key_depth != wal_key_depth:
+                logger.warning(
+                    msg="skipping non-qualifying key in 'delete before'",
+                    detail=(
+                        'The unexpected key is "{0}", and it appears to be '
+                        'at an unexpected depth.'.format(url)),
+                    hint=generic_weird_key_hint_message)
+            elif key_depth == wal_key_depth:
+                segment_match = (re.match(storage.SEGMENT_REGEXP + r'\.lzo',
+                                          key_parts[-1]))
+                label_match = (re.match(storage.SEGMENT_REGEXP +
+                                        r'\.[A-F0-9]{8,8}.backup.lzo',
+                                        key_parts[-1]))
+                history_match = re.match(r'[A-F0-9]{8,8}\.history',
+                                         key_parts[-1])
+
+                all_matches = [segment_match, label_match, history_match]
+
+                non_matches = len(list(m for m in all_matches if m is None))
+
+                # These patterns are intended to be mutually
+                # exclusive, so either one should match or none should
+                # match.
+                assert non_matches in (len(all_matches) - 1, len(all_matches))
+                if non_matches == len(all_matches):
+                    logger.warning(
+                        msg="skipping non-qualifying key in 'delete before'",
+                        detail=('The unexpected key is "{0}", and it appears '
+                                'not to match the WAL file naming pattern.'
+                                .format(url)),
+                        hint=generic_weird_key_hint_message)
+                elif segment_match is not None:
+                    scanned_sn = self._groupdict_to_segment_number(
+                        segment_match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
+                                        'a wal file')
+                elif label_match is not None:
+                    scanned_sn = self._groupdict_to_segment_number(
+                        label_match.groupdict())
+                    self._delete_if_before(segment_info, scanned_sn, key,
+                                        'a backup history file')
+                elif history_match is not None:
+                    # History (timeline) files do not have any actual
+                    # WAL position information, so they are never
+                    # deleted.
+                    pass
+                else:
+                    assert False
+            else:
+                assert False
+
     def delete_everything(self):
         """
         Delete everything in a storage layout
@@ -357,68 +422,8 @@ class _DeleteFromContext(object):
             else:
                 assert False
 
-        # the WAL-file sweep, deleting only WAL files, and not any
-        # base-backup information.
-        wal_key_depth = self.layout.wal_directory().count('/') + 1
-        for key in self._backup_list(prefix=self.layout.wal_directory()):
-            key_name = self.layout.key_name(key)
-            url = '{scm}://{bucket}/{name}'.format(
-                scm=self.layout.scheme,
-                bucket=self.layout.store_name(),
-                name=key_name
-            )
-            key_parts = key_name.split('/')
-            key_depth = len(key_parts)
-            if key_depth != wal_key_depth:
-                logger.warning(
-                    msg="skipping non-qualifying key in 'delete before'",
-                    detail=(
-                        'The unexpected key is "{0}", and it appears to be '
-                        'at an unexpected depth.'.format(url)),
-                    hint=generic_weird_key_hint_message)
-            elif key_depth == wal_key_depth:
-                segment_match = (re.match(storage.SEGMENT_REGEXP + r'\.lzo',
-                                          key_parts[-1]))
-                label_match = (re.match(storage.SEGMENT_REGEXP +
-                                        r'\.[A-F0-9]{8,8}.backup.lzo',
-                                        key_parts[-1]))
-                history_match = re.match(r'[A-F0-9]{8,8}\.history',
-                                         key_parts[-1])
-
-                all_matches = [segment_match, label_match, history_match]
-
-                non_matches = len(list(m for m in all_matches if m is None))
-
-                # These patterns are intended to be mutually
-                # exclusive, so either one should match or none should
-                # match.
-                assert non_matches in (len(all_matches) - 1, len(all_matches))
-                if non_matches == len(all_matches):
-                    logger.warning(
-                        msg="skipping non-qualifying key in 'delete before'",
-                        detail=('The unexpected key is "{0}", and it appears '
-                                'not to match the WAL file naming pattern.'
-                                .format(url)),
-                        hint=generic_weird_key_hint_message)
-                elif segment_match is not None:
-                    scanned_sn = self._groupdict_to_segment_number(
-                        segment_match.groupdict())
-                    self._delete_if_before(segment_info, scanned_sn, key,
-                                        'a wal file')
-                elif label_match is not None:
-                    scanned_sn = self._groupdict_to_segment_number(
-                        label_match.groupdict())
-                    self._delete_if_before(segment_info, scanned_sn, key,
-                                        'a backup history file')
-                elif history_match is not None:
-                    # History (timeline) files do not have any actual
-                    # WAL position information, so they are never
-                    # deleted.
-                    pass
-                else:
-                    assert False
-            else:
-                assert False
+        # This will delete all WAL segments before segment_info.
+        self._delete_wals_before(self, segment_info)
 
         if self.deleter:
             self.deleter.close()
