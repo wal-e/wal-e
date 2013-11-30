@@ -261,7 +261,8 @@ class _DeleteFromContext(object):
         def delete_if_before(delete_horizon_segment_number,
                                 scanned_segment_number,
                                 key, type_of_thing):
-            if scanned_sn.as_an_integer < segment_info.as_an_integer:
+            if scanned_segment_number.as_an_integer < \
+                delete_horizon_segment_number.as_an_integer:
                 self._maybe_delete_key(key, type_of_thing)
 
         # The base-backup sweep, deleting bulk data and metadata, but
