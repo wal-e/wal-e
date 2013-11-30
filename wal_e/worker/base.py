@@ -373,7 +373,8 @@ class _DeleteFromContext(object):
                     # the range of things to delete, and if that is
                     # the case, attempt deletion.
                     assert match is not None
-                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    scanned_sn = \
+                        self._groupdict_to_segment_number(match.groupdict())
                     self._delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup sentinel file')
             elif key_depth == version_depth:
@@ -389,7 +390,8 @@ class _DeleteFromContext(object):
                         hint=generic_weird_key_hint_message)
                 else:
                     assert match is not None
-                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    scanned_sn = \
+                        self._groupdict_to_segment_number(match.groupdict())
                     self._delete_if_before(segment_info, scanned_sn, key,
                                         'a extended version metadata file')
             elif key_depth == volume_backup_depth:
@@ -413,7 +415,8 @@ class _DeleteFromContext(object):
                         hint=generic_weird_key_hint_message)
                 else:
                     assert match is not None
-                    scanned_sn = self._groupdict_to_segment_number(match.groupdict())
+                    scanned_sn = \
+                        self._groupdict_to_segment_number(match.groupdict())
                     self._delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup volume')
             else:
