@@ -258,7 +258,7 @@ class _DeleteFromContext(object):
         def groupdict_to_segment_number(d):
             return storage.SegmentNumber(log=d['log'], seg=d['seg'])
 
-        def delete_if_qualifies(delete_horizon_segment_number,
+        def delete_if_before(delete_horizon_segment_number,
                                 scanned_segment_number,
                                 key, type_of_thing):
             if scanned_sn.as_an_integer < segment_info.as_an_integer:
@@ -309,7 +309,7 @@ class _DeleteFromContext(object):
                     # the case, attempt deletion.
                     assert match is not None
                     scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_qualifies(segment_info, scanned_sn, key,
+                    delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup sentinel file')
             elif key_depth == version_depth:
                 match = re.match(
@@ -325,7 +325,7 @@ class _DeleteFromContext(object):
                 else:
                     assert match is not None
                     scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_qualifies(segment_info, scanned_sn, key,
+                    delete_if_before(segment_info, scanned_sn, key,
                                         'a extended version metadata file')
             elif key_depth == volume_backup_depth:
                 # This has the depth of a base-backup volume, so try
@@ -349,7 +349,7 @@ class _DeleteFromContext(object):
                 else:
                     assert match is not None
                     scanned_sn = groupdict_to_segment_number(match.groupdict())
-                    delete_if_qualifies(segment_info, scanned_sn, key,
+                    delete_if_before(segment_info, scanned_sn, key,
                                         'a base backup volume')
             else:
                 assert False
@@ -400,12 +400,12 @@ class _DeleteFromContext(object):
                 elif segment_match is not None:
                     scanned_sn = groupdict_to_segment_number(
                         segment_match.groupdict())
-                    delete_if_qualifies(segment_info, scanned_sn, key,
+                    delete_if_before(segment_info, scanned_sn, key,
                                         'a wal file')
                 elif label_match is not None:
                     scanned_sn = groupdict_to_segment_number(
                         label_match.groupdict())
-                    delete_if_qualifies(segment_info, scanned_sn, key,
+                    delete_if_before(segment_info, scanned_sn, key,
                                         'a backup history file')
                 elif history_match is not None:
                     # History (timeline) files do not have any actual
