@@ -221,7 +221,7 @@ class _DeleteFromContext(object):
             assert False
 
     def _groupdict_to_segment_number(self, d):
-        return storage.SegmentNumber(log=d['log'], seg=d['seg'])
+        return storage.base.SegmentNumber(log=d['log'], seg=d['seg'])
 
     def _delete_if_before(self, delete_horizon_segment_number,
                             scanned_segment_number, key, type_of_thing):

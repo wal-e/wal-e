@@ -155,7 +155,7 @@ def external_program_check(
 
 def extract_segment(text_with_extractable_segment):
     from wal_e.storage import BASE_BACKUP_REGEXP
-    from wal_e.storage import SegmentNumber
+    from wal_e.storage.base import SegmentNumber
 
     match = re.match(BASE_BACKUP_REGEXP, text_with_extractable_segment)
     if match is None:
