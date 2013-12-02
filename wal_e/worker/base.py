@@ -475,7 +475,7 @@ class _DeleteFromContext(object):
         # Sort the base backups from newest to oldest.
         basebackups = sorted(
                         completed_basebackups,
-                        key=lambda backup: backup.scanned_sn.as_an_integer,
+                        key=lambda backup: backup['scanned_sn'].as_an_integer,
                         reverse=True)
         last_retained = None
         if len(basebackups) <= num_to_retain:
