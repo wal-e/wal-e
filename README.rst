@@ -415,6 +415,13 @@ environment variable configuration for clarity:
 
     $ wal-e delete [--confirm] before base_00000004000002DF000000A6_03626144
 
+* ``retain``: Leave the given number of backups in place, and delete
+  all base backups and wal segment files older than them.
+
+  Example::
+
+    $ wal-e delete [--confirm] retain 5
+
 * ``old-versions``: Delete all backups and wal file segments with an
   older format.  This is only intended to be run after a major WAL-E
   version upgrade and the subsequent base-backup.  If no base backup

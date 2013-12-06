@@ -322,9 +322,9 @@ def build_parser():
 
     # delete 'retain' operator
     delete_retain_parser = delete_subparsers.add_parser(
-        'retain', help=('Delete backups and WAL segments older than the N '
-                        'oldest base backup. This will leave N working '
-                        'backups in place.'))
+        'retain', help=('Delete backups and WAL segments older than the '
+                        'NUM_TO_RETAIN oldest base backup. This will leave '
+                        'NUM_TO_RETAIN working backups in place.'))
     delete_retain_parser.add_argument(
         'NUM_TO_RETAIN', type=int,
         help='The number of base backups to retain')
