@@ -459,8 +459,11 @@ much faster when many small relations and ancillary files are
 involved.
 
 
+Other Options
+-------------
+
 Encryption
-----------
+''''''''''
 
 To encrypt backups as well as compress them, first generate a key
 pair using ``gpg --gen-key``. You don't need the private key on the
@@ -471,13 +474,18 @@ Once this is done, just set the ``WALE_GPG_KEY_ID`` environment
 variable or the ``--gpg-key-id`` command line option to the ID of
 the secret key for backup and restore commands.
 
-
 Controlling the I/O of a Base Backup
-------------------------------------
+''''''''''''''''''''''''''''''''''''
 
 To reduce the read load on base backups, they are sent through the
 tool ``pv`` first.  To use this rate-limited-read mode, use the option
---cluster-read-rate-limit as seen in ``wal-e backup-push``.
+``--cluster-read-rate-limit`` as seen in ``wal-e backup-push``.
+
+Quieter Logging
+'''''''''''''''
+
+To restrict log statements to warnings and errors, use the ``--terse``
+option. This is supported on all WAL-E operations.
 
 
 Development
