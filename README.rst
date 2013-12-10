@@ -499,6 +499,20 @@ Quieter Logging
 To restrict log statements to warnings and errors, use the ``--terse``
 option. This is supported on all WAL-E operations.
 
+Increasing throughput of wal_push
+'''''''''''''''''''''''''''''''''
+
+In certain situations, the ``wal-push`` process can take long enough
+that it can't keep up with WAL segments being produced by Postgres,
+which can lead to unbounded disk usage and an eventual crash of the
+database..
+
+One can instruct WAL-E to pool WAL segments together and send them in
+groups by passing the ``--pool-size`` parameter to ``wal-push``.  This
+can increase throughput significantly.
+
+As of version 0.7.x, ``--pool-size`` defaults to 8.
+
 
 Development
 -----------
