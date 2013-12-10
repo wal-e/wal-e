@@ -1,5 +1,6 @@
 class Credentials(object):
-    def __init__(self, authurl, user, password, tenant_name, region, endpoint_type):
+    def __init__(self, authurl, user, password, tenant_name, region,
+            endpoint_type):
         self.authurl = authurl
         self.user = user
         self.password = password
