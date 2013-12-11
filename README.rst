@@ -505,7 +505,7 @@ Increasing throughput of wal_push
 In certain situations, the ``wal-push`` process can take long enough
 that it can't keep up with WAL segments being produced by Postgres,
 which can lead to unbounded disk usage and an eventual crash of the
-database..
+database.
 
 One can instruct WAL-E to pool WAL segments together and send them in
 groups by passing the ``--pool-size`` parameter to ``wal-push``.  This
