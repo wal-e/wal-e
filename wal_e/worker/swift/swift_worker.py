@@ -62,7 +62,7 @@ class BackupFetcher(object):
             msg='beginning partition download',
             detail=('The partition being downloaded is {0}.'
                     .format(partition_name)),
-            hint='The absolute S3 key is {0}.'.format(part_abs_name))
+            hint='The absolute Swift object name is {0}.'.format(part_abs_name))
 
         url = 'swift://{ctr}/{path}'.format(ctr=self.layout.store_name(),
                                             path=part_abs_name)
