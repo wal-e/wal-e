@@ -41,6 +41,11 @@ def configure(*args, **kwargs):
     be printed to the other log handlers.
 
     """
+    level = kwargs.setdefault('level', logging.INFO)
+    handlers = []
+
+    # Add stderr output.
+    handlers.append(logging.StreamHandler())
 
     def terrible_log_output(s):
         import sys
@@ -67,40 +72,27 @@ def configure(*args, **kwargs):
     syslog_address = kwargs.setdefault('syslog_address',
                                        default_syslog_address)
 
-    handlers = []
+    try:
+        # Add syslog output.
+        handlers.append(logging.handlers.SysLogHandler(syslog_address))
+    except EnvironmentError, e:
+        if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
+            message = ('wal-e: Could not set up syslog, '
+                       'continuing anyway.  '
+                       'Reason: {0}').format(errno.errorcode[e.errno])
 
-    if len(logging.root.handlers) == 0:
-        filename = kwargs.get("filename")
-        if filename:
-            mode = kwargs.get("filemode", 'a')
-            handlers.append(logging.FileHandler(filename, mode))
-        else:
-            stream = kwargs.get("stream")
-            handlers.append(logging.StreamHandler(stream))
+            terrible_log_output(message)
 
-        try:
-            # Nobody can escape syslog, for now, and this default only
-            # works on Linux.
-            handlers.append(logging.handlers.SysLogHandler(syslog_address))
-        except EnvironmentError, e:
-            if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
-                message = ('wal-e: Could not set up syslog, '
-                           'continuing anyway.  '
-                           'Reason: {0}').format(errno.errorcode[e.errno])
+    fs = kwargs.get("format", logging.BASIC_FORMAT)
+    dfs = kwargs.get("datefmt", None)
+    fmt = IndentFormatter(fs, dfs)
 
-                terrible_log_output(message)
+    for handler in handlers:
+        handler.setFormatter(fmt)
+        handler.setLevel(level)
+        logging.root.addHandler(handler)
 
-        fs = kwargs.get("format", logging.BASIC_FORMAT)
-        dfs = kwargs.get("datefmt", None)
-        fmt = IndentFormatter(fs, dfs)
-
-        for handler in handlers:
-            handler.setFormatter(fmt)
-            logging.root.addHandler(handler)
-
-        level = kwargs.get("level")
-        if level is not None:
-            logging.root.setLevel(level)
+    logging.root.setLevel(level)
 
 
 class WalELogger(object):
