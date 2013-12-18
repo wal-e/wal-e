@@ -30,11 +30,12 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     container_name = url_tup.netloc
     conn = calling_format.connect(creds)
 
-    data = fp.read()
     conn.put_object(
-        container_name, url_tup.path, data, content_type=content_encoding
+        container_name, url_tup.path, fp, content_type=content_encoding
     )
-    return SwiftKey(url_tup.path, len(data))
+    # Swiftclient doesn't return us the total file size, we see how much of the
+    # file swiftclient read in order to determine the file size.
+    return SwiftKey(url_tup.path, size=fp.tell())
 
 
 def do_lzop_get(creds, uri, path, decrypt):
