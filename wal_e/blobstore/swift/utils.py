@@ -30,11 +30,12 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     container_name = url_tup.netloc
     conn = calling_format.connect(creds)
 
-    data = fp.read()
     conn.put_object(
-        container_name, url_tup.path, data, content_type=content_encoding
+        container_name, url_tup.path, fp, content_type=content_encoding
     )
-    return SwiftKey(url_tup.path, len(data))
+    # Swiftclient doesn't return us the total file size, we see how much of the
+    # file swiftclient read in order to determine the file size.
+    return SwiftKey(url_tup.path, size=fp.tell())
 
 
 def do_lzop_get(creds, uri, path, decrypt):
@@ -104,7 +105,7 @@ def do_lzop_get(creds, uri, path, decrypt):
     return download()
 
 
-def uri_get_file(creds, uri, conn=None):
+def uri_get_file(creds, uri, conn=None, resp_chunk_size=None):
     assert uri.startswith('swift://')
     url_tup = urlparse(uri)
     container_name = url_tup.netloc
@@ -112,13 +113,17 @@ def uri_get_file(creds, uri, conn=None):
 
     if conn is None:
         conn = calling_format.connect(creds)
-    _, content = conn.get_object(container_name, object_name)
+    _, content = conn.get_object(
+        container_name, object_name, resp_chunk_size=resp_chunk_size
+    )
     return content
 
 
 def write_and_return_error(uri, conn, stream):
     try:
-        stream.write(uri_get_file(None, uri, conn))
+        response = uri_get_file(None, uri, conn, resp_chunk_size=8192)
+        for chunk in response:
+            stream.write(chunk)
         stream.flush()
     except Exception, e:
         return e
