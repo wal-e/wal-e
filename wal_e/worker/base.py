@@ -480,17 +480,16 @@ class _DeleteFromContext(object):
                         reverse=True)
         last_retained = None
         if len(basebackups) <= num_to_retain:
+            detail = None
             if len(basebackups) == 0:
-                logger.info(
-                    msg='Not deleting any data.',
-                    detail='No existing base backups.')
+                msg = 'Not deleting any data.'
+                detail = 'No existing base backups.'
             elif len(basebackups) == 1:
                 last_retained = basebackups[-1]
                 msg = 'Retaining existing base backup.'
             else:
                 last_retained = basebackups[-1]
                 msg = "Retaining all %d base backups." % len(basebackups)
-            detail = None
         else:
             last_retained = basebackups[num_to_retain - 1]
             num_deleting = len(basebackups) - num_to_retain
