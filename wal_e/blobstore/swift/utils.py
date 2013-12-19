@@ -4,6 +4,8 @@ from urlparse import urlparse
 
 import gevent
 
+from swiftclient.exceptions import ClientException
+
 from wal_e import log_help
 from wal_e.blobstore.swift import calling_format
 from wal_e.pipeline import get_download_pipeline
@@ -90,9 +92,25 @@ def do_lzop_get(creds, uri, path, decrypt):
             g = gevent.spawn(write_and_return_error, uri, conn, pipeline.stdin)
 
             # Raise any exceptions from write_and_return_error
-            exc = g.get()
-            if exc is not None:
-                raise exc
+            try:
+                exc = g.get()
+                if exc is not None:
+                    raise exc
+            except ClientException as e:
+                if e.http_status == 404:
+                    # Do not retry if the key not present, this can happen
+                    # under normal situations.
+                    logger.warning(
+                        msg=('could no longer locate object while performing '
+                             'wal restore'),
+                        detail=('The absolute URI that could not be located '
+                                'is {url}.'.format(url=uri)),
+                        hint=('This can be normal when Postgres is trying to '
+                              'detect what timelines are available during '
+                              'restoration.'))
+                    return False
+                else:
+                    raise
 
             pipeline.finish()
 
