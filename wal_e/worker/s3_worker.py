@@ -301,9 +301,9 @@ class PartitionUploader(object):
 
             # Actually do work, retrying if necessary, and timing how long
             # it takes.
-            clock_start = time.clock()
+            clock_start = time.time()
             k = put_file_helper()
-            clock_finish = time.clock()
+            clock_finish = time.time()
 
             kib_per_second = format_kib_per_second(clock_start, clock_finish,
                                                    k.size)
@@ -338,10 +338,10 @@ def _do_lzop_s3_put(aws_access_key_id, aws_secret_access_key,
 
         tf.flush()
 
-        clock_start = time.clock()
+        clock_start = time.time()
         tf.seek(0)
         k = uri_put_file(aws_access_key_id, aws_secret_access_key, s3_url, tf)
-        clock_finish = time.clock()
+        clock_finish = time.time()
 
         kib_per_second = format_kib_per_second(clock_start, clock_finish,
                                                k.size)
