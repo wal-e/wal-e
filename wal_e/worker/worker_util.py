@@ -33,10 +33,10 @@ def do_lzop_put(creds, url, local_path, gpg_key):
 
         tf.flush()
 
-        clock_start = time.clock()
+        clock_start = time.time()
         tf.seek(0)
         k = blobstore.uri_put_file(creds, url, tf)
-        clock_finish = time.clock()
+        clock_finish = time.time()
 
         kib_per_second = format_kib_per_second(
             clock_start, clock_finish, k.size)
