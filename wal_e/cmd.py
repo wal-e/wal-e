@@ -164,10 +164,7 @@ def extract_segment(text_with_extractable_segment):
         return SegmentNumber(log=groupdict['log'], seg=groupdict['seg'])
 
 
-def main(argv=None):
-    if argv is None:
-        argv = sys.argv
-
+def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
@@ -465,6 +462,3 @@ def main(argv=None):
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
-
-if __name__ == "__main__":
-    sys.exit(main())
