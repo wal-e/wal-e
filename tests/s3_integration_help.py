@@ -1,5 +1,9 @@
 import boto
 import os
+import pytest
+
+from boto.s3.connection import Location
+from wal_e.s3 import calling_format
 
 
 def no_real_s3_credentials():
@@ -10,6 +14,44 @@ def no_real_s3_credentials():
             return True
 
     return False
+
+
+def prepare_s3_default_test_bucket():
+    # Check credentials are present: this procedure should not be
+    # called otherwise.
+    if no_real_s3_credentials():
+        assert False
+
+    bucket_name = 'wale-test-default-' + os.getenv('AWS_ACCESS_KEY_ID').lower()
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    cinfo = calling_format.from_bucket_name(bucket_name)
+    conn = cinfo.connect(aws_access_key_id, aws_secret_access_key)
+
+    def _clean():
+        bucket = conn.get_bucket(bucket_name)
+        for key in bucket.list():
+            key.delete()
+    try:
+        conn.create_bucket(bucket_name, location=Location.USWest)
+    except boto.exception.S3CreateError, e:
+        if e.status == 409:
+            # Conflict: bucket already present.  Re-use it, but
+            # clean it out first.
+            _clean()
+        else:
+            raise
+    else:
+        # Success
+        _clean()
+
+    return bucket_name
+
+
+@pytest.fixture(scope='session')
+def default_test_bucket():
+    if not no_real_s3_credentials():
+        return prepare_s3_default_test_bucket()
 
 
 def boto_supports_certs():
