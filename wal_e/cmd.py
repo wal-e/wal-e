@@ -170,18 +170,19 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
 
-    parser.add_argument('-k', '--aws-access-key-id',
-                        help='public AWS access key. Can also be defined in '
-                        'an environment variable. If both are defined, '
-                        'the one defined in the programs arguments takes '
-                        'precedence. Left in place for backwards '
-                        'compatibility, please switch to --storage-account.')
+    aws_group = parser.add_mutually_exclusive_group()
+    aws_group.add_argument('-k', '--aws-access-key-id',
+                           help='public AWS access key. Can also be defined '
+                           'in an environment variable. If both are defined, '
+                           'the one defined in the programs arguments takes '
+                           'precedence. Left in place for backwards '
+                           'compatibility, please switch to --storage-account.')
 
-    parser.add_argument('-a', '--wabs-account-name',
-                        help='Account name of Windows Azure Blob Service '
-                        'account. Can also be defined in an environment'
-                        'variable. If both are defined, the one defined'
-                        'in the programs arguments takes precedence.')
+    aws_group.add_argument('-a', '--wabs-account-name',
+                           help='Account name of Windows Azure Blob Service '
+                           'account. Can also be defined in an environment'
+                           'variable. If both are defined, the one defined'
+                           'in the programs arguments takes precedence.')
 
     parser.add_argument('--aws-instance-profile',
                         help='Use the IAM Instance Profile associated '
