@@ -173,9 +173,8 @@ def build_parser():
     parser.add_argument('-k', '--aws-access-key-id',
                         help='public AWS access key. Can also be defined in '
                         'an environment variable. If both are defined, '
-                        'the one defined in the programs arguments takes '
-                        'precedence. Left in place for backwards '
-                        'compatibility, please switch to --storage-account.')
+                        'the one defined in the program arguments takes '
+                        'precedence.')
 
     parser.add_argument('-a', '--wabs-account-name',
                         help='Account name of Windows Azure Blob Service '
