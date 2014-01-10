@@ -177,17 +177,16 @@ def build_parser():
                            'the one defined in the program arguments takes '
                            'precedence.')
 
-    aws_group.add_argument('-a', '--wabs-account-name',
-                           help='Account name of Windows Azure Blob Service '
-                           'account. Can also be defined in an environment'
-                           'variable. If both are defined, the one defined'
-                           'in the programs arguments takes precedence.')
+    aws_group.add_argument('--aws-instance-profile',
+                           help='Use the IAM Instance Profile associated '
+                           'with this instance to authenticate with the s3 '
+                           'API.')
 
-    parser.add_argument('--aws-instance-profile',
-                        help='Use the IAM Instance Profile associated '
-                        'with this instance to authenticate with the s3 API. '
-                        'This argument takes precedence over '
-                        '--aws-access-key-id')
+    parser.add_argument('-a', '--wabs-account-name',
+                        help='Account name of Windows Azure Blob Service '
+                        'account. Can also be defined in an environment'
+                        'variable. If both are defined, the one defined'
+                        'in the programs arguments takes precedence.')
 
     parser.add_argument('--s3-prefix',
                         help='S3 prefix to run all commands against.  '
