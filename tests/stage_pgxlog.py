@@ -1,5 +1,6 @@
 import pytest
 
+
 class PgXlog(object):
     """Test utility for staging a pg_xlog directory."""
 
@@ -17,6 +18,9 @@ class PgXlog(object):
 
         self.pg_xlog.join(name).ensure(file=True)
         self.status.join(name + status).ensure(file=True)
+
+    def seg(self, name):
+        return self.pg_xlog.join(name)
 
     def assert_exists(self, name, status):
         assert status in ('.ready', '.done')
