@@ -514,6 +514,19 @@ can increase throughput significantly.
 As of version 0.7.x, ``--pool-size`` defaults to 8.
 
 
+Use with AWS IAM instance profiles
+''''''''''''''''''''''''''''''''''
+
+Shipping credentials to instances has usability and security draw-
+backs. This is why we recommend running instances with an iam_ instance
+profile.
+
+To instruct WAL-E to use these credentials for access to S3, pass the
+``--aws-instance-profile`` flag.
+
+
+.. _iam: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AESDG-chapter-instancedata.html
+
 Development
 -----------
 
