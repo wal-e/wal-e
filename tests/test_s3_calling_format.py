@@ -46,7 +46,7 @@ no_real_s3_credentials = no_real_s3_credentials
 
 
 def test_subdomain_detect():
-    """Exercie subdomain compatible/incompatible bucket names."""
+    """Exercise subdomain compatible/incompatible bucket names."""
     for bn in SUBDOMAIN_OK:
         assert _is_mostly_subdomain_compatible(bn) is True
 
