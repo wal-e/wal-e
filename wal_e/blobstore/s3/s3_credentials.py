@@ -1,3 +1,5 @@
+from functools import partial
+
 from boto.provider import Provider as DefaultS3Provider
 
 from wal_e.exception import UserException
@@ -20,21 +22,6 @@ class InstanceProfileProvider(DefaultS3Provider):
                                 hint='Check that your instance has an IAM '
                                 'profile or set --aws-access-key-id')
 
-class Credentials(object):
-    def __init__(self, access_key_id, secret_access_key, security_token=None):
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
-        self.security_token = security_token
 
-    def get_provider(self):
-        return DefaultS3Provider('aws', self.access_key_id,
-                                 self.secret_access_key, self.security_token)
-
-
-class InstanceProfileCredentials(Credentials):
-    def __init__(self):
-        super(InstanceProfileCredentials, self).__init__(
-            None, None, None)
-
-    def get_provider(self):
-        return InstanceProfileProvider('aws')
+Credentials = partial(DefaultS3Provider, "aws")
+InstanceProfileCredentials = partial(InstanceProfileProvider, 'aws')
