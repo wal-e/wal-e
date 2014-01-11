@@ -397,8 +397,6 @@ def configure_backup_cxt(args):
 
         if args.aws_instance_profile:
             creds = s3.InstanceProfileCredentials()
-            # TODO: if we can't find an instance profile, hint to the
-            # user that they may need to configure that correctly.
         else:
             access_key = (args.aws_access_key_id or
                           os.getenv('AWS_ACCESS_KEY_ID'))
