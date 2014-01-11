@@ -18,8 +18,7 @@ class InstanceProfileProvider(DefaultS3Provider):
             raise UserException('Could not retrieve secret key from instance '
                                 'profile.',
                                 hint='Check that your instance has an IAM '
-                                'profile or set --aws-acces-key-id')
-
+                                'profile or set --aws-access-key-id')
 
 class Credentials(object):
     def __init__(self, access_key_id, secret_access_key, security_token=None):
