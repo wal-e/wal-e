@@ -124,9 +124,7 @@ class CallingInfo(object):
         def _conn_help(*args, **kwargs):
             return _connect_secureish(
                 *args,
-                aws_access_key_id=creds.access_key_id,
-                aws_secret_access_key=creds.secret_access_key,
-                security_token=creds.security_token,
+                provider=creds,
                 calling_format=self.calling_format(),
                 **kwargs)
 
