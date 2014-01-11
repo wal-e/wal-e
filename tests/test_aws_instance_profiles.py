@@ -1,5 +1,6 @@
 import pytest
 
+import boto
 import boto.provider
 from boto import utils
 
@@ -16,6 +17,10 @@ META_DATA_CREDENTIALS = {
 }
 
 
+def boto_flat_metadata():
+    return tuple(int(x) for x in boto.__version__.split('.')) >= (2, 9, 0)
+
+
 @pytest.fixture()
 def metadata(monkeypatch):
     m = dict(**META_DATA_CREDENTIALS)
@@ -25,8 +30,12 @@ def metadata(monkeypatch):
     monkeypatch.setattr(boto.provider.Provider,
                         '_credentials_need_refresh',
                         lambda self: False)
+    if boto_flat_metadata():
+        m = {'irrelevant': m}
+    else:
+        m = {'iam': {'security-credentials': {'irrelevant': m}}}
     monkeypatch.setattr(utils, 'get_instance_metadata',
-                        lambda *args, **kwargs: {"irrelevant": m})
+                        lambda *args, **kwargs: m)
 
 
 def test_profile_provider(metadata):
