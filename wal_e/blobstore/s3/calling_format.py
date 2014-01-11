@@ -124,7 +124,7 @@ class CallingInfo(object):
         def _conn_help(*args, **kwargs):
             return _connect_secureish(
                 *args,
-                provider=creds.get_provider(),
+                provider=creds,
                 calling_format=self.calling_format(),
                 **kwargs)
 

@@ -24,12 +24,4 @@ class InstanceProfileProvider(DefaultS3Provider):
 
 
 Credentials = partial(DefaultS3Provider, "aws")
-
-
-class InstanceProfileCredentials(DefaultS3Provider):
-    def __init__(self):
-        super(InstanceProfileCredentials, self).__init__(
-            None, None, None)
-
-    def get_provider(self):
-        return InstanceProfileProvider('aws')
+InstanceProfileCredentials = partial(InstanceProfileProvider, 'aws')
