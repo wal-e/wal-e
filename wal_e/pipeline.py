@@ -99,7 +99,7 @@ class PipelineCommand(object):
 
     def start(self):
         if self._process is not None:
-            raise StandardError(
+            raise UserCritical(
                 'BUG: Tried to .start on a PipelineCommand twice')
 
         self._process = popen_sp(self._command,
@@ -114,7 +114,7 @@ class PipelineCommand(object):
     def stdinSet(self, value):
         # Use the grotesque name 'stdinSet' to suppress pyflakes.
         if self._process is not None:
-            raise StandardError(
+            raise UserCritical(
                 'BUG: Trying to set stdin on PipelineCommand '
                 'after it has already been .start-ed')
 
@@ -128,7 +128,7 @@ class PipelineCommand(object):
     def stdoutSet(self, value):
         # Use the grotesque name 'stdoutSet' to suppress pyflakes.
         if self._process is not None:
-            raise StandardError(
+            raise UserCritical(
                 'BUG: Trying to set stdout on PipelineCommand '
                 'after it has already been .start-ed')
 

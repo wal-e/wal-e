@@ -164,7 +164,7 @@ def test_retry_on_normal_error(b, collect):
     key_name = 'test-key-name'
     k = key.Key(bucket=b, name=key_name)
 
-    collect.inject(StandardError('Normal error'))
+    collect.inject(Exception('Normal error'))
     d = s3_deleter.Deleter()
     d.delete(k)
 
