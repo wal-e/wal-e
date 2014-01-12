@@ -141,7 +141,7 @@ def uri_get_file(creds, uri, conn=None):
                         hint="")
                     gevent.sleep(30)
                 else:
-                    raise e
+                    raise
             else:
                 break
         length = len(part)
