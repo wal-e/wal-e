@@ -62,7 +62,7 @@ def retry(exception_processor=generic_exception_processor):
                     return f(*args, **kwargs)
                 except KeyboardInterrupt:
                     raise
-                except StandardError:
+                except:
                     exception_info_tuple = None
 
                     try:

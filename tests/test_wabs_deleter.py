@@ -144,7 +144,7 @@ def test_retry_on_normal_error(collect):
     key_name = 'test-key-name'
     b = B(name=key_name)
 
-    collect.inject(StandardError('Normal error'))
+    collect.inject(Exception('Normal error'))
     d = wabs_deleter.Deleter(BlobService('test', 'ing'), 'test-container')
     d.delete(b)
 

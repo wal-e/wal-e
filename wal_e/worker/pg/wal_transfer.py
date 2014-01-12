@@ -46,7 +46,7 @@ class WalSegment(object):
             done_metadata = path.join(status_dir, self.name + '.done')
 
             os.rename(ready_metadata, done_metadata)
-        except StandardError:
+        except:
             raise UserCritical(
                 msg='problem moving .ready archive status to .done',
                 detail='Traceback is: {0}'.format(traceback.format_exc()),
@@ -158,7 +158,7 @@ class WalTransferGroup(object):
 
                 if not segment.explicit:
                     segment.mark_done()
-            except StandardError, e:
+            except BaseException as e:
                 # Absorb and forward exceptions across the channel.
                 placed = e
             else:

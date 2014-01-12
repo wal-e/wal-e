@@ -5,7 +5,7 @@ from wal_e import worker
 from wal_e.exception import UserCritical
 
 
-class Explosion(StandardError):
+class Explosion(Exception):
     """Marker type for fault injection."""
     pass
 
