@@ -78,7 +78,7 @@ class BackupFetcher(object):
         g = gevent.spawn(s3.write_and_return_error, key, pipeline.stdin)
         TarPartition.tarfile_extract(pipeline.stdout, self.local_root)
 
-        # Raise any exceptions from self._write_and_close
+        # Raise any exceptions guarded by write_and_return_error.
         exc = g.get()
         if exc is not None:
             raise exc

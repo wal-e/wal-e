@@ -207,7 +207,8 @@ def do_lzop_get(creds, url, path, decrypt):
             g = gevent.spawn(write_and_return_error, url, conn, pipeline.stdin)
 
             try:
-                # Raise any exceptions from _write_and_close
+                # Raise any exceptions guarded by
+                # write_and_return_error.
                 g.get()
             except WindowsAzureMissingResourceError:
                 # Short circuit any re-try attempts under certain race
