@@ -132,7 +132,7 @@ def uri_get_file(creds, uri, conn=None):
                 part = conn.get_blob(url_tup.netloc,
                                      url_tup.path,
                                      x_ms_range=ms_range)
-            except Exception, e:
+            except EnvironmentError as e:
                 if e.errno in (errno.EBUSY, errno.ECONNRESET):
                     logger.warning(
                         msg="retrying after encountering exception",
