@@ -177,7 +177,7 @@ def build_parser():
                            'the one defined in the program arguments takes '
                            'precedence.')
 
-    aws_group.add_argument('--aws-instance-profile',
+    aws_group.add_argument('--aws-instance-profile', action='store_true',
                            help='Use the IAM Instance Profile associated '
                            'with this instance to authenticate with the s3 '
                            'API.')
