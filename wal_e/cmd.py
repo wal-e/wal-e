@@ -444,9 +444,7 @@ def configure_backup_cxt(args):
             hint='Report a bug.')
 
 
-def main(argv=None):
-    if argv is None:
-        argv = sys.argv
+def main():
     parser = build_parser()
     args = parser.parse_args()
     subcommand = args.subcommand
@@ -578,6 +576,3 @@ def main(argv=None):
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
-
-if __name__ == "__main__":
-    sys.exit(main())
