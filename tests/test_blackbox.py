@@ -40,6 +40,9 @@ def test_backup_push(tmpdir, monkeypatch, main):
     monkeypatch.setattr(wal_e.operator.backup, 'PgBackupStatements',
                         blackbox.NoopPgBackupStatements)
 
+    monkeypatch.setattr(wal_e.cmd, 'external_program_check',
+                        lambda *args, **kwargs: None)
+
     contents = 'abcdefghijlmnopqrstuvwxyz\n' * 10000
     push_dir = tmpdir.join('push-from').ensure(dir=True)
     push_dir.join('arbitrary-file').write(contents)
