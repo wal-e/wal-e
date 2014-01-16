@@ -4,6 +4,7 @@ import pytest
 from blackbox import apply_blackbox_config, main
 from s3_integration_help import default_test_bucket
 from stage_pgxlog import pg_xlog
+from wal_e import cmd
 from wal_e.operator import s3_operator
 
 # Quiet pyflakes about pytest fixtures.
@@ -39,6 +40,8 @@ def test_wal_fetch_non_existent(tmpdir, main):
 def test_backup_push(tmpdir, monkeypatch, main):
     monkeypatch.setattr(s3_operator, 'PgBackupStatements',
                         blackbox.NoopPgBackupStatements)
+    monkeypatch.setattr(cmd, 'external_program_check',
+                        lambda *args, **kwargs: None)
 
     contents = 'abcdefghijlmnopqrstuvwxyz\n' * 10000
     push_dir = tmpdir.join('push-from').ensure(dir=True)
