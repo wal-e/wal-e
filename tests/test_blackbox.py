@@ -6,6 +6,7 @@ from s3_integration_help import default_test_bucket
 from stage_pgxlog import pg_xlog
 from wal_e import cmd
 from wal_e.operator import s3_operator
+from wal_e.worker import syncer
 
 # Quiet pyflakes about pytest fixtures.
 assert apply_blackbox_config
@@ -41,7 +42,16 @@ def test_backup_push(tmpdir, monkeypatch, main):
     monkeypatch.setattr(s3_operator, 'PgBackupStatements',
                         blackbox.NoopPgBackupStatements)
     monkeypatch.setattr(cmd, 'external_program_check',
+    # psql binary test will fail if local pg env isn't set up
                         lambda *args, **kwargs: None)
+
+    fsynced_root = []
+
+    # Check that recursive_fsync is called with the right
+    # argument. There's a separate unit test in test_tar_hacks.py that
+    # it actually fsyncs the right files.
+    monkeypatch.setattr(syncer, 'recursive_fsync',
+                        lambda root: fsynced_root.append(root))
 
     contents = 'abcdefghijlmnopqrstuvwxyz\n' * 10000
     push_dir = tmpdir.join('push-from').ensure(dir=True)
@@ -56,4 +66,6 @@ def test_backup_push(tmpdir, monkeypatch, main):
 
     fetch_dir = tmpdir.join('fetch-to').ensure(dir=True)
     main('backup-fetch', unicode(fetch_dir), 'LATEST')
+
     assert fetch_dir.join('arbitrary-file').read() == contents
+    assert fsynced_root[0] == unicode(fetch_dir)

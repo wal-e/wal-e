@@ -28,6 +28,7 @@ from wal_e.exception import UserException
 from wal_e.pipeline import get_upload_pipeline, get_download_pipeline
 from wal_e.piper import PIPE
 from wal_e.s3 import calling_format
+from wal_e.worker import syncer
 
 logger = log_help.WalELogger(__name__, level=logging.INFO)
 
@@ -506,6 +507,8 @@ class BackupFetcher(object):
         g.get()
 
         pipeline.finish()
+
+        syncer.recursive_fsync(self.local_root)
 
 
 class BackupList(object):
