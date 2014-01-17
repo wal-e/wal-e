@@ -36,12 +36,22 @@ def test_wal_fetch_non_existent(tmpdir, main):
 
 
 def test_backup_push(tmpdir, monkeypatch, main):
+    import wal_e.tar_partition
     import wal_e.operator.backup
+    fsynced_files = []
+
     monkeypatch.setattr(wal_e.operator.backup, 'PgBackupStatements',
                         blackbox.NoopPgBackupStatements)
 
+    # psql binary test will fail if local pg env isn't set up
     monkeypatch.setattr(wal_e.cmd, 'external_program_check',
                         lambda *args, **kwargs: None)
+
+    # check that _fsync_files() is called with the right
+    # arguments. There's a separate unit test in test_tar_hacks.py
+    # that it actually fsyncs the right files.
+    monkeypatch.setattr(wal_e.tar_partition, '_fsync_files',
+                        lambda filenames: fsynced_files.extend(filenames))
 
     contents = 'abcdefghijlmnopqrstuvwxyz\n' * 10000
     push_dir = tmpdir.join('push-from').ensure(dir=True)
@@ -56,4 +66,8 @@ def test_backup_push(tmpdir, monkeypatch, main):
 
     fetch_dir = tmpdir.join('fetch-to').ensure(dir=True)
     main('backup-fetch', unicode(fetch_dir), 'LATEST')
+
     assert fetch_dir.join('arbitrary-file').read() == contents
+
+    for filename in fetch_dir.listdir():
+        assert unicode(filename) in fsynced_files
