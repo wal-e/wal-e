@@ -56,7 +56,7 @@ def retry(exception_processor=generic_exception_processor):
 
             while True:
                 # Avoid livelocks while spinning on retry by yielding.
-                gevent.sleep(0)
+                gevent.sleep(0.1)
 
                 try:
                     return f(*args, **kwargs)

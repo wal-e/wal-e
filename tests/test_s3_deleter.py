@@ -40,7 +40,7 @@ class BucketDeleteKeysCollector(object):
 
                 # Prevent starvation/livelock with a polling process
                 # by yielding.
-                gevent.sleep(0)
+                gevent.sleep(0.1)
 
                 raise self.exc
         finally:
@@ -94,7 +94,7 @@ def gevent_fastsleep(monkeypatch):
 
     def fast_sleep(tm):
         # Ignore time passed and just yield.
-        old_sleep(0)
+        old_sleep(0.1)
 
     monkeypatch.setattr(gevent, 'sleep', fast_sleep)
 
@@ -171,7 +171,7 @@ def test_retry_on_normal_error(b, collect):
     # Since delete_keys will fail over and over again, aborted_keys
     # should grow quickly.
     while len(collect.aborted_keys) < 2:
-        gevent.sleep(0)
+        gevent.sleep(0.1)
 
     # Since delete_keys has been failing repeatedly, no keys should be
     # successfully deleted.
@@ -206,7 +206,7 @@ def test_no_retry_on_keyboadinterrupt(b, collect):
         # MarkedKeyboardInterrupt being processed within the
         # pytest.raises context manager.
         while True:
-            gevent.sleep(0)
+            gevent.sleep(0.1)
 
     # Only one key should have been aborted, since the purpose is to
     # *not* retry when processing KeyboardInterrupt.
