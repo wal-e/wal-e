@@ -170,11 +170,17 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
 
-    parser.add_argument('-k', '--aws-access-key-id',
-                        help='public AWS access key. Can also be defined in '
-                        'an environment variable. If both are defined, '
-                        'the one defined in the program arguments takes '
-                        'precedence.')
+    aws_group = parser.add_mutually_exclusive_group()
+    aws_group.add_argument('-k', '--aws-access-key-id',
+                           help='public AWS access key. Can also be defined '
+                           'in an environment variable. If both are defined, '
+                           'the one defined in the program arguments takes '
+                           'precedence.')
+
+    aws_group.add_argument('--aws-instance-profile', action='store_true',
+                           help='Use the IAM Instance Profile associated '
+                           'with this instance to authenticate with the s3 '
+                           'API.')
 
     parser.add_argument('-a', '--wabs-account-name',
                         help='Account name of Windows Azure Blob Service '
@@ -386,25 +392,31 @@ def configure_backup_cxt(args):
     # backend data stores, yielding value adhering to the
     # 'operator.Backup' protocol.
     if store.is_s3:
-        access_key = args.aws_access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
-        if access_key is None:
-            raise UserException(
-                msg='AWS Access Key credential is required but not provided',
-                hint=(_opt_env_hint('aws-access-key-id')))
-
-        secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-        if secret_key is None:
-            raise UserException(
-                msg='AWS Secret Key credential is required but not provided',
-                hint=_env_hint('aws-secret-access-key'))
-
-        security_token = os.getenv('AWS_SECURITY_TOKEN')
-
         from wal_e.blobstore import s3
+
+        if args.aws_instance_profile:
+            creds = s3.InstanceProfileCredentials()
+        else:
+            access_key = (args.aws_access_key_id or
+                          os.getenv('AWS_ACCESS_KEY_ID'))
+            if access_key is None:
+                raise UserException(
+                    msg='AWS Access Key credential is required '
+                    'but not provided',
+                    hint=(_opt_env_hint('aws-access-key-id')))
+
+            secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+            if secret_key is None:
+                raise UserException(
+                    msg='AWS Secret Key credential is required '
+                    'but not provided',
+                    hint=_env_hint('aws-secret-access-key'))
+
+            security_token = os.getenv('AWS_SECURITY_TOKEN')
+
+            creds = s3.Credentials(access_key, secret_key, security_token)
+
         from wal_e.operator.s3_operator import S3Backup
-
-        creds = s3.Credentials(access_key, secret_key, security_token)
-
         return S3Backup(store, creds, gpg_key_id)
     elif store.is_wabs:
         account_name = args.wabs_account_name or os.getenv('WABS_ACCOUNT_NAME')
