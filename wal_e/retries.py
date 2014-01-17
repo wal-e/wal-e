@@ -55,6 +55,9 @@ def retry(exception_processor=generic_exception_processor):
         def shim(*args, **kwargs):
             exc_processor_cxt = None
 
+            if os.getenv('CRIPPLE_RETRIES'):
+                return f(*args, **kwargs)
+
             while True:
                 # Avoid livelocks while spinning on retry by yielding.
                 gevent.sleep(0.1)
