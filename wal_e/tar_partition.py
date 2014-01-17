@@ -147,6 +147,30 @@ PARTITION_MAX_SZ = 1610612736
 # 262144 is 256 KiB.
 PARTITION_MAX_MEMBERS = int(PARTITION_MAX_SZ / 262144)
 
+# Helper function to fsync a list of file names. The filenames are
+# absolute paths already.
+def _fsync_files(filenames):
+    touched_directories = set()
+
+    mode = os.O_RDONLY
+
+    # Windows
+    if hasattr(os, 'O_BINARY'):
+        mode |= os.O_BINARY
+
+    for filename in filenames:
+        fd = os.open(filename, mode)
+        os.fsync(fd)
+        os.close(fd)
+        touched_directories.add(os.path.dirname(filename))
+
+    # Some OSes also require us to fsync the directory where we've
+    # created files or subdirectories.
+    if hasattr(os, 'O_DIRECTORY'):
+        for dirname in touched_directories:
+            fd = os.open(dirname, os.O_RDONLY | os.O_DIRECTORY)
+            os.fsync(fd)
+            os.close(fd)
 
 class TarPartition(list):
 
@@ -187,19 +211,45 @@ class TarPartition(list):
         # for the most part.
         tar = tarfile.open(mode='r|', fileobj=fileobj)
 
+        # canonicalize dest_path so the prefix check below works
+        dest_path = os.path.realpath(dest_path)
+
+        # list of files that need fsyncing
+        extracted_files = []
+
         # Iterate through each member of the tarfile individually. We must
         # approach it this way because we are dealing with a pipe and the
         # getmembers() method will consume it before we extract any data.
         for member in tar:
             # NOTE:: these verifications may be a bit paranoid, but
-            # NOTE:: isn't paranoia a good thing?
-            # Verify the member location is a relative path
-            assert not member.name.startswith('/')
-            # Verify path does not contain '..'
-            assert all([c != '..' for c in os.path.split(member.name)])
-            tar.extract(member, path=dest_path)
-        tar.close()
+            # NOTE:: isn't paranoia a good thing? 
+            #
+            # The member file names should be relative paths that do
+            # not escape the top level directory. Checking for .. is
+            # insufficient due to symlinks. The only way to be sure is
+            # to actually look at the filesystem which is what
+            # realpath() does. 
+            #
+            # We need the absolute path for the fsync call and in any
+            # case it's handy for the assert. This does assume that
+            # tar.extract() will use os.path.join() the same we way
+            # do.
+            filename = os.path.realpath(os.path.join(dest_path, member.name))
 
+            assert not member.name.startswith('/')
+            assert filename.startswith(dest_path)
+
+            tar.extract(member, path=dest_path)
+            extracted_files.append(filename)
+
+            # avoid accumulating an unbounded list of strings which
+            # could be quite large for a large database
+            if len(extracted_files) > 1000:
+                _fsync_files(extracted_files)
+                del extracted_files[:]
+        tar.close()
+        _fsync_files(extracted_files)
+        
     def tarfile_write(self, fileobj):
         tar = None
         try:
