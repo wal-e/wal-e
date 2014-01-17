@@ -193,7 +193,7 @@ def test_finally_execution():
             if segment is segOK:
                 try:
                     while True:
-                        gevent.sleep(0)
+                        gevent.sleep(0.1)
                 finally:
                     self.cleaned_up = True
 
