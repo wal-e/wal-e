@@ -345,6 +345,38 @@ def build_parser():
     return parser
 
 
+def _config_hint_generate(optname, both_env_and_param):
+    """Generate HINT language for missing configuration"""
+    env = optname.replace('-', '_').upper()
+
+    if both_env_and_param:
+        option = '--' + optname.lower()
+        return ('Pass "{0}" or set the environment variable "{1}".'
+                .format(option, env))
+    else:
+        return 'Set the environment variable {0}.'.format(env)
+
+
+def s3_explicit_creds(args):
+    access_key = args.aws_access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
+    if access_key is None:
+        raise UserException(
+            msg='AWS Access Key credential is required but not provided',
+            hint=(_config_hint_generate('aws-access-key-id', True)))
+
+    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    if secret_key is None:
+        raise UserException(
+            msg='AWS Secret Key credential is required but not provided',
+            hint=_config_hint_generate('aws-secret-access-key', False))
+
+    security_token = os.getenv('AWS_SECURITY_TOKEN')
+
+    from wal_e.blobstore import s3
+
+    return s3.Credentials(access_key, secret_key, security_token)
+
+
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
     prefix = (args.s3_prefix or args.wabs_prefix
@@ -369,55 +401,25 @@ def configure_backup_cxt(args):
     if gpg_key_id is not None:
         external_program_check([GPG_BIN])
 
-    # Define some hint-text generator to help the user with consistent
-    # language between storage backends when possible.
-    def _opt_env_hint(optname):
-        option = '--' + optname.lower()
-        env = optname.replace('-', '_').upper()
-
-        return ('Pass "{0}" or set the environment variable "{1}".'
-                .format(option, env))
-
-    def _env_hint(optname):
-        env = optname.replace('-', '_').upper()
-        return 'Set the environment variable {0}.'.format(env)
-
     # Enumeration of reading in configuration for all supported
     # backend data stores, yielding value adhering to the
     # 'operator.Backup' protocol.
     if store.is_s3:
-        access_key = args.aws_access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
-        if access_key is None:
-            raise UserException(
-                msg='AWS Access Key credential is required but not provided',
-                hint=(_opt_env_hint('aws-access-key-id')))
-
-        secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-        if secret_key is None:
-            raise UserException(
-                msg='AWS Secret Key credential is required but not provided',
-                hint=_env_hint('aws-secret-access-key'))
-
-        security_token = os.getenv('AWS_SECURITY_TOKEN')
-
-        from wal_e.blobstore import s3
+        creds = s3_explicit_creds(args)
         from wal_e.operator.s3_operator import S3Backup
-
-        creds = s3.Credentials(access_key, secret_key, security_token)
-
         return S3Backup(store, creds, gpg_key_id)
     elif store.is_wabs:
         account_name = args.wabs_account_name or os.getenv('WABS_ACCOUNT_NAME')
         if account_name is None:
             raise UserException(
                 msg='WABS account name is undefined',
-                hint=_opt_env_hint('wabs-account-name'))
+                hint=_config_hint_generate('wabs-account-name', True))
 
         access_key = os.getenv('WABS_ACCESS_KEY')
         if access_key is None:
             raise UserException(
                 msg='WABS access key credential is required but not provided',
-                hint=_env_hint('wabs-access-key'))
+                hint=_config_hint_generate('wabs-access-key', False))
 
         from wal_e.blobstore import wabs
         from wal_e.operator.wabs_operator import WABSBackup
