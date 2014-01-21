@@ -1,7 +1,9 @@
 import boto
+import json
 import os
 import pytest
 
+from boto import sts
 from boto.s3.connection import Location
 from wal_e.blobstore import s3
 from wal_e.blobstore.s3 import calling_format
@@ -66,6 +68,49 @@ def default_test_bucket():
 
 def boto_supports_certs():
     return tuple(int(x) for x in boto.__version__.split('.')) >= (2, 6, 0)
+
+
+def make_policy(bucket_name, prefix, allow_get_location=False):
+    """Produces a S3 IAM text for selective access of data.
+
+    Only a prefix can be listed, gotten, or written to when a
+    credential is subject to this policy text.
+    """
+    bucket_arn = "arn:aws:s3:::" + bucket_name
+    prefix_arn = "arn:aws:s3:::{0}/{1}/*".format(bucket_name, prefix)
+
+    structure = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": ["s3:ListBucket"],
+                "Effect": "Allow",
+                "Resource": [bucket_arn],
+                "Condition": {"StringLike": {"s3:prefix": [prefix + '/*']}},
+            },
+            {
+                "Effect": "Allow",
+                "Action": ["s3:PutObject", "s3:GetObject"],
+                "Resource": [prefix_arn]
+            }]}
+
+    if allow_get_location:
+        structure["Statement"].append(
+            {"Action": ["s3:GetBucketLocation"],
+             "Effect": "Allow",
+             "Resource": [bucket_arn]})
+
+    return json.dumps(structure, indent=2)
+
+
+@pytest.fixture
+def sts_conn():
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    return sts.connect_to_region(
+        'us-east-1',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key)
 
 
 def _delete_keys(bucket, keys):
