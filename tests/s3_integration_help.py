@@ -31,7 +31,7 @@ def prepare_s3_default_test_bucket():
     if no_real_s3_credentials():
         assert False
 
-    bucket_name = 'wale-test-default-' + os.getenv('AWS_ACCESS_KEY_ID').lower()
+    bucket_name = 'waletdefwuy' + os.getenv('AWS_ACCESS_KEY_ID').lower()
 
     creds = s3.Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
                            os.getenv('AWS_SECRET_ACCESS_KEY'),
