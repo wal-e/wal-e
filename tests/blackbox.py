@@ -16,7 +16,6 @@ class AwsTestConfig(object):
 
     def __init__(self, request):
         self.env_vars = {}
-        self.request = request
         self.monkeypatch = request.getfuncargvalue('monkeypatch')
 
         for name in _AWS_CRED_ENV_VARS:
