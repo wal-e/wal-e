@@ -12,32 +12,36 @@ _AWS_CRED_ENV_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
 
 
 class AwsTestConfig(object):
-    def __init__(self):
+    name = 'aws'
+
+    def __init__(self, request):
         self.env_vars = {}
+        self.request = request
+        self.monkeypatch = request.getfuncargvalue('monkeypatch')
 
         for name in _AWS_CRED_ENV_VARS:
             maybe_value = os.getenv(name)
             self.env_vars[name] = maybe_value
 
-    def patch(self, test_name, default_test_bucket, monkeypatch):
+    def patch(self, test_name, default_test_bucket):
         # Scrub WAL-E prefixes left around in the user's environment to
         # prevent unexpected results.
         for name in _PREFIX_VARS:
-            monkeypatch.delenv(name, raising=False)
+            self.monkeypatch.delenv(name, raising=False)
 
         # Set other credentials.
         for name, value in self.env_vars.iteritems():
             if value is None:
-                monkeypatch.delenv(name, raising=False)
+                self.monkeypatch.delenv(name, raising=False)
             else:
-                monkeypatch.setenv(name, value)
+                self.monkeypatch.setenv(name, value)
 
-        monkeypatch.setenv('WALE_S3_PREFIX', 's3://{0}/{1}'
-                           .format(default_test_bucket, test_name))
+        self.monkeypatch.setenv('WALE_S3_PREFIX', 's3://{0}/{1}'
+                                .format(default_test_bucket, test_name))
 
-    @property
-    def name(self):
-        return 'aws'
+    def main(self, *args):
+        self.monkeypatch.setattr(sys, 'argv', ['wal-e'] + list(args))
+        return cmd.main()
 
 
 def _make_fixture_param_and_ids():
@@ -51,15 +55,16 @@ def _make_fixture_param_and_ids():
         ret['ids'].append(c.name)
 
     if not s3_integration_help.no_real_s3_credentials():
-        _add_config(AwsTestConfig())
+        _add_config(AwsTestConfig)
 
     return ret
 
 
-@pytest.fixture(autouse=True,
-                **_make_fixture_param_and_ids())
-def apply_blackbox_config(request, monkeypatch, default_test_bucket):
-    request.param.patch(request.node.name, default_test_bucket, monkeypatch)
+@pytest.fixture(**_make_fixture_param_and_ids())
+def config(request, monkeypatch, default_test_bucket):
+    config = request.param(request)
+    config.patch(request.node.name, default_test_bucket)
+    return config
 
 
 class NoopPgBackupStatements(object):
@@ -84,17 +89,3 @@ class NoopPgBackupStatements(object):
     @classmethod
     def pg_version(cls):
         return {'version': 'FAKE-PG-VERSION'}
-
-
-class MainWithArgs(object):
-    def __init__(self, monkeypatch):
-        self.monkeypatch = monkeypatch
-
-    def __call__(self, *argv):
-        self.monkeypatch.setattr(sys, 'argv', ['wal-e'] + list(argv))
-        cmd.main()
-
-
-@pytest.fixture
-def main(monkeypatch):
-    return MainWithArgs(monkeypatch)
