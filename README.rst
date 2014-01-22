@@ -514,6 +514,26 @@ can increase throughput significantly.
 As of version 0.7.x, ``--pool-size`` defaults to 8.
 
 
+Using AWS IAM Instance Profiles
+'''''''''''''''''''''''''''''''
+
+Storing credentials on AWS EC2 instances has usability and security
+drawbacks.  When using WAL-E with AWS S3 and AWS EC2, most uses of
+WAL-E would benefit from use with the `AWS Instance Profile feature`_,
+which automatically generates and rotates credentials on behalf of an
+instance.
+
+To instruct WAL-E to use these credentials for access to S3, pass the
+``--aws-instance-profile`` flag.
+
+.. _AWS Instance Profile feature:
+   http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AESDG-chapter-instancedata.html
+
+Instance profiles may *not* be preferred in more complex scenarios
+when one has multiple AWS IAM policies written for multiple programs
+run on an instance, or an existing key management infrastructure.
+
+
 Development
 -----------
 

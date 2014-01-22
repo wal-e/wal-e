@@ -170,11 +170,17 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
 
-    parser.add_argument('-k', '--aws-access-key-id',
-                        help='public AWS access key. Can also be defined in '
-                        'an environment variable. If both are defined, '
-                        'the one defined in the program arguments takes '
-                        'precedence.')
+    aws_group = parser.add_mutually_exclusive_group()
+    aws_group.add_argument('-k', '--aws-access-key-id',
+                           help='public AWS access key. Can also be defined '
+                           'in an environment variable. If both are defined, '
+                           'the one defined in the programs arguments takes '
+                           'precedence.')
+
+    aws_group.add_argument('--aws-instance-profile', action='store_true',
+                           help='Use the IAM Instance Profile associated '
+                           'with this instance to authenticate with the S3 '
+                           'API.')
 
     parser.add_argument('-a', '--wabs-account-name',
                         help='Account name of Windows Azure Blob Service '
@@ -377,6 +383,13 @@ def s3_explicit_creds(args):
     return s3.Credentials(access_key, secret_key, security_token)
 
 
+def s3_instance_profile(args):
+    from wal_e.blobstore import s3
+
+    assert args.aws_instance_profile
+    return s3.InstanceProfileCredentials()
+
+
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
     prefix = (args.s3_prefix or args.wabs_prefix
@@ -405,9 +418,14 @@ def configure_backup_cxt(args):
     # backend data stores, yielding value adhering to the
     # 'operator.Backup' protocol.
     if store.is_s3:
-        creds = s3_explicit_creds(args)
-        from wal_e.operator.s3_operator import S3Backup
-        return S3Backup(store, creds, gpg_key_id)
+        if args.aws_instance_profile:
+            creds = s3_instance_profile(args)
+        else:
+            creds = s3_explicit_creds(args)
+
+        from wal_e.operator import s3_operator
+
+        return s3_operator.S3Backup(store, creds, gpg_key_id)
     elif store.is_wabs:
         account_name = args.wabs_account_name or os.getenv('WABS_ACCOUNT_NAME')
         if account_name is None:
