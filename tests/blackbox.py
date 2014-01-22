@@ -7,15 +7,15 @@ from wal_e import cmd
 
 _PREFIX_VARS = ['WALE_S3_PREFIX', 'WALE_WABS_PREFIX', 'WALE_SWIFT_PREFIX']
 
+_AWS_CRED_ENV_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
+                      'AWS_SECURITY_TOKEN']
+
 
 class AwsTestConfig(object):
     def __init__(self):
         self.env_vars = {}
-        relevant_env_vars = ['AWS_ACCESS_KEY_ID',
-                             'AWS_SECRET_ACCESS_KEY',
-                             'AWS_SECURITY_TOKEN']
 
-        for name in relevant_env_vars:
+        for name in _AWS_CRED_ENV_VARS:
             maybe_value = os.getenv(name)
             self.env_vars[name] = maybe_value
 
