@@ -43,6 +43,65 @@ class AwsTestConfig(object):
         return cmd.main()
 
 
+class AwsInstanceProfileTestConfig(object):
+    name = 'aws+instance-profile'
+
+    def __init__(self, request):
+        self.request = request
+        self.monkeypatch = request.getfuncargvalue('monkeypatch')
+
+    def patch(self, test_name, default_test_bucket):
+        # Get STS-vended credentials to stand in for Instance Profile
+        # credentials before scrubbing the environment of AWS
+        # environment variables.
+        c = s3_integration_help.sts_conn()
+        policy = s3_integration_help.make_policy(default_test_bucket,
+                                                 test_name)
+        fed = c.get_federation_token(default_test_bucket, policy=policy)
+
+        # Scrub AWS environment-variable based cred to make sure the
+        # instance profile path is used.
+        for name in _AWS_CRED_ENV_VARS:
+            self.monkeypatch.delenv(name, raising=False)
+
+        self.monkeypatch.setenv('WALE_S3_PREFIX', 's3://{0}/{1}'
+                                .format(default_test_bucket, test_name))
+
+        # Patch boto.utils.get_instance_metadata to return a ginned up
+        # credential.
+        m = {
+            "Code": "Success",
+            "LastUpdated": "3014-01-11T02:13:53Z",
+            "Type": "AWS-HMAC",
+            "AccessKeyId": fed.credentials.access_key,
+            "SecretAccessKey": fed.credentials.secret_key,
+            "Token": fed.credentials.session_token,
+            "Expiration": "3014-01-11T08:16:59Z"
+        }
+
+        from boto import provider
+        self.monkeypatch.setattr(provider.Provider,
+                            '_credentials_need_refresh',
+                            lambda self: False)
+
+        # Different versions of boto require slightly different return
+        # formats.
+        import test_aws_instance_profiles
+        if test_aws_instance_profiles.boto_flat_metadata():
+            m = {'irrelevant': m}
+        else:
+            m = {'iam': {'security-credentials': {'irrelevant': m}}}
+        from boto import utils
+
+        self.monkeypatch.setattr(utils, 'get_instance_metadata',
+                            lambda *args, **kwargs: m)
+
+    def main(self, *args):
+        self.monkeypatch.setattr(
+            sys, 'argv', ['wal-e', '--aws-instance-profile'] + list(args))
+        return cmd.main()
+
+
 def _make_fixture_param_and_ids():
     ret = {
         'params': [],
@@ -55,6 +114,7 @@ def _make_fixture_param_and_ids():
 
     if not s3_integration_help.no_real_s3_credentials():
         _add_config(AwsTestConfig)
+        _add_config(AwsInstanceProfileTestConfig)
 
     return ret
 
