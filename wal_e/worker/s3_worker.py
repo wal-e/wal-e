@@ -241,7 +241,7 @@ class PartitionUploader(object):
         logger.info(msg='beginning volume compression',
                     detail='Building volume {name}.'.format(name=tpart.name))
 
-        with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        with tempfile.NamedTemporaryFile(mode='r+b') as tf:
             pipeline = get_upload_pipeline(PIPE,
                                            tf,
                                            rate_limit=self.rate_limit,
@@ -332,7 +332,7 @@ def _do_lzop_s3_put(aws_access_key_id, aws_secret_access_key,
 
     assert s3_url.endswith('.lzo')
 
-    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+    with tempfile.NamedTemporaryFile(mode='r+b') as tf:
         pipeline = get_upload_pipeline(
             open(local_path, 'r'), tf, gpg_key=gpg_key)
         pipeline.finish()
