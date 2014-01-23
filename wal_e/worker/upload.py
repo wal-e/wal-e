@@ -71,7 +71,7 @@ class PartitionUploader(object):
         logger.info(msg='beginning volume compression',
                     detail='Building volume {name}.'.format(name=tpart.name))
 
-        with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+        with tempfile.NamedTemporaryFile(mode='r+b') as tf:
             pipeline = get_upload_pipeline(PIPE, tf,
                                            rate_limit=self.rate_limit,
                                            gpg_key=self.gpg_key)
