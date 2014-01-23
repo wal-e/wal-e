@@ -26,7 +26,7 @@ def do_lzop_put(creds, url, local_path, gpg_key):
     assert url.endswith('.lzo')
     blobstore = get_blobstore(storage.StorageLayout(url))
 
-    with tempfile.NamedTemporaryFile(mode='rwb') as tf:
+    with tempfile.NamedTemporaryFile(mode='r+b') as tf:
         pipeline = get_upload_pipeline(
             open(local_path, 'r'), tf, gpg_key=gpg_key)
         pipeline.finish()
