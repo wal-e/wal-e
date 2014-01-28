@@ -231,7 +231,7 @@ Primary Commands
 the primary functionality of WAL-E and must reside on the database machine.
 Unlike ``wal-push`` and ``wal-fetch`` commands, which function as described
 above, the``backup-push`` and ``backup-fetch`` require a little additional
-explination.
+explanation.
 
 backup-push
 '''''''''''
