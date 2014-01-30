@@ -226,21 +226,9 @@ class TarPartition(list):
         # approach it this way because we are dealing with a pipe and the
         # getmembers() method will consume it before we extract any data.
         for member in tar:
-            # The member file names should be relative paths that do
-            # not escape the top level directory. Checking for .. is
-            # insufficient due to symlinks. The only way to be sure is
-            # to actually look at the filesystem which is what
-            # realpath() does.
-            #
-            # We need the absolute path for the fsync call and in any
-            # case it's handy for the assert. This does assume that
-            # tar.extract() will use os.path.join() the same we way
-            # do.
             filename = os.path.realpath(os.path.join(dest_path, member.name))
 
             assert not member.name.startswith('/')
-            assert filename.startswith(dest_path)
-
             tar.extract(member, path=dest_path)
             extracted_files.append(filename)
 
