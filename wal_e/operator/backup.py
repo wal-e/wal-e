@@ -437,28 +437,28 @@ class Backup(object):
 
         return wrapper
 
-    def _build_restore_paths(self, restor_spec):
-        path_prefix = restor_spec['base_prefix']
+    def _build_restore_paths(self, restore_spec):
+        path_prefix = restore_spec['base_prefix']
         tblspc_prefix = os.path.join(path_prefix, 'pg_tblspc')
 
         if not os.path.isdir(path_prefix):
             os.mkdir(path_prefix, DEFAULT_DIR_MODE)
             os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
 
-        for tblspc in restor_spec['tablespaces']:
+        for tblspc in restore_spec['tablespaces']:
             dest = os.path.join(path_prefix,
-                                restor_spec[tblspc]['link'])
-            source = restor_spec[tblspc]['loc']
+                                restore_spec[tblspc]['link'])
+            source = restore_spec[tblspc]['loc']
             if not os.path.isdir(source):
                 os.mkdir(source, DEFAULT_DIR_MODE)
             os.symlink(source, dest)
 
-    def _verify_restore_paths(self, restor_spec):
-        path_prefix = restor_spec['base_prefix']
+    def _verify_restore_paths(self, restore_spec):
+        path_prefix = restore_spec['base_prefix']
         bad_links = []
-        if not 'tablespaces' in restor_spec:
+        if not 'tablespaces' in restore_spec:
             return
-        for tblspc in restor_spec['tablespaces']:
+        for tblspc in restore_spec['tablespaces']:
             tblspc_link = os.path.join(path_prefix, 'pg_tblspc', tblspc)
             valid = os.path.islink(tblspc_link) and os.path.isdir(tblspc_link)
             if not valid:
