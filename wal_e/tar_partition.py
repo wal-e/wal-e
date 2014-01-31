@@ -226,11 +226,19 @@ class TarPartition(list):
         # approach it this way because we are dealing with a pipe and the
         # getmembers() method will consume it before we extract any data.
         for member in tar:
-            filename = os.path.realpath(os.path.join(dest_path, member.name))
-
             assert not member.name.startswith('/')
+
             tar.extract(member, path=dest_path)
-            extracted_files.append(filename)
+
+            if member.issym():
+                # It does not appear possible to fsync a symlink, or
+                # so it seems, as there is no portable way to open()
+                # one to get a fd to run fsync on.
+                pass
+            else:
+                relpath = os.path.join(dest_path, member.name)
+                filename = os.path.realpath(relpath)
+                extracted_files.append(filename)
 
             # avoid accumulating an unbounded list of strings which
             # could be quite large for a large database
