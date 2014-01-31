@@ -56,6 +56,10 @@ def test_backup_push_fetch(tmpdir, monkeypatch, config):
     push_dir = tmpdir.join('push-from').ensure(dir=True)
     push_dir.join('arbitrary-file').write(contents)
 
+    # Construct a symlink a non-existent path.  This provoked a crash
+    # at one time.
+    push_dir.join('pg_xlog').mksymlinkto('/tmp/wal-e-test-must-not-exist')
+
     # Holy crap, the tar segmentation code relies on the directory
     # containing files without a common prefix...the first character
     # of two files must be distinct!
@@ -69,4 +73,7 @@ def test_backup_push_fetch(tmpdir, monkeypatch, config):
     assert fetch_dir.join('arbitrary-file').read() == contents
 
     for filename in fetch_dir.listdir():
-        assert unicode(filename) in fsynced_files
+        if filename.check(link=0):
+            assert unicode(filename) in fsynced_files
+        elif filename.check(link=1):
+            assert unicode(filename) not in fsynced_files
