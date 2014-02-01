@@ -1,5 +1,5 @@
 gevent>=0.13.1
 boto>=2.6.0
-azure==0.7.0
+azure>=0.7.0
 python-swiftclient
 python-keystoneclient
