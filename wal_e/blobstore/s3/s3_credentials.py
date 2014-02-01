@@ -18,7 +18,7 @@ class InstanceProfileProvider(provider.Provider):
     """
 
     def get_credentials(self, access_key=None, secret_key=None,
-                        security_token=None):
+                        security_token=None, profile_name=None):
         if self.MetadataServiceSupport[self.name]:
             self._populate_keys_from_metadata_server()
 
