@@ -22,7 +22,14 @@ def recursive_fsync(root):
 
     for root, dirs, files in walker:
         for name in files:
-            _sync_file(path.join(root, name), False)
+            p = path.join(root, name)
+
+            if path.islink(p):
+                # Flushing the symlink's text appears unsupported by
+                # any known platform.
+                pass
+            else:
+                _sync_file(p, False)
 
         for name in dirs:
             _sync_file(path.join(root, name), True)

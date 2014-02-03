@@ -9,6 +9,9 @@ def test_recursive_fsync(monkeypatch, tmpdir):
     bar = dirb.join('bar').ensure()
     baz = dirb.join('baz').ensure()
 
+    dangling_symlink = dirb.join('dangle').mksymlinkto(
+        '/tmp/wal-e-test-must-not-exist')
+
     # Monkeypatch around open, close, and fsync to capture which
     # filenames the file descriptors being fsynced actually correspond
     # to. Only bother to remember filenames in the tmpdir.
@@ -51,6 +54,9 @@ def test_recursive_fsync(monkeypatch, tmpdir):
 
     for filename in filenames:
         assert filename in synced_filenames
+
+    # Ensure link was not attempted to be followed and fsynced.
+    assert unicode(dangling_symlink) not in synced_filenames
 
     # Not every OS allows you to open directories, if not, don't try
     # to open it to fsync.
