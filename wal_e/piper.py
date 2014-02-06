@@ -13,8 +13,6 @@ import gevent.socket
 import os
 import signal
 
-import sys
-
 from cStringIO import StringIO
 
 from wal_e import subprocess
@@ -40,25 +38,39 @@ class NonBlockPipeFileWrap(object):
     def read(self, size=None):
         # Some adaptation from gevent's examples/processes.py
         accum = StringIO()
+        fd = self._fp.fileno()
 
         while size is None or accum.tell() < size:
-            try:
-                if size is None:
-                    max_read = PIPE_BUF_BYTES
-                else:
-                    max_read = min(PIPE_BUF_BYTES, size - accum.tell())
+            if size is None:
+                max_read = PIPE_BUF_BYTES
+            else:
+                max_read = min(PIPE_BUF_BYTES, size - accum.tell())
 
-                chunk = self._fp.read(max_read)
+            # Put a retry around this one write syscall to take care
+            # of EAGAIN.
+            succeeded = False
+            while not succeeded:
+                chunk = None
 
-                # End of the stream: leave the loop
-                if not chunk:
-                    break
-                accum.write(chunk)
-            except IOError, ex:
-                if ex[0] != errno.EAGAIN:
-                    raise
-                sys.exc_clear()
-            gevent.socket.wait_read(self._fp.fileno())
+                try:
+                    chunk = os.read(fd, max_read)
+                    succeeded = True
+                except EnvironmentError, ex:
+                    if ex.errno == errno.EAGAIN:
+                        assert chunk is None
+                        gevent.socket.wait_read(fd)
+                    else:
+                        raise
+
+            # 'chunk' should be assigned at least once if no exception
+            # was raised, even if an immediate EOF is found.
+            assert chunk is not None
+
+            # End of the stream: leave the loop.
+            if chunk == '':
+                break
+
+            accum.write(chunk)
 
         return accum.getvalue()
 
@@ -67,17 +79,23 @@ class NonBlockPipeFileWrap(object):
         buf = StringIO(data)
         bytes_total = len(data)
         bytes_written = 0
+        fd = self._fp.fileno()
+
         while bytes_written < bytes_total:
-            try:
-                # self._fp.write() doesn't return anything, so use
-                # os.write.
-                bytes_written += os.write(self._fp.fileno(),
-                                          buf.read(PIPE_BUF_BYTES))
-            except IOError, ex:
-                if ex[0] != errno.EAGAIN:
-                    raise
-                sys.exc_clear()
-            gevent.socket.wait_write(self._fp.fileno())
+            chunk = buf.read(PIPE_BUF_BYTES)
+
+            # Put a retry around this one write syscall to take care
+            # of EAGAIN.
+            succeeded = False
+            while not succeeded:
+                try:
+                    bytes_written += os.write(fd, chunk)
+                    succeeded = True
+                except EnvironmentError, ex:
+                    if ex.errno == errno.EAGAIN:
+                        gevent.socket.wait_write(fd)
+                    else:
+                        raise
 
     def fileno(self):
         return self._fp.fileno()
