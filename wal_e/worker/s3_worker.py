@@ -33,6 +33,9 @@ from wal_e.worker import syncer
 logger = log_help.WalELogger(__name__, level=logging.INFO)
 
 
+def get_bucket(conn, name):
+    return conn.get_bucket(name, validate=False)
+
 generic_weird_key_hint_message = ('This means an unexpected key was found in '
                                   'a WAL-E prefix.  It can be harmless, or '
                                   'the result a bug or misconfiguration.')
@@ -455,7 +458,7 @@ class TarPartitionLister(object):
         prefix = self.layout.basebackup_tar_partition_directory(
             self.backup_info)
 
-        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        bucket = get_bucket(self.s3_conn, self.layout.bucket_name())
         for key in bucket.list(prefix=prefix):
             url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
                                                 name=key.name)
@@ -477,7 +480,7 @@ class BackupFetcher(object):
         self.layout = layout
         self.local_root = local_root
         self.backup_info = backup_info
-        self.bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        self.bucket = get_bucket(self.s3_conn, self.layout.bucket_name())
         self.decrypt = decrypt
 
     @retry()
@@ -556,7 +559,7 @@ class BackupList(object):
         return key.get_contents_as_string()
 
     def __iter__(self):
-        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        bucket = get_bucket(self.s3_conn, self.layout.bucket_name())
 
         # Try to identify the sentinel file.  This is sort of a drag, the
         # storage format should be changed to put them in their own leaf
@@ -651,7 +654,7 @@ class DeleteFromContext(object):
           database, for example)
 
         """
-        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        bucket = get_bucket(self.s3_conn, self.layout.bucket_name())
 
         for key in bucket.list(prefix=self.layout.basebackups()):
             self._maybe_delete_key(key, 'part of a base backup')
@@ -667,7 +670,7 @@ class DeleteFromContext(object):
         old backups and WAL.
 
         """
-        bucket = self.s3_conn.get_bucket(self.layout.bucket_name())
+        bucket = get_bucket(self.s3_conn, self.layout.bucket_name())
 
         base_backup_sentinel_depth = self.layout.basebackups().count('/') + 1
         version_depth = base_backup_sentinel_depth + 1
