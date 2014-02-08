@@ -35,7 +35,15 @@ environment-variable based settings:
 
 * AWS_ACCESS_KEY_ID or WABS_ACCOUNT_NAME
 * AWS_SECRET_ACCESS_KEY or WABS_ACCESS_KEY
-* WALE_S3_PREFIX or WALE_WABS_PREFIX
+* WALE_S3_PREFIX or WALE_WABS_PREFIX 
+
+For Swift the following environment variables are needed:
+
+* SWIFT_AUTHURL
+* SWIFT_TENANT
+* SWIFT_USER
+* SWIFT_PASSWORD
+* WALE_SWIFT_PREFIX
 
 With the exception of AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY,
 all of these can be specified as arguments as well.  The AWS_*
@@ -43,10 +51,10 @@ variables are the standard access-control keying system provided
 by Amazon, where the WABS_* are the standard access credentials defined
 by Windows Azure.
 
-The WALE_S3_PREFIX and WALE_WABS_PREFIX (_PREFIX) variables can be thought
-of as a context whereby this program operates on a single database cluster at
-a time.  Generally, for any one database the _PREFIX will be the same
-between all four operators.  This context-driven approach attempts
+The WALE_S3_PREFIX, WALE_WABS_PREFIX and WALE_SWIFT_PREFIX (_PREFIX) variables 
+can be thought of as a context whereby this program operates on a single 
+database cluster at a time.  Generally, for any one database the _PREFIX will 
+be the same between all four operators.  This context-driven approach attempts
 to help users avoid errors such as one database overwriting the WAL segments
 of another, as long as the _PREFIX is set uniquely for each database. Use
 whichever variable is appropriate for the store you are using.
@@ -115,6 +123,15 @@ Sending a WAL segment to WABS::
     -a WABS_ACCOUNT_NAME                                        \
     --wabs-prefix=wabs://some-bucket/directory/or/whatever      \
     wal-push /var/lib/my/database/pg_xlog/WAL_SEGMENT_LONG_HEX
+
+Push a base backup to Swift::
+
+  $ WALE_SWIFT_PREFIX="swift://my_container_name"              \
+    SWIFT_AUTHURL="http://my_keystone_url/v2.0/"               \
+    SWIFT_TENANT="my_tennant"                                  \
+    SWIFT_USER="my_user"                                       \
+    SWIFT_PASSWORD="my_password" wal-e                         \
+    backup-push /var/lib/my/database
 
 It is generally recommended that one use some sort of environment
 variable management with WAL-E: working with it this way is less verbose,
