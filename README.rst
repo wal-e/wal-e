@@ -84,8 +84,14 @@ will attempt to resolve them:
 
 * gevent>=0.13.1
 * boto>=2.6.0
-* azure==0.7.0
+* azure>=0.7.0
+* python-swiftclient>=1.8.0
+* python-keystoneclient>=0.4.2
 * argparse, if not on Python 2.7
+
+It is possible to use WAL-E without the dependencies of back-end
+storage one does not use installed: the imports for those are only
+performed if the storage configuration demands their use.
 
 Backend Blob Store
 ------------------
