@@ -69,15 +69,10 @@ is appropriate for the store you are using.
 Dependencies
 ------------
 
+* python (>= 2.6)
 * lzop
 * psql (>= 8.4)
 * pv
-
-This software is most frequently used with Python 2.6+.  It will
-probably never support Python 2.5 or below because of the much more
-useful timeout semantics with sockets in Python 2.6+.  Still, if you
-feel strongly about supporting Python 2.5, please send mail to the
-mailing list (see the `Introduction`_).
 
 This software also has Python dependencies; installing with setup.py
 will attempt to resolve them:
