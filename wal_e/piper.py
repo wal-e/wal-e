@@ -196,7 +196,7 @@ popen_sp = PopenShim()
 def popen_nonblock(*args, **kwargs):
     """
     Create a process in the same way as popen_sp, but patch the file
-    descriptors so they can can be accessed from Python/gevent
+    descriptors so they can be accessed from Python/gevent
     in a non-blocking manner.
     """
 
