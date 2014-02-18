@@ -1,28 +1,28 @@
-import os
-import sys
-import gevent
-import errno
-import socket
-from urlparse import urlparse
-import traceback
-from collections import namedtuple as _namedtuple
-from hashlib import md5
 import base64
+import collections
+import errno
+import gevent
+import os
+import socket
+import sys
+import traceback
 
 from azure import WindowsAzureMissingResourceError
 from azure.storage import BlobService
 
-import wal_e.log_help as log_help
-from wal_e.retries import retry, retry_with_count
+from . import calling_format
+from hashlib import md5
+from urlparse import urlparse
+from wal_e import log_help
 from wal_e.pipeline import get_download_pipeline
 from wal_e.piper import PIPE
+from wal_e.retries import retry, retry_with_count
 
-from . import calling_format
 assert calling_format
 
 logger = log_help.WalELogger(__name__)
 
-_Key = _namedtuple('_Key', ['size'])
+_Key = collections.namedtuple('_Key', ['size'])
 WABS_CHUNK_SIZE = 4 * 1024 * 1024
 
 

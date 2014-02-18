@@ -45,8 +45,7 @@ import errno
 import os
 import tarfile
 
-import wal_e.log_help as log_help
-
+from wal_e import log_help
 from wal_e.exception import UserException
 
 logger = log_help.WalELogger(__name__)

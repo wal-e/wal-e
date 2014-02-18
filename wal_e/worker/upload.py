@@ -4,7 +4,7 @@ import time
 
 import boto.exception
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 from wal_e import storage
 from wal_e.pipeline import get_upload_pipeline
 from wal_e.blobstore import get_blobstore
