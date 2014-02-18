@@ -1,6 +1,7 @@
 import tempfile
 import time
 
+from wal_e import pipebuf
 from wal_e import storage
 from wal_e.blobstore import get_blobstore
 from wal_e import pipeline
@@ -26,7 +27,8 @@ def do_lzop_put(creds, url, local_path, gpg_key):
     assert url.endswith('.lzo')
     blobstore = get_blobstore(storage.StorageLayout(url))
 
-    with tempfile.NamedTemporaryFile(mode='r+b') as tf:
+    with tempfile.NamedTemporaryFile(
+            mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
         pl = pipeline.get_upload_pipeline(
             open(local_path, 'r'), tf, gpg_key=gpg_key)
         pl.finish()
