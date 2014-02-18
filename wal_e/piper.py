@@ -7,108 +7,17 @@ Mostly necessary only because of http://bugs.python.org/issue1652.
 """
 import copy
 import errno
-import fcntl
 import gevent
 import gevent.socket
-import os
 import signal
 
-from cStringIO import StringIO
-
+from wal_e import pipebuf
 from wal_e import subprocess
 from wal_e.subprocess import PIPE
 
 # This is not used in this module, but is imported by dependent
 # modules, so do this to quiet pyflakes.
 assert PIPE
-
-# Determine the maximum number of bytes that can be written atomically
-# to a pipe
-PIPE_BUF_BYTES = os.pathconf('.', os.pathconf_names['PC_PIPE_BUF'])
-
-
-class NonBlockPipeFileWrap(object):
-    def __init__(self, fp):
-        # Make the file nonblocking (but don't lose its previous flags)
-        flags = fcntl.fcntl(fp, fcntl.F_GETFL)
-        fcntl.fcntl(fp, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-        self._fp = fp
-
-    def read(self, size=None):
-        # Some adaptation from gevent's examples/processes.py
-        accum = StringIO()
-        fd = self._fp.fileno()
-
-        while size is None or accum.tell() < size:
-            if size is None:
-                max_read = PIPE_BUF_BYTES
-            else:
-                max_read = min(PIPE_BUF_BYTES, size - accum.tell())
-
-            # Put a retry around this one write syscall to take care
-            # of EAGAIN.
-            succeeded = False
-            while not succeeded:
-                chunk = None
-
-                try:
-                    chunk = os.read(fd, max_read)
-                    succeeded = True
-                except EnvironmentError, ex:
-                    if ex.errno == errno.EAGAIN:
-                        assert chunk is None
-                        gevent.socket.wait_read(fd)
-                    else:
-                        raise
-
-            # 'chunk' should be assigned at least once if no exception
-            # was raised, even if an immediate EOF is found.
-            assert chunk is not None
-
-            # End of the stream: leave the loop.
-            if chunk == '':
-                break
-
-            accum.write(chunk)
-
-        return accum.getvalue()
-
-    def write(self, data):
-        # Some adaptation from gevent's examples/processes.py
-        buf = StringIO(data)
-        bytes_total = len(data)
-        bytes_written = 0
-        fd = self._fp.fileno()
-
-        while bytes_written < bytes_total:
-            chunk = buf.read(PIPE_BUF_BYTES)
-
-            # Put a retry around this one write syscall to take care
-            # of EAGAIN.
-            succeeded = False
-            while not succeeded:
-                try:
-                    bytes_written += os.write(fd, chunk)
-                    succeeded = True
-                except EnvironmentError, ex:
-                    if ex.errno == errno.EAGAIN:
-                        gevent.socket.wait_write(fd)
-                    else:
-                        raise
-
-    def fileno(self):
-        return self._fp.fileno()
-
-    def close(self):
-        return self._fp.close()
-
-    def flush(self):
-        return self._fp.flush()
-
-    @property
-    def closed(self):
-        return self._fp.closed
 
 
 def subprocess_setup(f=None):
@@ -202,15 +111,14 @@ def popen_nonblock(*args, **kwargs):
 
     proc = popen_sp(*args, **kwargs)
 
-    # Patch up the process object to use non-blocking I/O that yields
-    # to the gevent hub.
-    for fp_symbol in ['stdin', 'stdout', 'stderr']:
-        value = getattr(proc, fp_symbol)
+    if proc.stdin:
+        proc.stdin = pipebuf.NonBlockBufferedWriter(proc.stdin)
 
-        if value is not None:
-            # this branch is only taken if a descriptor is sent in
-            # with 'PIPE' mode.
-            setattr(proc, fp_symbol, NonBlockPipeFileWrap(value))
+    if proc.stdout:
+        proc.stdout = pipebuf.NonBlockBufferedReader(proc.stdout)
+
+    if proc.stderr:
+        proc.stderr = pipebuf.NonBlockBufferedReader(proc.stderr)
 
     return proc
 
