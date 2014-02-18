@@ -11,6 +11,7 @@ from wal_e.piper import popen_sp, PIPE
 PV_BIN = 'pv'
 GPG_BIN = 'gpg'
 LZOP_BIN = 'lzop'
+CAT_BIN = 'cat'
 
 
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
@@ -37,6 +38,10 @@ def get_download_pipeline(in_fd, out_fd, gpg=False):
     commands.append(LZODecompressionFilter())
 
     return Pipeline(commands, in_fd, out_fd)
+
+
+def get_cat_pipeline(in_fd, out_fd):
+    return Pipeline([CatFilter()], in_fd, out_fd)
 
 
 class Pipeline(object):
@@ -173,6 +178,17 @@ class PipeViewerRateLimitFilter(PipelineCommand):
         PipelineCommand.__init__(
             self,
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
+
+
+class CatFilter(PipelineCommand):
+    """Run bytes through 'cat'
+
+    'cat' can be used to have quasi-asynchronous I/O that still allows
+    for cooperative concurrency.
+
+    """
+    def __init__(self, stdin=PIPE, stdout=PIPE):
+        PipelineCommand.__init__(self, [CAT_BIN], stdin, stdout)
 
 
 class LZOCompressionFilter(PipelineCommand):
