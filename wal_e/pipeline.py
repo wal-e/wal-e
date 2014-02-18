@@ -77,6 +77,10 @@ class Pipeline(object):
         return NonBlockPipeFileWrap(self.commands[-1].stdout)
 
     def finish(self):
+        if self.stdin is not None and not self.stdin.closed:
+            self.stdin.flush()
+            self.stdin.close()
+
         for command in self.commands:
             command.finish()
 
