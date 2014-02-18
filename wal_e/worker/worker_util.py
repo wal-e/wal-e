@@ -2,8 +2,8 @@ import tempfile
 import time
 
 from wal_e import storage
-from wal_e.pipeline import get_upload_pipeline
 from wal_e.blobstore import get_blobstore
+from wal_e import pipeline
 
 
 def uri_put_file(creds, uri, fp, content_encoding=None):
@@ -27,9 +27,9 @@ def do_lzop_put(creds, url, local_path, gpg_key):
     blobstore = get_blobstore(storage.StorageLayout(url))
 
     with tempfile.NamedTemporaryFile(mode='r+b') as tf:
-        pipeline = get_upload_pipeline(
+        pl = pipeline.get_upload_pipeline(
             open(local_path, 'r'), tf, gpg_key=gpg_key)
-        pipeline.finish()
+        pl.finish()
 
         tf.flush()
 
