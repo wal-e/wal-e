@@ -76,8 +76,6 @@ class PartitionUploader(object):
                                            rate_limit=self.rate_limit,
                                            gpg_key=self.gpg_key)
             tpart.tarfile_write(pipeline.stdin)
-            pipeline.stdin.flush()
-            pipeline.stdin.close()
             pipeline.finish()
 
             tf.flush()
