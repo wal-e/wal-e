@@ -1,10 +1,10 @@
 import gevent
-from gevent import queue
 import re
 
+from gevent import queue
 from wal_e import exception
+from wal_e import log_help
 from wal_e import storage
-import wal_e.log_help as log_help
 
 logger = log_help.WalELogger(__name__)
 

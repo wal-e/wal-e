@@ -6,10 +6,10 @@ import gevent
 import boto
 
 from . import calling_format
-import wal_e.log_help as log_help
-from wal_e.retries import retry, retry_with_count
+from wal_e import log_help
 from wal_e.pipeline import get_download_pipeline
 from wal_e.piper import PIPE
+from wal_e.retries import retry, retry_with_count
 
 logger = log_help.WalELogger(__name__)
 

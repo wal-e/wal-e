@@ -5,10 +5,11 @@ import functools
 import gevent
 import gevent.pool
 import itertools
-from cStringIO import StringIO
 
+from cStringIO import StringIO
+from wal_e import log_help
 from wal_e import storage
-import wal_e.tar_partition as tar_partition
+from wal_e import tar_partition
 from wal_e.exception import UserException, UserCritical
 from wal_e.worker import (WalSegment,
                           WalUploader,
@@ -19,7 +20,7 @@ from wal_e.worker import (WalSegment,
                           WalTransferGroup,
                           uri_put_file,
                           do_lzop_get)
-import wal_e.log_help as log_help
+
 
 # File mode on directories created during restore process
 DEFAULT_DIR_MODE = 0700

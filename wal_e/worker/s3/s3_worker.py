@@ -8,17 +8,16 @@ with the intention that they are used in gevent greenlets.
 import gevent
 import re
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 from wal_e import storage
-
+from wal_e.blobstore import s3
 from wal_e.pipeline import get_download_pipeline
 from wal_e.piper import PIPE
-from wal_e.worker.s3.s3_deleter import Deleter
-from wal_e.worker.base import _BackupList, _DeleteFromContext
 from wal_e.retries import retry
-from wal_e.blobstore import s3
 from wal_e.tar_partition import TarPartition
+from wal_e.worker.base import _BackupList, _DeleteFromContext
 from wal_e.worker.base import generic_weird_key_hint_message
+from wal_e.worker.s3.s3_deleter import Deleter
 
 logger = log_help.WalELogger(__name__)
 

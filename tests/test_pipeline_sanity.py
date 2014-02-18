@@ -1,4 +1,4 @@
-import wal_e.pipeline as pipeline
+from wal_e import pipeline
 
 
 def create_bogus_payload(dirname):

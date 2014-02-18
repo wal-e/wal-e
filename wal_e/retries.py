@@ -4,7 +4,7 @@ import traceback
 
 import gevent
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 
 logger = log_help.WalELogger(__name__)
 
