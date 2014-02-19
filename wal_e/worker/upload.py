@@ -5,8 +5,9 @@ import time
 import boto.exception
 
 from wal_e import log_help
+from wal_e import pipebuf
+from wal_e import pipeline
 from wal_e import storage
-from wal_e.pipeline import get_upload_pipeline
 from wal_e.blobstore import get_blobstore
 from wal_e.piper import PIPE
 from wal_e.retries import retry, retry_with_count
@@ -71,14 +72,13 @@ class PartitionUploader(object):
         logger.info(msg='beginning volume compression',
                     detail='Building volume {name}.'.format(name=tpart.name))
 
-        with tempfile.NamedTemporaryFile(mode='r+b') as tf:
-            pipeline = get_upload_pipeline(PIPE, tf,
-                                           rate_limit=self.rate_limit,
-                                           gpg_key=self.gpg_key)
-            tpart.tarfile_write(pipeline.stdin)
-            pipeline.stdin.flush()
-            pipeline.stdin.close()
-            pipeline.finish()
+        with tempfile.NamedTemporaryFile(
+                mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
+            pl = pipeline.get_upload_pipeline(PIPE, tf,
+                                              rate_limit=self.rate_limit,
+                                              gpg_key=self.gpg_key)
+            tpart.tarfile_write(pl.stdin)
+            pl.finish()
 
             tf.flush()
 

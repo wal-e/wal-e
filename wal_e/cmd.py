@@ -22,6 +22,18 @@ gevent_monkey()
 #
 # Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
 if sys.version_info >= (2, 7):
+    def getresponse_monkey():
+        import httplib
+        original = httplib.HTTPConnection.getresponse
+
+        def monkey(*args, **kwargs):
+            kwargs['buffering'] = True
+            return original(*args, **kwargs)
+
+        httplib.HTTPConnection.getresponse = monkey
+
+    getresponse_monkey()
+
     def ssl_monkey():
         import ssl
 
@@ -464,6 +476,14 @@ def configure_backup_cxt(args):
             hint='Report a bug.')
 
 
+def monkeypatch_tarfile_copyfileobj():
+    """Monkey-patch tarfile.copyfileobj to exploit large buffers"""
+    import tarfile
+    from wal_e import copyfileobj
+
+    tarfile.copyfileobj = copyfileobj.copyfileobj
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
@@ -485,6 +505,8 @@ def main():
         backup_cxt = configure_backup_cxt(args)
 
         if subcommand == 'backup-fetch':
+            monkeypatch_tarfile_copyfileobj()
+
             external_program_check([LZOP_BIN])
             backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
@@ -495,6 +517,8 @@ def main():
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
+            monkeypatch_tarfile_copyfileobj()
+
             if args.while_offline:
                 # we need to query pg_config first for the
                 # pg_controldata's bin location

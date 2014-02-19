@@ -3,20 +3,15 @@ compression/encryption.
 """
 
 from gevent import sleep
+from wal_e import pipebuf
 
 from wal_e.exception import UserCritical
-from wal_e.piper import popen_sp, NonBlockPipeFileWrap, PIPE
+from wal_e.piper import popen_sp, PIPE
 
 PV_BIN = 'pv'
 GPG_BIN = 'gpg'
 LZOP_BIN = 'lzop'
-
-# BUFSIZE_HT: Buffer Size, High Throughput
-#
-# This is set conservatively because small systems can end up being
-# unhappy with too much memory usage in buffers.
-
-BUFSIZE_HT = 128 * 8192
+CAT_BIN = 'cat'
 
 
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
@@ -45,6 +40,10 @@ def get_download_pipeline(in_fd, out_fd, gpg=False):
     return Pipeline(commands, in_fd, out_fd)
 
 
+def get_cat_pipeline(in_fd, out_fd):
+    return Pipeline([CatFilter()], in_fd, out_fd)
+
+
 class Pipeline(object):
     """ Represent a pipeline of commands.
         stdin and stdout are wrapped to be non-blocking. """
@@ -59,6 +58,11 @@ class Pipeline(object):
         # Connect all interior commands to one another via stdin/stdout
         for command in commands[1:]:
             last_command.start()
+
+            # Set large kernel buffering between pipeline
+            # participants.
+            pipebuf.set_buf_size(last_command.stdout.fileno())
+
             command.stdinSet = last_command.stdout
             last_command = command
 
@@ -68,15 +72,23 @@ class Pipeline(object):
         last_command.stdoutSet = out_fd
         last_command.start()
 
-    @property
-    def stdin(self):
-        return NonBlockPipeFileWrap(self.commands[0].stdin)
+        stdin = commands[0].stdin
+        if stdin is not None:
+            self.stdin = pipebuf.NonBlockBufferedWriter(stdin)
+        else:
+            self.stdin = None
 
-    @property
-    def stdout(self):
-        return NonBlockPipeFileWrap(self.commands[-1].stdout)
+        stdout = commands[-1].stdout
+        if stdout is not None:
+            self.stdout = pipebuf.NonBlockBufferedReader(stdout)
+        else:
+            self.stdout = None
 
     def finish(self):
+        if self.stdin is not None and not self.stdin.closed:
+            self.stdin.flush()
+            self.stdin.close()
+
         for command in self.commands:
             command.finish()
 
@@ -104,7 +116,7 @@ class PipelineCommand(object):
 
         self._process = popen_sp(self._command,
                                  stdin=self._stdin, stdout=self._stdout,
-                                 bufsize=BUFSIZE_HT, close_fds=True)
+                                 close_fds=True)
 
     @property
     def stdin(self):
@@ -153,9 +165,6 @@ class PipelineCommand(object):
         if self.stdout is not None:
             self.stdout.close()
 
-        assert self.stdin is None or self.stdin.closed
-        assert self.stdout is None or self.stdout.closed
-
         if retcode != 0:
             raise UserCritical(
                 msg='pipeline process did not exit gracefully',
@@ -169,6 +178,17 @@ class PipeViewerRateLimitFilter(PipelineCommand):
         PipelineCommand.__init__(
             self,
             [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
+
+
+class CatFilter(PipelineCommand):
+    """Run bytes through 'cat'
+
+    'cat' can be used to have quasi-asynchronous I/O that still allows
+    for cooperative concurrency.
+
+    """
+    def __init__(self, stdin=PIPE, stdout=PIPE):
+        PipelineCommand.__init__(self, [CAT_BIN], stdin, stdout)
 
 
 class LZOCompressionFilter(PipelineCommand):
