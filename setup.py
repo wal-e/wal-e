@@ -52,8 +52,8 @@ setup(
                  'Topic :: System :: Recovery Tools'],
     platforms=['any'],
     license="BSD",
-    keywords=("postgres postgresql database backup archive "
-              "archiving s3 aws wal shipping"),
+    keywords=("postgres postgresql database backup archive archiving s3 aws "
+              "openstack swift wabs azure wal shipping"),
     url="https://github.com/wal-e/wal-e",
 
     # Include the VERSION file
