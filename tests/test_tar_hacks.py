@@ -1,4 +1,5 @@
 import os
+import tarfile
 
 from wal_e import tar_partition
 
@@ -68,3 +69,51 @@ def test_fsync_tar_members(monkeypatch, tmpdir):
     if hasattr(os, 'O_DIRECTORY'):
         assert unicode(dira) in synced_filenames
         assert unicode(dirb) in synced_filenames
+
+
+def test_creation_upper_dir(tmpdir, monkeypatch):
+    """Check for upper-directory creation in untarring
+
+    This affected the special "cat" based extraction works when no
+    upper level directory is present.  Using that path depends on
+    PIPE_BUF_BYTES, so test that integration via monkey-patching it to
+    a small value.
+
+    """
+    from wal_e import pipebuf
+
+    # Set up a directory with a file inside.
+    adir = tmpdir.join('adir').ensure(dir=True)
+    some_file = adir.join('afile')
+    some_file.write('1234567890')
+
+    tar_path = unicode(tmpdir.join('foo.tar'))
+
+    # Add the file to a test tar, *but not the directory*.
+    tar = tarfile.open(name=tar_path, mode='w')
+    tar.add(unicode(some_file))
+    tar.close()
+
+    # Replace cat_extract with a version that does the same, but
+    # ensures that it is called by the test.
+    original_cat_extract = tar_partition.cat_extract
+
+    class CheckCatExtract(object):
+        def __init__(self):
+            self.called = False
+
+        def __call__(self, *args, **kwargs):
+            self.called = True
+            return original_cat_extract(*args, **kwargs)
+
+    check = CheckCatExtract()
+    monkeypatch.setattr(tar_partition, 'cat_extract', check)
+    monkeypatch.setattr(pipebuf, 'PIPE_BUF_BYTES', 1)
+
+    dest_dir = tmpdir.join('dest')
+    dest_dir.ensure(dir=True)
+    with open(tar_path) as f:
+        tar_partition.TarPartition.tarfile_extract(f, unicode(dest_dir))
+
+    # Make sure the test exercised cat_extraction.
+    assert check.called

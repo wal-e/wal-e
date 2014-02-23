@@ -179,6 +179,47 @@ def _fsync_files(filenames):
             os.close(fd)
 
 
+def cat_extract(tar, member, targetpath):
+    """Extract a regular file member using cat for async-like I/O
+
+    Mostly adapted from tarfile.py.
+
+    """
+    assert member.isreg()
+
+    # Fetch the TarInfo object for the given name and build the
+    # destination pathname, replacing forward slashes to platform
+    # specific separators.
+    targetpath = targetpath.rstrip("/")
+    targetpath = targetpath.replace("/", os.sep)
+
+    # Create all upper directories.
+    upperdirs = os.path.dirname(targetpath)
+    if upperdirs and not os.path.exists(upperdirs):
+        try:
+            # Create directories that are not part of the archive with
+            # default permissions.
+            os.makedirs(upperdirs)
+        except EnvironmentError as e:
+            if e.errno == errno.EEXIST:
+                # Ignore an error caused by the race of
+                # the directory being created between the
+                # check for the path and the creation.
+                pass
+            else:
+                raise
+
+    with open(targetpath, 'wb') as dest:
+        pl = pipeline.get_cat_pipeline(pipeline.PIPE, dest)
+        fp = tar.extractfile(member)
+        copyfileobj.copyfileobj(fp, pl.stdin)
+        pl.finish()
+
+    tar.chown(member, targetpath)
+    tar.chmod(member, targetpath)
+    tar.utime(member, targetpath)
+
+
 class TarPartition(list):
 
     def __init__(self, name, *args, **kwargs):
@@ -233,15 +274,7 @@ class TarPartition(list):
             relpath = os.path.join(dest_path, member.name)
 
             if member.isreg() and member.size >= pipebuf.PIPE_BUF_BYTES:
-                with open(relpath, 'wb') as dest:
-                    pl = pipeline.get_cat_pipeline(pipeline.PIPE, dest)
-                    fp = tar.extractfile(member)
-                    copyfileobj.copyfileobj(fp, pl.stdin)
-                    pl.finish()
-
-                tar.chown(member, relpath)
-                tar.chmod(member, relpath)
-                tar.utime(member, relpath)
+                cat_extract(tar, member, relpath)
             else:
                 tar.extract(member, path=dest_path)
 
