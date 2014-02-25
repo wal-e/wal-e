@@ -217,9 +217,11 @@ class NonBlockBufferedWriter(object):
         byts = self._bd.get_all()
         cursor = buffer(byts)
 
+        flushed = False
         while len(cursor) > max_retain:
             try:
                 n = os.write(self._fd, cursor)
+                flushed = True
                 cursor = buffer(cursor, n)
             except EnvironmentError, e:
                 if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
@@ -231,17 +233,20 @@ class NonBlockBufferedWriter(object):
         if len(cursor) > 0:
             self._bd.add(cursor)
 
+        return flushed
+
     def write(self, data):
         self._bd.add(data)
 
-        while self._bd.byteSz > PIPE_BUF_BYTES:
+        flushed = True
+        while flushed and self._bd.byteSz > PIPE_BUF_BYTES:
             # Flush down to a small amount of buffered bytes as to
             # avoid memory-copy intensive defragmentations.
             #
             # The tradeoff being made here is the price of a syscall
             # (where larger buffers are better) vs. the price of
             # copying some memory.
-            self._partial_flush(65535)
+            flushed = self._partial_flush(65535)
 
     def flush(self):
         while self._bd.byteSz > 0:
