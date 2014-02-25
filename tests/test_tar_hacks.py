@@ -2,12 +2,18 @@ from wal_e import tar_partition
 import os
 
 
-# Test that _fsync_files() syncs all files and also, if possible, all
-# directories passed to it. There is a separate test in test_blackbox
-# that tar_file_extract() actually calls _fsync_files and passes it
-# the expected list of files.
 
 def test_fsync_tar_members(monkeypatch, tmpdir):
+    """Test that _fsync_files() syncs all files and directories
+
+    Syncing directories is a platform specific feature, so it is
+    optional.
+
+    There is a separate test in test_blackbox that tar_file_extract()
+    actually calls _fsync_files and passes it the expected list of
+    files.
+
+    """
     dira = tmpdir.join('dira').ensure(dir=True)
     dirb = tmpdir.join('dirb').ensure(dir=True)
     foo = dira.join('foo').ensure()
