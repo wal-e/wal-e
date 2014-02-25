@@ -1,6 +1,6 @@
-from wal_e import tar_partition
 import os
 
+from wal_e import tar_partition
 
 
 def test_fsync_tar_members(monkeypatch, tmpdir):
