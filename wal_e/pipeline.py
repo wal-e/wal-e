@@ -213,7 +213,11 @@ class GPGEncryptionFilter(PipelineCommand):
 
 
 class GPGDecryptionFilter(PipelineCommand):
-    """ Decrypt using GPG (the private key must exist and be unpassworded). """
+    """Decrypt using GPG.
+
+    The private key must exist, and either be unpassworded, or the password
+    should be present in the gpg agent.
+    """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
-                self, [GPG_BIN, '-d', '-q'], stdin, stdout)
+                self, [GPG_BIN, '-d', '-q', '--batch'], stdin, stdout)
