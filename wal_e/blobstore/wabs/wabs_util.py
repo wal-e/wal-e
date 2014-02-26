@@ -209,7 +209,9 @@ def do_lzop_get(creds, url, path, decrypt):
             try:
                 # Raise any exceptions guarded by
                 # write_and_return_error.
-                g.get()
+                exc = g.get()
+                if exc is not None:
+                    raise exc
             except WindowsAzureMissingResourceError:
                 # Short circuit any re-try attempts under certain race
                 # conditions.
