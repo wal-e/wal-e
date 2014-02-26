@@ -496,14 +496,48 @@ Other Options
 Encryption
 ''''''''''
 
-To encrypt backups as well as compress them, first generate a key
-pair using ``gpg --gen-key``. You don't need the private key on the
-machine to back up, but you will need it to restore. It'll need to
-have no passphrase.
+To encrypt backups as well as compress them, first generate a key pair
+using ``gpg --gen-key``. You don't need the private key on the machine
+to back up, but you will need it to restore. The private key may have
+a password, but to restore, the password should be present in GPG
+agent. WAL-E does not support entering GPG passwords via a tty device.
 
-Once this is done, just set the ``WALE_GPG_KEY_ID`` environment
-variable or the ``--gpg-key-id`` command line option to the ID of
-the secret key for backup and restore commands.
+Once this is done, set the ``WALE_GPG_KEY_ID`` environment variable or
+the ``--gpg-key-id`` command line option to the ID of the secret key
+for backup and restore commands.
+
+Here's an example of how you can restore with a private key that has a
+password, by forcing decryption of an arbitrary file with the correct
+key to unlock the GPG keychain::
+
+  # This assumes you have "keychain" gpg-agent installed.
+  eval $( keychain --eval --agents gpg )
+
+  # If you want default gpg-agent, use this instead
+  # eval $( gpg-agent --daemon )
+
+  # Force storing the private key password in the agent.  Here you
+  # will need to enter the key password.
+  export TEMPFILE=`tempfile`
+  gpg --recipient "$WALE_GPG_KEY_ID" --encrypt "$TEMPFILE"
+  gpg --decrypt "$TEMPFILE".gpg || exit 1
+
+  rm "$TEMPFILE" "$TEMPFILE".gpg
+  unset TEMPFILE
+
+  # Now use wal-e to fetch the backup.
+  wal-e backup-fetch [...]
+
+  # If you have WAL segments encrypted, don't forget to add
+  # restore_command to recovery.conf, e.g.
+  #
+  # restore_command = 'wal-e wal-fetch "%f" "%p"'
+
+  # Start the restoration postgres server in a context where you have
+  # gpg-agent's environment variables initialized, such as the current
+  # shell.
+  pg_ctl -D [...] start
+
 
 Controlling the I/O of a Base Backup
 ''''''''''''''''''''''''''''''''''''
