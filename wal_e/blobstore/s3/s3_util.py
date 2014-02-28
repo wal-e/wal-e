@@ -110,31 +110,30 @@ def do_lzop_get(creds, url, path, decrypt):
     def download():
         with open(path, 'wb') as decomp_out:
             key = _uri_to_key(creds, url)
-            pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
-            g = gevent.spawn(write_and_return_error, key, pipeline.stdin)
+            with get_download_pipeline(PIPE, decomp_out, decrypt) as pl:
+                g = gevent.spawn(write_and_return_error, key, pl.stdin)
 
-            try:
-                # Raise any exceptions from write_and_return_error
-                exc = g.get()
-                if exc is not None:
-                    raise exc
-            except boto.exception.S3ResponseError, e:
-                if e.status == 404:
-                    # Do not retry if the key not present, this can happen
-                    # under normal situations.
-                    logger.warning(
-                        msg=('could no longer locate object while performing '
-                             'wal restore'),
-                        detail=('The absolute URI that could not be located '
-                                'is {url}.'.format(url=url)),
-                        hint=('This can be normal when Postgres is trying to '
-                              'detect what timelines are available during '
-                              'restoration.'))
-                    return False
-                else:
-                    raise
-
-            pipeline.finish()
+                try:
+                    # Raise any exceptions from write_and_return_error
+                    exc = g.get()
+                    if exc is not None:
+                        raise exc
+                except boto.exception.S3ResponseError, e:
+                    if e.status == 404:
+                        # Do not retry if the key not present, this
+                        # can happen under normal situations.
+                        pl.abort()
+                        logger.warning(
+                            msg=('could no longer locate object while '
+                                 'performing wal restore'),
+                            detail=('The absolute URI that could not be '
+                                    'located is {url}.'.format(url=url)),
+                            hint=('This can be normal when Postgres is trying '
+                                  'to detect what timelines are available '
+                                  'during restoration.'))
+                        return False
+                    else:
+                        raise
 
             logger.info(
                 msg='completed download and decompression',

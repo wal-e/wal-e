@@ -210,10 +210,9 @@ def cat_extract(tar, member, targetpath):
                 raise
 
     with open(targetpath, 'wb') as dest:
-        pl = pipeline.get_cat_pipeline(pipeline.PIPE, dest)
-        fp = tar.extractfile(member)
-        copyfileobj.copyfileobj(fp, pl.stdin)
-        pl.finish()
+        with pipeline.get_cat_pipeline(pipeline.PIPE, dest) as pl:
+            fp = tar.extractfile(member)
+            copyfileobj.copyfileobj(fp, pl.stdin)
 
     tar.chown(member, targetpath)
     tar.chmod(member, targetpath)

@@ -74,11 +74,10 @@ class PartitionUploader(object):
 
         with tempfile.NamedTemporaryFile(
                 mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
-            pl = pipeline.get_upload_pipeline(PIPE, tf,
+            with pipeline.get_upload_pipeline(PIPE, tf,
                                               rate_limit=self.rate_limit,
-                                              gpg_key=self.gpg_key)
-            tpart.tarfile_write(pl.stdin)
-            pl.finish()
+                                              gpg_key=self.gpg_key) as pl:
+                tpart.tarfile_write(pl.stdin)
 
             tf.flush()
 

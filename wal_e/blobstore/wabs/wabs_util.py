@@ -203,29 +203,28 @@ def do_lzop_get(creds, url, path, decrypt):
     @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
-            pipeline = get_download_pipeline(PIPE, decomp_out, decrypt)
-            g = gevent.spawn(write_and_return_error, url, conn, pipeline.stdin)
+            with get_download_pipeline(PIPE, decomp_out, decrypt) as pl:
+                g = gevent.spawn(write_and_return_error, url, conn, pl.stdin)
 
-            try:
-                # Raise any exceptions guarded by
-                # write_and_return_error.
-                exc = g.get()
-                if exc is not None:
-                    raise exc
-            except WindowsAzureMissingResourceError:
-                # Short circuit any re-try attempts under certain race
-                # conditions.
-                logger.warn(
-                    msg=('could no longer locate object while performing '
-                         'wal restore'),
-                    detail=('The URI  at {url} no longer exists.'
-                            .format(url=url)),
-                    hint=('This can be normal when Postgres is trying to '
-                          'detect what timelines are available during '
-                          'restoration.'))
-                return False
-
-            pipeline.finish()
+                try:
+                    # Raise any exceptions guarded by
+                    # write_and_return_error.
+                    exc = g.get()
+                    if exc is not None:
+                        raise exc
+                except WindowsAzureMissingResourceError:
+                    # Short circuit any re-try attempts under certain race
+                    # conditions.
+                    pl.abort()
+                    logger.warning(
+                        msg=('could no longer locate object while '
+                             'performing wal restore'),
+                        detail=('The absolute URI that could not be '
+                                'located is {url}.'.format(url=url)),
+                        hint=('This can be normal when Postgres is trying '
+                              'to detect what timelines are available '
+                              'during restoration.'))
+                    return False
 
             logger.info(
                 msg='completed download and decompression',
