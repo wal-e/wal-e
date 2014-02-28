@@ -73,16 +73,14 @@ class BackupFetcher(object):
             hint='The absolute S3 key is {0}.'.format(part_abs_name))
 
         key = self.bucket.get_key(part_abs_name)
-        pipeline = get_download_pipeline(PIPE, PIPE, self.decrypt)
-        g = gevent.spawn(s3.write_and_return_error, key, pipeline.stdin)
-        TarPartition.tarfile_extract(pipeline.stdout, self.local_root)
+        with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
+            g = gevent.spawn(s3.write_and_return_error, key, pl.stdin)
+            TarPartition.tarfile_extract(pl.stdout, self.local_root)
 
-        # Raise any exceptions guarded by write_and_return_error.
-        exc = g.get()
-        if exc is not None:
-            raise exc
-
-        pipeline.finish()
+            # Raise any exceptions guarded by write_and_return_error.
+            exc = g.get()
+            if exc is not None:
+                raise exc
 
 
 class BackupList(_BackupList):

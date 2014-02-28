@@ -70,16 +70,15 @@ class BackupFetcher(object):
 
         url = 'wabs://{ctr}/{path}'.format(ctr=self.layout.store_name(),
                                            path=part_abs_name)
-        pipeline = get_download_pipeline(PIPE, PIPE, self.decrypt)
-        g = gevent.spawn(wabs.write_and_return_error,
-                         url, self.wabs_conn, pipeline.stdin)
-        TarPartition.tarfile_extract(pipeline.stdout, self.local_root)
+        with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
+            g = gevent.spawn(wabs.write_and_return_error,
+                             url, self.wabs_conn, pl.stdin)
+            TarPartition.tarfile_extract(pl.stdout, self.local_root)
 
-        # Raise any exceptions from self._write_and_close
-        exc = g.get()
-        if exc is not None:
-            raise exc
-        pipeline.finish()
+            # Raise any exceptions from self._write_and_close
+            exc = g.get()
+            if exc is not None:
+                raise exc
 
 
 class BackupList(_BackupList):

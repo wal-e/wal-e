@@ -50,13 +50,20 @@ class Pipeline(object):
 
     def __init__(self, commands, in_fd, out_fd):
         self.commands = commands
+        self.in_fd = in_fd
+        self.out_fd = out_fd
+        self._abort = False
 
+    def abort(self):
+        self._abort = True
+
+    def __enter__(self):
         # Teach the first command to take input specially
-        commands[0].stdinSet = in_fd
-        last_command = commands[0]
+        self.commands[0].stdinSet = self.in_fd
+        last_command = self.commands[0]
 
         # Connect all interior commands to one another via stdin/stdout
-        for command in commands[1:]:
+        for command in self.commands[1:]:
             last_command.start()
 
             # Set large kernel buffering between pipeline
@@ -68,29 +75,43 @@ class Pipeline(object):
 
         # Teach the last command to spill output to out_fd rather than to
         # its default, which is typically stdout.
-        assert last_command is commands[-1]
-        last_command.stdoutSet = out_fd
+        assert last_command is self.commands[-1]
+        last_command.stdoutSet = self.out_fd
         last_command.start()
 
-        stdin = commands[0].stdin
+        stdin = self.commands[0].stdin
         if stdin is not None:
             self.stdin = pipebuf.NonBlockBufferedWriter(stdin)
         else:
             self.stdin = None
 
-        stdout = commands[-1].stdout
+        stdout = self.commands[-1].stdout
         if stdout is not None:
             self.stdout = pipebuf.NonBlockBufferedReader(stdout)
         else:
             self.stdout = None
 
-    def finish(self):
-        if self.stdin is not None and not self.stdin.closed:
-            self.stdin.flush()
-            self.stdin.close()
+        return self
 
-        for command in self.commands:
-            command.finish()
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            if self.stdin is not None and not self.stdin.closed:
+                self.stdin.flush()
+                self.stdin.close()
+
+            if exc_type is not None or self._abort:
+                for command in self.commands:
+                    command.wait()
+            else:
+                for command in self.commands:
+                    command.finish()
+        except:
+            if exc_type:
+                # Re-raise inner exception rather than complaints during
+                # pipeline shutdown.
+                raise exc_type, exc_value, traceback
+            else:
+                raise
 
 
 class PipelineCommand(object):
@@ -153,14 +174,17 @@ class PipelineCommand(object):
         else:
             return self._process.returncode
 
-    def finish(self):
+    def wait(self):
         while True:
             if self._process.poll() is not None:
                 break
             else:
                 sleep(0.1)
 
-        retcode = self._process.wait()
+        return self._process.wait()
+
+    def finish(self):
+        retcode = self.wait()
 
         if self.stdout is not None:
             self.stdout.close()
