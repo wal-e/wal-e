@@ -11,6 +11,8 @@ import collections
 
 import wal_e.exception
 
+import re
+
 from urlparse import urlparse
 
 
@@ -28,6 +30,19 @@ COMPLETE_BASE_BACKUP_REGEXP = (
     r'_(?P<offset>[0-9A-F]{8})_backup_stop_sentinel\.json')
 
 VOLUME_REGEXP = (r'part_(\d+)\.tar\.lzo')
+
+
+def volume_key(volume):
+    match = match_volume_part(volume)
+    # TODO: handle if match is None (assert?)
+    return int(match.group(1))
+
+
+def match_volume_part(volume):
+    key_last_part = volume.rsplit('/', 1)[-1]
+    match = re.match(VOLUME_REGEXP, key_last_part)
+    # TODO: put warning here if match is None?
+    return match
 
 
 # A representation of a log number and segment, naive of timeline.

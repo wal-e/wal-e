@@ -40,8 +40,7 @@ class TarPartitionLister(object):
         for key in bucket.list(prefix=prefix):
             url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
                                                 name=key.name)
-            key_last_part = key.name.rsplit('/', 1)[-1]
-            match = re.match(storage.VOLUME_REGEXP, key_last_part)
+            match = storage.match_volume_part(key.name)
             if match is None:
                 logger.warning(
                     msg='unexpected key found in tar volume directory',
@@ -49,7 +48,7 @@ class TarPartitionLister(object):
                             .format(url)),
                     hint=generic_weird_key_hint_message)
             else:
-                yield key_last_part
+                yield match.group(0)
 
 
 class BackupFetcher(object):
