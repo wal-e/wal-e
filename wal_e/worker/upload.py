@@ -82,7 +82,7 @@ class PartitionUploader(object):
             tf.flush()
 
             # TODO :: Move arbitray path construction to StorageLayout Object
-            url = '{0}/tar_partitions/part_{number}.tar.lzo'.format(
+            url = '{0}/tar_partitions/part_{number:08d}.tar.lzo'.format(
                 self.backup_prefix.rstrip('/'), number=tpart.name)
 
             logger.info(msg='begin uploading a base backup volume',
