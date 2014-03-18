@@ -83,7 +83,8 @@ class PartitionUploader(object):
 
             # TODO :: Move arbitray path construction to StorageLayout Object
             url = '{0}/tar_partitions/part_{number}.tar.lzo'.format(
-                self.backup_prefix.rstrip('/'), number=tpart.name)
+                self.backup_prefix.rstrip('/'),
+                number=tpart.name.rjust(8, "0"))
 
             logger.info(msg='begin uploading a base backup volume',
                         detail='Uploading to "{url}".'.format(url=url))
