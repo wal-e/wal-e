@@ -111,8 +111,8 @@ class _BackupList(object):
 
         * a backup name (base_number_number)
 
-        * the psuedo-name LATEST, which finds the lexically highest
-          backup
+        * the psuedo-name LATEST, which finds the backup with the most
+          recent modification date
 
         """
 
@@ -130,7 +130,7 @@ class _BackupList(object):
 
             assert len(all_backups) > 0
 
-            all_backups.sort()
+            all_backups.sort(key=lambda bi: bi.last_modified)
             yield all_backups[-1]
         else:
             raise exception.UserException(
