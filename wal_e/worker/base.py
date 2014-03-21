@@ -104,8 +104,7 @@ class _BackupList(object):
         self.detail = detail
 
     def find_all(self, query):
-        """
-        A procedure to assist in finding or detailing specific backups
+        """A procedure to assist in finding or detailing specific backups
 
         Currently supports:
 
