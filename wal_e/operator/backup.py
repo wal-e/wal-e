@@ -144,7 +144,10 @@ class Backup(object):
 
         p = gevent.pool.Pool(size=pool_size)
         fetcher_cycle = itertools.cycle(fetchers)
-        for part_name in partition_iter:
+
+        reversed_partition_iter = reversed(sorted(
+            partition_iter, key=storage.volume_key))
+        for part_name in reversed_partition_iter:
             p.spawn(
                 self._exception_gather_guard(
                     fetcher_cycle.next().fetch_partition),
