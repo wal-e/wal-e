@@ -45,7 +45,7 @@ setup(
     author_email="wal-e@googlegroups.com",
     maintainer="Daniel Farina",
     maintainer_email="daniel@heroku.com",
-    description="PostgreSQL WAL-shipping for S3",
+    description="Simple Continuous Archiving for Postgres",
     long_description=read('README.rst'),
     classifiers=['Topic :: Database',
                  'Topic :: System :: Archiving',
