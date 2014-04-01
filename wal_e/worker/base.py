@@ -393,8 +393,7 @@ class _DeleteFromContext(object):
                 assert False
 
     def delete_everything(self):
-        """
-        Delete everything in a storage layout
+        """Delete everything in a storage layout
 
         Named provocatively for a reason: can (and in fact intended
         to) cause irrecoverable loss of data.  This can be used to:
