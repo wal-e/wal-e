@@ -31,8 +31,8 @@ def test_301_redirect():
     bucket_name = 'wal-e-test-301-redirect' + aws_access_key.lower()
 
     with pytest.raises(boto.exception.S3ResponseError) as e:
-         # Just initiating the bucket manipulation API calls is enough
-         # to provoke a 301 redirect.
+        # Just initiating the bucket manipulation API calls is enough
+        # to provoke a 301 redirect.
         with FreshBucket(bucket_name,
                          calling_format=OrdinaryCallingFormat()) as fb:
             fb.create(location='us-west-1')
