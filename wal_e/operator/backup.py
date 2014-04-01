@@ -457,7 +457,7 @@ class Backup(object):
     def _verify_restore_paths(self, restore_spec):
         path_prefix = restore_spec['base_prefix']
         bad_links = []
-        if not 'tablespaces' in restore_spec:
+        if 'tablespaces' not in restore_spec:
             return
         for tblspc in restore_spec['tablespaces']:
             tblspc_link = os.path.join(path_prefix, 'pg_tblspc', tblspc)
