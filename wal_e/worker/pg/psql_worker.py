@@ -43,7 +43,7 @@ def psql_csv_run(sql_command, error_handler=None):
 
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
                                 '-c', csv_query],
-                               stdout=PIPE)
+                               stdout=PIPE, stderr=PIPE)
     stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
