@@ -4,8 +4,8 @@ WAL-E
 Simple continuous archiving for Postgres
 ----------------------------------------
 
-WAL-E is a program designed to perform continuous archiving of PostgreSQL
-WAL files and manage the use of pg_start_backup and pg_stop_backup.
+WAL-E is a program designed to perform continuous archiving of
+PostgreSQL WAL files and base backups.
 
 To correspond on using WAL-E or to collaborate on its development, do
 not hesitate to send mail to the mailing list at
