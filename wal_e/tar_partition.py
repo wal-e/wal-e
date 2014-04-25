@@ -40,10 +40,11 @@ extraction.  This coupling between tarfiles makes the extraction
 process considerably more complicated.
 
 """
-import collections
 import errno
 import os
 import tarfile
+import hashlib
+import StringIO
 
 from wal_e import log_help
 from wal_e import copyfileobj
@@ -68,28 +69,36 @@ class StreamPadFileObj(object):
     be returned.  Furthermore, if the underlying stream runs out of
     bytes, '\0' will be returned until the target size is reached.
 
+    It also calculates a checksum on the file which can be retrieved
+    later by calling the digest() method.
+
     """
 
     # Try to save space via __slots__ optimization: many of these can
     # be created on systems with many small files that are packed into
     # a tar partition, and memory blows up when instantiating the
     # tarfile instance full of these.
-    __slots__ = ('underlying_fp', 'target_size', 'pos')
+    __slots__ = ('underlying_fp', 'target_size', 'pos', 'digest')
 
     def __init__(self, underlying_fp, target_size):
         self.underlying_fp = underlying_fp
         self.target_size = target_size
         self.pos = 0
+        self.digest = hashlib.sha1()
 
     def read(self, size):
         max_readable = min(self.target_size - self.pos, size)
         ret = self.underlying_fp.read(max_readable)
+        self.digest.update(ret)
         lenret = len(ret)
         self.pos += lenret
         return ret + '\0' * (max_readable - lenret)
 
     def close(self):
         return self.underlying_fp.close()
+
+    def hexdigest(self):
+        return self.digest.hexdigest()
 
     def __enter__(self):
         return self
@@ -131,8 +140,17 @@ class TarBadPathError(Exception):
 
         Exception.__init__(self, *args, **kwargs)
 
-ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
-                                         'submitted_path tarinfo')
+
+class ExtendedTarInfo(object):
+    __slots__ = ['submitted_path', 'tarinfo', 'type', 'size', 'hexdigest']
+
+    def __init__(self, submitted_path, tarinfo):
+        self.submitted_path = submitted_path
+        self.size = tarinfo.size
+        self.type = tarinfo.type
+        self.hexdigest = ''
+        self.tarinfo = tarinfo
+
 
 # 1.5 GiB is 1610612736 bytes, and Postgres allocates 1 GiB files as a
 # nominal maximum.  This must be greater than that.
@@ -232,6 +250,13 @@ class TarPartition(list):
                 with StreamPadFileObj(raw_file,
                                       et_info.tarinfo.size) as f:
                     tar.addfile(et_info.tarinfo, f)
+                    # Check the et_info matches the file we're adding
+                    # so the manifest is accurate
+                    # (maybe change these to assignments later)
+                    assert et_info.size == et_info.tarinfo.size
+                    assert et_info.type == et_info.tarinfo.type
+                    # store the checksum for the manifest
+                    et_info.hexdigest = f.hexdigest()
 
         except EnvironmentError, e:
             if (e.errno == errno.ENOENT and
@@ -305,8 +330,14 @@ class TarPartition(list):
                 # or may be unlinked in the meanwhile.
                 if et_info.tarinfo.isfile():
                     self._padded_tar_add(tar, et_info)
+
                 else:
                     tar.addfile(et_info.tarinfo)
+
+            manifest = self.format_manifest()
+            manifest_tarinfo = tarfile.TarInfo("MANIFEST")
+            tar.addfile(manifest_tarinfo, StringIO.StringIO(manifest))
+
         finally:
             if tar is not None:
                 tar.close()
@@ -323,11 +354,10 @@ class TarPartition(list):
 
     def format_manifest(self):
         parts = []
-        for tpart in self:
-            for et_info in tpart:
-                tarinfo = et_info.tarinfo
-                parts.append('\t'.join([tarinfo.name, tarinfo.size]))
-
+        for et_info in self:
+            parts.append("{0}\t{1:d}\t{2}".format(et_info.submitted_path,
+                                                  et_info.size,
+                                                  et_info.hexdigest))
         return '\n'.join(parts)
 
 
