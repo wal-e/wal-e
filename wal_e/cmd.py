@@ -484,6 +484,14 @@ def monkeypatch_tarfile_copyfileobj():
     tarfile.copyfileobj = copyfileobj.copyfileobj
 
 
+def render_subcommand(args):
+    """Render a subcommand for human-centric viewing"""
+    if args.subcommand == 'delete':
+        return 'delete ' + args.delete_subcommand
+    else:
+        return args.subcommand
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
@@ -507,7 +515,7 @@ def main():
     # because often emits status output too late.
     logger.info(msg='starting WAL-E',
                 detail=('The subcommand is "{0}".'
-                        .format(subcommand)))
+                        .format(render_subcommand(args))))
 
     try:
         backup_cxt = configure_backup_cxt(args)
