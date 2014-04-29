@@ -148,3 +148,34 @@ class NoopPgBackupStatements(object):
     @classmethod
     def pg_version(cls):
         return {'version': 'FAKE-PG-VERSION'}
+
+
+@pytest.fixture
+def noop_pg_backup_statements(monkeypatch):
+    import wal_e.operator.backup
+
+    monkeypatch.setattr(wal_e.operator.backup, 'PgBackupStatements',
+                        NoopPgBackupStatements)
+
+    # psql binary test will fail if local pg env isn't set up
+    monkeypatch.setattr(wal_e.cmd, 'external_program_check',
+                        lambda *args, **kwargs: None)
+
+
+@pytest.fixture
+def small_push_dir(tmpdir):
+    """Create a small pg data directory-alike"""
+    contents = 'abcdefghijlmnopqrstuvwxyz\n' * 10000
+    push_dir = tmpdir.join('push-from').ensure(dir=True)
+    push_dir.join('arbitrary-file').write(contents)
+
+    # Construct a symlink a non-existent path.  This provoked a crash
+    # at one time.
+    push_dir.join('pg_xlog').mksymlinkto('/tmp/wal-e-test-must-not-exist')
+
+    # Holy crap, the tar segmentation code relies on the directory
+    # containing files without a common prefix...the first character
+    # of two files must be distinct!
+    push_dir.join('holy-smokes').ensure()
+
+    return push_dir
