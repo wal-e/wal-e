@@ -501,6 +501,14 @@ def main():
         print pkgutil.get_data('wal_e', 'VERSION').strip()
         sys.exit(0)
 
+    # Print a start-up message right away.
+    #
+    # Otherwise, it is hard to tell when and how WAL-E started in logs
+    # because often emits status output too late.
+    logger.info(msg='starting WAL-E',
+                detail=('The subcommand is "{0}".'
+                        .format(subcommand)))
+
     try:
         backup_cxt = configure_backup_cxt(args)
 
