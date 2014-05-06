@@ -499,7 +499,7 @@ def main():
 
     # Adjust logging level if terse output is set.
     if args.terse:
-        log_help.MINIMUM_LOG_LEVEL = logging.WARNING
+        log_help.set_level(logging.WARNING)
 
     # Handle version printing specially, because it doesn't need
     # credentials.
