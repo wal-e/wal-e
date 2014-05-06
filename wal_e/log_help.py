@@ -41,7 +41,7 @@ def configure(*args, **kwargs):
     be printed to the other log handlers.
 
     """
-    level = kwargs.setdefault('level', logging.INFO)
+    level = kwargs.setdefault('level', MINIMUM_LOG_LEVEL)
     handlers = []
 
     # Add stderr output.
