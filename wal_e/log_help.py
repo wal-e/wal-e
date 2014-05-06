@@ -10,8 +10,9 @@ import os
 
 from os import path
 
-# Minimum logging level to emit logs for, inclusive.
-MINIMUM_LOG_LEVEL = logging.INFO
+
+# Global logging handlers created by configure.
+HANDLERS = []
 
 
 class IndentFormatter(logging.Formatter):
@@ -41,11 +42,12 @@ def configure(*args, **kwargs):
     be printed to the other log handlers.
 
     """
-    level = kwargs.setdefault('level', MINIMUM_LOG_LEVEL)
-    handlers = []
+    # Configuration must only happen once: no mechanism for avoiding
+    # duplication of handlers exists.
+    assert len(HANDLERS) == 0
 
     # Add stderr output.
-    handlers.append(logging.StreamHandler())
+    HANDLERS.append(logging.StreamHandler())
 
     def terrible_log_output(s):
         import sys
@@ -74,7 +76,7 @@ def configure(*args, **kwargs):
 
     try:
         # Add syslog output.
-        handlers.append(logging.handlers.SysLogHandler(syslog_address))
+        HANDLERS.append(logging.handlers.SysLogHandler(syslog_address))
     except EnvironmentError, e:
         if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
             message = ('wal-e: Could not set up syslog, '
@@ -87,10 +89,18 @@ def configure(*args, **kwargs):
     dfs = kwargs.get("datefmt", None)
     fmt = IndentFormatter(fs, dfs)
 
-    for handler in handlers:
+    for handler in HANDLERS:
         handler.setFormatter(fmt)
-        handler.setLevel(level)
         logging.root.addHandler(handler)
+
+    # Default to INFO level logging.
+    set_level(kwargs.get('level', logging.INFO))
+
+
+def set_level(level):
+    """Adjust the logging level of WAL-E"""
+    for handler in HANDLERS:
+        handler.setLevel(level)
 
     logging.root.setLevel(level)
 
@@ -137,9 +147,6 @@ class WalELogger(object):
         return '\n'.join(msg_parts)
 
     def log(self, level, msg, *args, **kwargs):
-        if level < MINIMUM_LOG_LEVEL:
-            return
-
         detail = kwargs.pop('detail', None)
         hint = kwargs.pop('hint', None)
         structured = kwargs.pop('structured', None)
