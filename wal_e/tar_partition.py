@@ -370,8 +370,12 @@ class TarPartition(list):
                 else:
                     tar.addfile(tarinfo)
 
-            manifest = self.format_manifest()
+            manifest = self.format_manifest().encode('utf-8')
             manifest_tarinfo = tarfile.TarInfo("MANIFEST")
+            manifest_tarinfo.size = len(manifest)
+            logger.debug(
+                msg="manifest generated",
+                detail="manifest={0}".format(manifest))
             tar.addfile(manifest_tarinfo, StringIO.StringIO(manifest))
 
         finally:
@@ -391,6 +395,10 @@ class TarPartition(list):
     def format_manifest(self):
         parts = []
         for et_info in self:
+            logger.debug(
+                msg="manifest for entry:{0}".format(et_info.submitted_path),
+                detail="size={0:d} hexdigest={1}".format(et_info.size,
+                                                       et_info.hexdigest));
             parts.append("{0}\t{1:d}\t{2}".format(et_info.submitted_path,
                                                   et_info.size,
                                                   et_info.hexdigest))
