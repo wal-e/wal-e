@@ -370,13 +370,14 @@ class TarPartition(list):
                 else:
                     tar.addfile(tarinfo)
 
-            manifest = self.format_manifest().encode('utf-8')
-            manifest_tarinfo = tarfile.TarInfo("MANIFEST")
-            manifest_tarinfo.size = len(manifest)
-            logger.debug(
-                msg="manifest generated",
-                detail="manifest={0}".format(manifest))
-            tar.addfile(manifest_tarinfo, StringIO.StringIO(manifest))
+            wale_dir = tarfile.TarInfo("WAL-E");
+            wale_dir.type = tarfile.DIRTYPE
+            tar.addfile(wale_dir)
+
+            manifest_text = self.format_manifest().encode('utf-8')
+            manifest = tarfile.TarInfo("WAL-E/part_{number:08d}.manifest".format(number=self.name))
+            manifest.size = len(manifest_text)
+            tar.addfile(manifest, StringIO.StringIO(manifest_text))
 
         finally:
             if tar is not None:
@@ -399,7 +400,7 @@ class TarPartition(list):
                 msg="manifest for entry:{0}".format(et_info.submitted_path),
                 detail="size={0:d} hexdigest={1}".format(et_info.size,
                                                        et_info.hexdigest));
-            parts.append("{0}\t{1:d}\t{2}".format(et_info.submitted_path,
+            parts.append("{0}\t{1:d}\t{2}".format(et_info.arcname,
                                                   et_info.size,
                                                   et_info.hexdigest))
         return '\n'.join(parts)
