@@ -25,11 +25,7 @@ def test_format_structured_info():
     many = ({'hello': 'world', 'goodbye': 'world'},
             u'time=2012-01-01T00.1234-00 pid=1234 goodbye=world hello=world')
 
-    otherTyps = ({1: None, frozenset([1, ' ']): 7.0, '': ''},
-                 u"time=2012-01-01T00.1234-00 pid=1234 "
-                 "1=None = frozenset([1, ' '])=7.0")
-
-    for d, expect in [zero, one, many, otherTyps]:
+    for d, expect in [zero, one, many]:
         result = log_help.WalELogger._fmt_structured(d)
         assert sanitize_log(result) == expect
 
