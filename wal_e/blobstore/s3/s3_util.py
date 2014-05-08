@@ -51,7 +51,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
     if content_encoding is not None:
         k.content_type = content_encoding
 
-    k.set_contents_from_file(fp,encrypt_key=True)
+    k.set_contents_from_file(fp, encrypt_key=True)
     return k
 
 
