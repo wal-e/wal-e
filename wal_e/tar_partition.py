@@ -370,12 +370,14 @@ class TarPartition(list):
                 else:
                     tar.addfile(tarinfo)
 
-            wale_dir = tarfile.TarInfo("WAL-E");
+            wale_dir = tarfile.TarInfo("WAL-E")
             wale_dir.type = tarfile.DIRTYPE
+            wale_dir.mode = 0700
             tar.addfile(wale_dir)
 
             manifest_text = self.format_manifest().encode('utf-8')
-            manifest = tarfile.TarInfo("WAL-E/part_{number:08d}.manifest".format(number=self.name))
+            manifest = tarfile.TarInfo(
+                "WAL-E/part_{number:08d}.manifest".format(number=self.name))
             manifest.size = len(manifest_text)
             tar.addfile(manifest, StringIO.StringIO(manifest_text))
 
@@ -399,7 +401,7 @@ class TarPartition(list):
             logger.debug(
                 msg="manifest for entry:{0}".format(et_info.submitted_path),
                 detail="size={0:d} hexdigest={1}".format(et_info.size,
-                                                       et_info.hexdigest));
+                                                       et_info.hexdigest))
             parts.append("{0}\t{1:d}\t{2}".format(et_info.arcname,
                                                   et_info.size,
                                                   et_info.hexdigest))
@@ -508,12 +510,18 @@ def partition(pg_cluster_dir):
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
+        # Do not capture any WAL-E meta information from an earlier
+        # restore (WAL-E renames this directory when it restores but
+        # just in case someone manually restored)
+        if is_cluster_toplevel and 'WAL-E' in dirnames:
+            dirnames.remove('WAL-E')
+            matches.append(os.path.join(root, 'WAL-E'))
+
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
         if is_cluster_toplevel and 'pg_xlog' in dirnames:
-            if 'pg_xlog' in dirnames:
-                dirnames.remove('pg_xlog')
-                matches.append(os.path.join(root, 'pg_xlog'))
+            dirnames.remove('pg_xlog')
+            matches.append(os.path.join(root, 'pg_xlog'))
 
         # Do not capture any TEMP Space files, although we do want to
         # capture the directory name or symlink
