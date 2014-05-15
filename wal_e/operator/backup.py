@@ -1,10 +1,15 @@
 import sys
 import os
+from datetime import datetime
 import json
 import functools
 import gevent
 import gevent.pool
 import itertools
+
+# XXX only needed for manifest verification which should move
+import hashlib
+import stat
 
 from cStringIO import StringIO
 from wal_e import log_help
@@ -37,6 +42,7 @@ class Backup(object):
         self.creds = creds
         self.gpg_key_id = gpg_key_id
         self.exceptions = []
+        self.check_checksums = True  # XXX
 
     def new_connection(self):
         return self.cinfo.connect(self.creds)
@@ -151,6 +157,39 @@ class Backup(object):
                 part_name)
 
         p.join(raise_error=True)
+
+        utc = datetime.utcnow().isoformat()
+        wale_info_dir = os.path.join(backup_info.spec['base_prefix'],
+                                     'WAL-E')
+        wale_rest_dir = os.path.join(backup_info.spec['base_prefix'],
+                                     'WAL-E.{}'.format(utc))
+
+        if not os.path.exists(wale_info_dir):
+            logger.warning('WAL-E info directory not present in backup. '
+                           'Will not verify restore against manifest')
+            os.mkdir(wale_rest_dir)
+            self.check_checksums = False
+        else:
+            os.rename(wale_info_dir, wale_rest_dir)
+
+        with open(os.path.join(wale_rest_dir, 'restore.spec'), 'w') as f:
+            json.dump(backup_info.spec, f)
+
+        if self.check_checksums:
+            for part_name in partition_iter:
+                # XXX This is a hack
+                part_num = part_name.replace('.tar.lzo', '')
+                manifest = os.path.join(wale_rest_dir,
+                                        '{}.manifest'.format(part_num))
+                logger.debug(
+                    'verifying part_name:{} using manifest:{}'
+                    .format(part_name, manifest))
+                if not os.path.exists(manifest):
+                    logger.warning('manifest missing: {}'.format(manifest))
+                else:
+                    # XXX tablespaces?
+                    self._verify_manifest(backup_info.spec['base_prefix'],
+                                          manifest)
 
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
@@ -474,3 +513,58 @@ class Backup(object):
                       'running backup-fetch, or use --blind-restore to '
                       'ignore symlinking. Alternatively supply a restore '
                       'spec to have WAL-E create tablespace symlinks for you'))
+
+    # XXX This should really move to tar_partition or they should both
+    # move to a common manifest.py file or something but clearly the
+    # manifest generation and verification should be in one file
+
+    def _verify_manifest(self, base, manifest):
+        with open(manifest, 'r') as f:
+            for line in f:
+                name, size, hexdigest = line.split('\t', 3)
+
+                filename = os.path.join(base, name)
+                size = int(size)
+                hexdigest = hexdigest.strip()
+
+                try:
+                    statres = os.lstat(filename)
+                except OSError, e:
+                    logger.warning('Could not verify {}: {}'
+                                   ''.format(name, e.strerror))
+
+                if not stat.S_ISREG(statres.st_mode) and size == 0:
+                    logger.debug('found file {} mode {:06o} '
+                                 'listed in manifest with size 0... ok'
+                                 ''.format(filename, statres.st_mode))
+
+                elif not stat.S_ISREG(statres.st_mode) and size != 0:
+                    logger.warning('expected regular file of length {} '
+                                   'instead found {} mode {:06o}'
+                                   ''.format(size,
+                                             filename,
+                                             statres.st_mode))
+
+                elif statres.st_size != size:
+                    logger.warning('expected regular file of length {} '
+                                   'instead found {} size {}'
+                                   ''.format(size,
+                                             filename,
+                                             statres.st_size))
+
+                elif (self.check_checksums
+                      and self._checksum_file(filename) != hexdigest):
+                    logger.warning('file {} checksum mismatch '
+                                   '(expected sha1 of {})'
+                                   ''.format(filename, hexdigest))
+                else:
+                    logger.debug('checked file {} against manifest... success'
+                                 ''.format(filename))
+
+    def _checksum_file(self, filename):
+        sha1 = hashlib.sha1()
+
+        with open(filename, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                sha1.update(chunk)
+        return sha1.hexdigest()

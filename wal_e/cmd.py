@@ -636,3 +636,7 @@ def main():
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
+
+
+if __name__ == "__main__":
+        main()
