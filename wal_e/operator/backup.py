@@ -175,21 +175,19 @@ class Backup(object):
         with open(os.path.join(wale_rest_dir, 'restore.spec'), 'w') as f:
             json.dump(backup_info.spec, f)
 
-        if self.check_checksums:
-            for part_name in partition_iter:
-                # XXX This is a hack
-                part_num = part_name.replace('.tar.lzo', '')
-                manifest = os.path.join(wale_rest_dir,
-                                        '{}.manifest'.format(part_num))
-                logger.debug(
-                    'verifying part_name:{} using manifest:{}'
-                    .format(part_name, manifest))
-                if not os.path.exists(manifest):
-                    logger.warning('manifest missing: {}'.format(manifest))
-                else:
-                    # XXX tablespaces?
-                    self._verify_manifest(backup_info.spec['base_prefix'],
-                                          manifest)
+        num_partitions_verified = 0
+        for fname in os.listdir(wale_rest_dir):
+            if not fname.endswith('.manifest'):
+                continue
+            logger.debug('verifying manifest file {}'.format(fname))
+            self._verify_manifest(backup_info.spec['base_prefix'], 
+                                  os.path.join(wale_rest_dir, fname))
+            num_partitions_verified += 1
+
+        if (hasattr(backup_info, 'number_of_partitions') and 
+            backup_info.number_of_partitions > num_partitions_verified):
+            logger.error('Only found {} out of {} manifest files to verify')
+
 
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
@@ -231,7 +229,7 @@ class Backup(object):
             ret_tuple = self._upload_pg_cluster_dir(
                 start_backup_info, data_directory, version=version, *args,
                 **kwargs)
-            spec, uploaded_to, expanded_size_bytes = ret_tuple
+            spec, uploaded_to, expanded_size_bytes, num_parts = ret_tuple
             upload_good = True
         finally:
             if not upload_good:
@@ -258,12 +256,14 @@ class Backup(object):
             # definitely run its course and also communicates what WAL
             # segments are needed to get to consistency.
             sentinel_content = StringIO()
+            assert(num_parts > 0)
             json.dump(
                 {'wal_segment_backup_stop':
                      stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
                      stop_backup_info['file_offset'],
                  'expanded_size_bytes': expanded_size_bytes,
+                 'number_of_partitions': num_parts,
                  'spec': spec},
                 sentinel_content)
 
@@ -427,6 +427,7 @@ class Backup(object):
         assert per_process_limit > 0 or per_process_limit is None
 
         total_size = 0
+        num_parts = 0
 
         # Make an attempt to upload extended version metadata
         extended_version_url = backup_prefix + '/extended_version.txt'
@@ -448,6 +449,7 @@ class Backup(object):
         # Enqueue uploads for parallel execution
         for tpart in parts:
             total_size += tpart.total_member_size
+            num_parts += 1
 
             # 'put' can raise an exception for a just-failed upload,
             # aborting the process.
@@ -457,7 +459,7 @@ class Backup(object):
         # raised to signal failure of the upload.
         pool.join()
 
-        return spec, backup_prefix, total_size
+        return spec, backup_prefix, total_size, num_parts
 
     def _exception_gather_guard(self, fn):
         """
