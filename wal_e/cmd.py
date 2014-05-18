@@ -219,6 +219,9 @@ def build_parser():
     parser.add_argument(
         '--terse', action='store_true',
         help='Only log messages as or more severe than a warning.')
+    parser.add_argument(
+        '--verbose', action='store_true',
+        help='Only log messages as or more severe than a warning.')
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -497,9 +500,11 @@ def main():
     args = parser.parse_args()
     subcommand = args.subcommand
 
-    # Adjust logging level if terse output is set.
+    # Adjust logging level if terse or verbose output is set.
     if args.terse:
         log_help.set_level(logging.WARNING)
+    if args.verbose:
+        log_help.set_level(logging.DEBUG)
 
     # Handle version printing specially, because it doesn't need
     # credentials.
