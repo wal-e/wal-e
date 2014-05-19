@@ -221,21 +221,32 @@ class Backup(object):
         """
         retval = True
         num_partitions_verified = 0
+        num_files_verified = 0
+        num_bytes_verified = 0
 
         for fname in os.listdir(wale_dir):
             if not fname.endswith('.manifest'):
                 continue
             logger.debug('verifying manifest file {}'.format(fname))
-            if not self._verify_manifest(data_directory,
-                                         os.path.join(wale_dir, fname)):
+            result, nfiles, nbytes = (
+                self._verify_manifest(data_directory,
+                                      os.path.join(wale_dir, fname)))
+            if not result:
                 retval = False
             num_partitions_verified += 1
+            num_files_verified += nfiles
+            num_bytes_verified += nbytes
 
         if (hasattr(spec, 'number_of_partitions') and
             spec.number_of_partitions > num_partitions_verified):
             logger.error('Only found {} out of {} manifest files to verify')
             retval = False
-
+        logger.info('Verified {} bytes in {} files from {} tar partitions '
+                    '{} checksums'
+                    ''.format(num_bytes_verified,
+                              num_files_verified,
+                              num_partitions_verified,
+                              'using' if self.check_checksums else 'NOT using'))
         return retval
 
 
@@ -572,6 +583,8 @@ class Backup(object):
 
     def _verify_manifest(self, base, manifest):
         retval = True
+        nfiles = 0
+        nbytes = 0
         with open(manifest, 'r') as f:
             for line in f:
                 name, size, hexdigest = line.split('\t', 3)
@@ -589,6 +602,7 @@ class Backup(object):
                     continue
 
                 if not stat.S_ISREG(statres.st_mode) and size == 0:
+                    nfiles += 1
                     pass
                 elif not stat.S_ISREG(statres.st_mode):
                     retval = False
@@ -612,7 +626,10 @@ class Backup(object):
                     logger.warning('file {} checksum mismatch '
                                    '(expected sha1 of {})'
                                    ''.format(filename, hexdigest))
-        return retval
+                else:
+                    nfiles += 1
+                    nbytes += size
+        return (retval, nfiles, nbytes)
 
     def _checksum_file(self, filename):
         sha1 = hashlib.sha1()

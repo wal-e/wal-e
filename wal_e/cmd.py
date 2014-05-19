@@ -278,6 +278,13 @@ def build_parser():
     backup_verify_parser = subparsers.add_parser(
         'backup-verify', help='verify an already-restored backup',
         parents=[backup_fetchpush_parent])
+    backup_verify_parser.add_argument(
+        '--no-verify-checksums',
+        help=('Skip verifying checksums of restored files. '
+              'Verify only the size and existence of restored files'),
+        dest='no_verify_checksums',
+        action='store_true',
+        default=False)
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
@@ -304,6 +311,13 @@ def build_parser():
               'restoration (optional, see README for more information).'),
         type=str,
         default=None)
+    backup_fetch_parser.add_argument(
+        '--no-verify-checksums',
+        help=('Skip verifying checksums of restored files. '
+              'Verify only the size and existence of restored files'),
+        dest='no_verify_checksums',
+        action='store_true',
+        default=False)
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -534,6 +548,8 @@ def main():
             monkeypatch_tarfile_copyfileobj()
 
             external_program_check([LZOP_BIN])
+            if args.no_verify_checksums:
+                backup_cxt.check_checksums = False
             backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
@@ -541,6 +557,8 @@ def main():
                 restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
         elif subcommand == 'backup-verify':
+            if args.no_verify_checksums:
+                backup_cxt.check_checksums = False
             backup_cxt.database_verify(args.PG_CLUSTER_DIRECTORY)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
