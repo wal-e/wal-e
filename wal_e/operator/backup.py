@@ -180,14 +180,49 @@ class Backup(object):
             if not fname.endswith('.manifest'):
                 continue
             logger.debug('verifying manifest file {}'.format(fname))
-            self._verify_manifest(backup_info.spec['base_prefix'], 
+            self._verify_manifest(backup_info.spec['base_prefix'],
                                   os.path.join(wale_rest_dir, fname))
             num_partitions_verified += 1
 
-        if (hasattr(backup_info, 'number_of_partitions') and 
+        if (hasattr(backup_info, 'number_of_partitions') and
             backup_info.number_of_partitions > num_partitions_verified):
             logger.error('Only found {} out of {} manifest files to verify')
 
+    def database_verify(self, data_directory):
+        """
+        Verifies the database directory checksums matches the manifest
+        for the last restore.
+        """
+
+        wale_dir = ''
+        for dirname in os.listdir(data_directory):
+            if (dirname.startswith('WAL-E.')
+                and dirname > wale_dir):
+                wale_dir = os.path.join(data_directory, dirname)
+
+        if (wale_dir == ''):
+            raise UserException(
+                msg='Did not find a valid WAL-E restore information',
+                detail='Expected to find a directory named WAL-E.<timestamp>')
+
+        logger.debug('verifying database against manifests from {}'
+                     ''.format(wale_dir))
+
+        with open(os.path.join(wale_dir, 'restore.spec'), 'r') as f:
+            spec = json.load(f)
+
+        num_partitions_verified = 0
+        for fname in os.listdir(wale_dir):
+            if not fname.endswith('.manifest'):
+                continue
+            logger.debug('verifying manifest file {}'.format(fname))
+            self._verify_manifest(data_directory,
+                                  os.path.join(wale_dir, fname))
+            num_partitions_verified += 1
+
+        if (hasattr(spec, 'number_of_partitions') and
+            spec.number_of_partitions > num_partitions_verified):
+            logger.error('Only found {} out of {} manifest files to verify')
 
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
@@ -536,11 +571,8 @@ class Backup(object):
                                    ''.format(name, e.strerror))
 
                 if not stat.S_ISREG(statres.st_mode) and size == 0:
-                    logger.debug('found file {} mode {:06o} '
-                                 'listed in manifest with size 0... ok'
-                                 ''.format(filename, statres.st_mode))
-
-                elif not stat.S_ISREG(statres.st_mode) and size != 0:
+                    pass
+                elif not stat.S_ISREG(statres.st_mode):
                     logger.warning('expected regular file of length {} '
                                    'instead found {} mode {:06o}'
                                    ''.format(size,
@@ -559,9 +591,6 @@ class Backup(object):
                     logger.warning('file {} checksum mismatch '
                                    '(expected sha1 of {})'
                                    ''.format(filename, hexdigest))
-                else:
-                    logger.debug('checked file {} against manifest... success'
-                                 ''.format(filename))
 
     def _checksum_file(self, filename):
         sha1 = hashlib.sha1()

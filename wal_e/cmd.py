@@ -256,6 +256,7 @@ def build_parser():
     backup_list_parser = subparsers.add_parser(
         'backup-list', parents=[backup_list_nodetail_parent],
         help='list backups in S3 or WABS')
+
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3 or WABS',
         parents=[backup_fetchpush_parent])
@@ -273,6 +274,10 @@ def build_parser():
         dest='while_offline',
         action='store_true',
         default=False)
+
+    backup_verify_parser = subparsers.add_parser(
+        'backup-verify', help='verify an already-restored backup',
+        parents=[backup_fetchpush_parent])
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
@@ -535,6 +540,8 @@ def main():
                 blind_restore=args.blind_restore,
                 restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
+        elif subcommand == 'backup-verify':
+            backup_cxt.database_verify(args.PG_CLUSTER_DIRECTORY)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
