@@ -175,25 +175,21 @@ class Backup(object):
         with open(os.path.join(wale_rest_dir, 'restore.spec'), 'w') as f:
             json.dump(backup_info.spec, f)
 
-        num_partitions_verified = 0
-        for fname in os.listdir(wale_rest_dir):
-            if not fname.endswith('.manifest'):
-                continue
-            logger.debug('verifying manifest file {}'.format(fname))
-            self._verify_manifest(backup_info.spec['base_prefix'],
-                                  os.path.join(wale_rest_dir, fname))
-            num_partitions_verified += 1
-
-        if (hasattr(backup_info, 'number_of_partitions') and
-            backup_info.number_of_partitions > num_partitions_verified):
-            logger.error('Only found {} out of {} manifest files to verify')
+        logger.info('Verifying database against manifests')
+        if self._database_verify(backup_info.spec['base_prefix'],
+                                 wale_rest_dir,
+                                 backup_info):
+            logger.info('Restore succeeded and passed verification')
+        else:
+            logger.info('Restore finished but FAILED verification')
 
     def database_verify(self, data_directory):
         """
-        Verifies the database directory checksums matches the manifest
-        for the last restore.
+        User command which finds the most recent database restore wale
+        info dir and invokes verification based on that. This only
+        works immediately after restore before any database recovery
+        of course.
         """
-
         wale_dir = ''
         for dirname in os.listdir(data_directory):
             if (dirname.startswith('WAL-E.')
@@ -205,24 +201,43 @@ class Backup(object):
                 msg='Did not find a valid WAL-E restore information',
                 detail='Expected to find a directory named WAL-E.<timestamp>')
 
-        logger.debug('verifying database against manifests from {}'
-                     ''.format(wale_dir))
+        logger.info('Verifying database against manifests from {}'
+                    ''.format(wale_dir))
 
         with open(os.path.join(wale_dir, 'restore.spec'), 'r') as f:
             spec = json.load(f)
 
+        if self._database_verify(data_directory, wale_dir, spec):
+            logger.info('Verification against manifests passed'
+                        ''.format(wale_dir))
+        else:
+            logger.info('Verification against manifests FAILED'
+                        ''.format(wale_dir))
+
+    def _database_verify(self, data_directory, wale_dir, spec):
+        """
+        Common code for restore and verify that does the actual
+        verification for the given directory and wale info dir.
+        """
+        retval = True
         num_partitions_verified = 0
+
         for fname in os.listdir(wale_dir):
             if not fname.endswith('.manifest'):
                 continue
             logger.debug('verifying manifest file {}'.format(fname))
-            self._verify_manifest(data_directory,
-                                  os.path.join(wale_dir, fname))
+            if not self._verify_manifest(data_directory,
+                                         os.path.join(wale_dir, fname)):
+                retval = False
             num_partitions_verified += 1
 
         if (hasattr(spec, 'number_of_partitions') and
             spec.number_of_partitions > num_partitions_verified):
             logger.error('Only found {} out of {} manifest files to verify')
+            retval = False
+
+        return retval
+
 
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
@@ -556,6 +571,7 @@ class Backup(object):
     # manifest generation and verification should be in one file
 
     def _verify_manifest(self, base, manifest):
+        retval = True
         with open(manifest, 'r') as f:
             for line in f:
                 name, size, hexdigest = line.split('\t', 3)
@@ -569,10 +585,13 @@ class Backup(object):
                 except OSError, e:
                     logger.warning('Could not verify {}: {}'
                                    ''.format(name, e.strerror))
+                    retval = False
+                    continue
 
                 if not stat.S_ISREG(statres.st_mode) and size == 0:
                     pass
                 elif not stat.S_ISREG(statres.st_mode):
+                    retval = False
                     logger.warning('expected regular file of length {} '
                                    'instead found {} mode {:06o}'
                                    ''.format(size,
@@ -580,6 +599,7 @@ class Backup(object):
                                              statres.st_mode))
 
                 elif statres.st_size != size:
+                    retval = False
                     logger.warning('expected regular file of length {} '
                                    'instead found {} size {}'
                                    ''.format(size,
@@ -588,9 +608,11 @@ class Backup(object):
 
                 elif (self.check_checksums
                       and self._checksum_file(filename) != hexdigest):
+                    retval = False
                     logger.warning('file {} checksum mismatch '
                                    '(expected sha1 of {})'
                                    ''.format(filename, hexdigest))
+        return retval
 
     def _checksum_file(self, filename):
         sha1 = hashlib.sha1()
