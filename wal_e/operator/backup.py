@@ -246,9 +246,9 @@ class Backup(object):
                     ''.format(num_bytes_verified,
                               num_files_verified,
                               num_partitions_verified,
-                              'using' if self.check_checksums else 'NOT using'))
+                              ('Using' if self.check_checksums
+                               else 'NOT using')))
         return retval
-
 
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
