@@ -1,7 +1,7 @@
 import gc
 import gevent
 
-from gevent import queue
+from wal_e import channel
 from wal_e import tar_partition
 from wal_e.exception import UserCritical
 
@@ -20,7 +20,7 @@ class TarUploadPool(object):
         self.member_burden = 0
 
         # Synchronization and tasks
-        self.wait_change = queue.Queue(maxsize=0)
+        self.wait_change = channel.Channel()
         self.closed = False
 
         # Used for both synchronization and measurement.

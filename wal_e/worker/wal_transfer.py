@@ -3,10 +3,10 @@ import os
 import re
 import traceback
 
-from gevent import queue
 from os import path
-from wal_e.exception import UserCritical
+from wal_e import channel
 from wal_e.storage import s3_storage
+from wal_e.exception import UserCritical
 
 
 class WalSegment(object):
@@ -87,7 +87,7 @@ class WalTransferGroup(object):
         self.transferer = transferer
 
         # Synchronization and tasks
-        self.wait_change = queue.Queue()
+        self.wait_change = channel.Channel()
         self.expect = 0
         self.closed = False
 
