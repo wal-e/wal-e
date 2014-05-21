@@ -87,7 +87,7 @@ class WalTransferGroup(object):
         self.transferer = transferer
 
         # Synchronization and tasks
-        self.wait_change = queue.Queue(maxsize=0)
+        self.wait_change = queue.Queue()
         self.expect = 0
         self.closed = False
 
