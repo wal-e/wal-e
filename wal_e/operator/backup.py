@@ -11,6 +11,7 @@ from wal_e import log_help
 from wal_e import storage
 from wal_e import tar_partition
 from wal_e.exception import UserException, UserCritical
+from wal_e.worker import prefetch
 from wal_e.worker import (WalSegment,
                           WalUploader,
                           PgBackupStatements,
@@ -280,7 +281,7 @@ class Backup(object):
         # Wait for uploads to finish.
         group.join()
 
-    def wal_restore(self, wal_name, wal_destination):
+    def wal_restore(self, wal_name, wal_destination, prefetch_max):
         """
         Downloads a WAL file from S3 or Windows Azure Blob Service
 
@@ -291,9 +292,45 @@ class Backup(object):
         basename(wal_path), so both are required.
 
         """
-        # TODO :: Move arbitray path construction to StorageLayout Object
-        url = '{0}/wal_{1}/{2}.lzo'.format(
-            self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION, wal_name)
+        url = '{0}://{1}/{2}'.format(
+            self.layout.scheme, self.layout.store_name(),
+            self.layout.wal_path(wal_name))
+
+        if prefetch_max > 0:
+            # Check for prefetch-hit.
+            base = os.path.dirname(os.path.realpath(wal_destination))
+            pd = prefetch.Dirs(base)
+            seg = WalSegment(wal_name)
+
+            started = start_prefetches(seg, pd, prefetch_max)
+            last_size = 0
+
+            while True:
+                if pd.contains(seg):
+                    pd.promote(seg, wal_destination)
+                    logger.info(
+                        msg='promoted prefetched wal segment',
+                        structured={'action': 'wal-fetch',
+                                    'key': url,
+                                    'seg': wal_name,
+                                    'prefix': self.layout.path_prefix})
+
+                    pd.clear_except(started)
+                    return True
+
+                # If there is a 'running' download, wait a bit for it
+                # to make progress or finish.  However, if it doesn't
+                # make progress in some amount of time, assume that
+                # the prefetch process has died and go on with the
+                # in-band downloading code.
+                sz = pd.running_size(seg)
+                if sz <= last_size:
+                    break
+
+                last_size = sz
+                gevent.sleep(0.5)
+
+            pd.clear_except(started)
 
         logger.info(
             msg='begin wal restore',
@@ -315,6 +352,35 @@ class Backup(object):
                         'state': 'complete'})
 
         return ret
+
+    def wal_prefetch(self, base, segment_name):
+        url = '{0}://{1}/{2}'.format(
+            self.layout.scheme, self.layout.store_name(),
+            self.layout.wal_path(segment_name))
+        pd = prefetch.Dirs(base)
+        seg = WalSegment(segment_name)
+        pd.create(seg)
+        with pd.download(seg) as d:
+            logger.info(
+                msg='begin wal restore',
+                structured={'action': 'wal-prefetch',
+                            'key': url,
+                            'seg': segment_name,
+                            'prefix': self.layout.path_prefix,
+                            'state': 'begin'})
+
+            ret = do_lzop_get(self.creds, url, d.dest,
+                              self.gpg_key_id is not None, do_retry=False)
+
+            logger.info(
+                msg='complete wal restore',
+                structured={'action': 'wal-prefetch',
+                            'key': url,
+                            'seg': segment_name,
+                            'prefix': self.layout.path_prefix,
+                            'state': 'complete'})
+
+            return ret
 
     def delete_old_versions(self, dry_run):
         assert storage.CURRENT_VERSION not in storage.OBSOLETE_VERSIONS
@@ -474,3 +540,27 @@ class Backup(object):
                       'running backup-fetch, or use --blind-restore to '
                       'ignore symlinking. Alternatively supply a restore '
                       'spec to have WAL-E create tablespace symlinks for you'))
+
+
+def start_prefetches(seg, pd, how_many):
+    import daemon
+
+    split = sys.argv.index('wal-fetch')
+    if split < 0:
+        return
+
+    future = list(itertools.islice(seg.future_segment_stream(), how_many))
+
+    for fs in future:
+        if pd.is_running(fs) or pd.contains(fs):
+            # Skip when it appears another pre-fetch is already
+            # running or done.
+            continue
+        elif os.fork() == 0:
+            pd.create(fs)
+            with daemon.DaemonContext():
+                os.execvp(
+                    sys.argv[0],
+                    sys.argv[:split] + ['wal-prefetch'] + [pd.base, fs.name])
+
+    return future

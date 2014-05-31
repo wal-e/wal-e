@@ -3,6 +3,7 @@ import pytest
 from blackbox import config
 from blackbox import noop_pg_backup_statements
 from blackbox import small_push_dir
+from os import path
 from s3_integration_help import default_test_bucket
 from stage_pgxlog import pg_xlog
 
@@ -25,6 +26,9 @@ def test_wal_push_fetch(pg_xlog, tmpdir, config):
     download_file = tmpdir.join('TEST-DOWNLOADED')
     config.main('wal-fetch', seg_name, unicode(download_file))
     assert download_file.read() == contents
+
+    config.main('wal-prefetch', path.dirname(unicode(download_file)), seg_name)
+    assert tmpdir.join('.wal-e', 'prefetch', seg_name).check(file=1)
 
 
 def test_wal_fetch_non_existent(tmpdir, config):

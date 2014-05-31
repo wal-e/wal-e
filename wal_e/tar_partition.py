@@ -458,6 +458,12 @@ def partition(pg_cluster_dir):
                 dirnames.remove('pg_stat_tmp')
                 matches.append(os.path.join(root, 'pg_stat_tmp'))
 
+        # Do not capture ".wal-e" directories which also contain
+        # temporary working space.
+        if '.wal-e' in dirnames:
+            dirnames.remove('.wal-e')
+            matches.append(os.path.join(root, '.wal-e'))
+
         for filename in filenames:
             if is_cluster_toplevel and filename in ('postmaster.pid',
                                                     'postmaster.opts'):

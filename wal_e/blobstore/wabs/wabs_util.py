@@ -155,7 +155,7 @@ def uri_get_file(creds, uri, conn=None):
     return data
 
 
-def do_lzop_get(creds, url, path, decrypt):
+def do_lzop_get(creds, url, path, decrypt, do_retry=True):
     """
     Get and decompress a S3 URL
 
@@ -200,7 +200,6 @@ def do_lzop_get(creds, url, path, decrypt):
         # Help Python GC by resolving possible cycles
         del tb
 
-    @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
             with get_download_pipeline(PIPE, decomp_out, decrypt) as pl:
@@ -231,6 +230,10 @@ def do_lzop_get(creds, url, path, decrypt):
                 detail='Downloaded and decompressed "{url}" to "{path}"'
                 .format(url=url, path=path))
         return True
+
+    if do_retry:
+        download = retry(
+            retry_with_count(log_wal_fetch_failures_on_error))(download)
 
     return download()
 

@@ -40,7 +40,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     return SwiftKey(url_tup.path, size=fp.tell())
 
 
-def do_lzop_get(creds, uri, path, decrypt):
+def do_lzop_get(creds, uri, path, decrypt, do_retry=True):
     """
     Get and decompress a Swift URL
 
@@ -82,7 +82,6 @@ def do_lzop_get(creds, uri, path, decrypt):
         # Help Python GC by resolving possible cycles
         del tb
 
-    @retry(retry_with_count(log_wal_fetch_failures_on_error))
     def download():
         with open(path, 'wb') as decomp_out:
             with get_download_pipeline(PIPE, decomp_out, decrypt) as pl:
@@ -118,6 +117,10 @@ def do_lzop_get(creds, uri, path, decrypt):
                 detail='Downloaded and decompressed "{uri}" to "{path}"'
                 .format(uri=uri, path=path))
         return True
+
+    if do_retry:
+        download = retry(
+            retry_with_count(log_wal_fetch_failures_on_error))(download)
 
     return download()
 

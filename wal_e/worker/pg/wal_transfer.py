@@ -15,6 +15,18 @@ class WalSegment(object):
         self.explicit = explicit
         self.name = path.basename(self.path)
 
+        # If possible, extract TLI and SegmentNumber information.
+        # Cases where this is not possible include a .history file.
+        self.tli = None
+        self.segment_number = None
+        match = re.match(storage.SEGMENT_REGEXP, self.name)
+
+        if match is not None:
+            gd = match.groupdict()
+            self.tli = gd['tli']
+            self.segment_number = storage.SegmentNumber(log=gd['log'],
+                                                        seg=gd['seg'])
+
     def mark_done(self):
         """Mark the archive status of this segment as 'done'.
 
@@ -73,6 +85,21 @@ class WalSegment(object):
                 seg_path = path.join(xlog_dir, seg_name)
 
                 yield WalSegment(seg_path, explicit=False)
+
+    def future_segment_stream(self):
+        sn = self.segment_number
+
+        if sn is None:
+            # Can't project from this 'segment'; it's probably
+            # actually a .history file or something like that.
+            return
+
+        while True:
+            sn = sn.next_larger()
+            segment = self.__class__(
+                path.join(path.dirname(self.path),
+                          self.tli + sn.log + sn.seg))
+            yield segment
 
 
 class WalTransferGroup(object):

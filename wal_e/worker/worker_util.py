@@ -46,7 +46,7 @@ def do_lzop_put(creds, url, local_path, gpg_key):
         return kib_per_second
 
 
-def do_lzop_get(creds, url, path, decrypt):
+def do_lzop_get(creds, url, path, decrypt, do_retry=True):
     """
     Get and decompress an S3 or WABS URL
 
@@ -55,7 +55,7 @@ def do_lzop_get(creds, url, path, decrypt):
 
     """
     blobstore = get_blobstore(storage.StorageLayout(url))
-    return blobstore.do_lzop_get(creds, url, path, decrypt)
+    return blobstore.do_lzop_get(creds, url, path, decrypt, do_retry=do_retry)
 
 
 def format_kib_per_second(start, finish, amount_in_bytes):

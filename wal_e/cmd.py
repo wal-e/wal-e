@@ -9,6 +9,7 @@ import sys
 
 def gevent_monkey(*args, **kwargs):
     import gevent.monkey
+    gevent.monkey.patch_os()
     gevent.monkey.patch_socket(dns=True, aggressive=True)
     gevent.monkey.patch_ssl()
     gevent.monkey.patch_time()
@@ -311,6 +312,17 @@ def build_parser():
         parents=[wal_fetchpush_parent])
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
+    wal_fetch_parser.add_argument(
+        '--prefetch', '-p', type=int, default=8,
+        help='Set the maximum number of WAL segments to prefetch.')
+
+    wal_prefetch_parser = subparsers.add_parser('wal-prefetch',
+                                                help='Prefetch WAL')
+    wal_prefetch_parser.add_argument(
+        'BASE_DIRECTORY',
+        help='Contains writable directory to place ".wal-e" directory in.')
+    wal_prefetch_parser.add_argument('SEGMENT',
+                                     help='Segment by name to download.')
 
     # delete subparser section
     delete_parser = subparsers.add_parser(
@@ -560,9 +572,13 @@ def main():
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_restore(args.WAL_SEGMENT,
-                                         args.WAL_DESTINATION)
+                                         args.WAL_DESTINATION,
+                                         args.prefetch)
             if not res:
                 sys.exit(1)
+        elif subcommand == 'wal-prefetch':
+            external_program_check([LZOP_BIN])
+            backup_cxt.wal_prefetch(args.BASE_DIRECTORY, args.SEGMENT)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
             backup_cxt.wal_archive(args.WAL_SEGMENT,
