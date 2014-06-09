@@ -220,6 +220,9 @@ def build_parser():
     parser.add_argument(
         '--terse', action='store_true',
         help='Only log messages as or more severe than a warning.')
+    parser.add_argument(
+        '--verbose', action='store_true',
+        help='Only log messages as or more severe than a warning.')
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
@@ -254,6 +257,7 @@ def build_parser():
     backup_list_parser = subparsers.add_parser(
         'backup-list', parents=[backup_list_nodetail_parent],
         help='list backups in S3 or WABS')
+
     backup_push_parser = subparsers.add_parser(
         'backup-push', help='pushing a fresh hot backup to S3 or WABS',
         parents=[backup_fetchpush_parent])
@@ -269,6 +273,17 @@ def build_parser():
               '(for example, a replica that you stop and restart '
               'when taking a backup)'),
         dest='while_offline',
+        action='store_true',
+        default=False)
+
+    backup_verify_parser = subparsers.add_parser(
+        'backup-verify', help='verify an already-restored backup',
+        parents=[backup_fetchpush_parent])
+    backup_verify_parser.add_argument(
+        '--no-verify-checksums',
+        help=('Skip verifying checksums of restored files. '
+              'Verify only the size and existence of restored files'),
+        dest='no_verify_checksums',
         action='store_true',
         default=False)
 
@@ -297,6 +312,13 @@ def build_parser():
               'restoration (optional, see README for more information).'),
         type=str,
         default=None)
+    backup_fetch_parser.add_argument(
+        '--no-verify-checksums',
+        help=('Skip verifying checksums of restored files. '
+              'Verify only the size and existence of restored files'),
+        dest='no_verify_checksums',
+        action='store_true',
+        default=False)
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -509,9 +531,11 @@ def main():
     args = parser.parse_args()
     subcommand = args.subcommand
 
-    # Adjust logging level if terse output is set.
+    # Adjust logging level if terse or verbose output is set.
     if args.terse:
         log_help.set_level(logging.WARNING)
+    if args.verbose:
+        log_help.set_level(logging.DEBUG)
 
     # Handle version printing specially, because it doesn't need
     # credentials.
@@ -536,12 +560,18 @@ def main():
             monkeypatch_tarfile_copyfileobj()
 
             external_program_check([LZOP_BIN])
+            if args.no_verify_checksums:
+                backup_cxt.check_checksums = False
             backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
                 blind_restore=args.blind_restore,
                 restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
+        elif subcommand == 'backup-verify':
+            if args.no_verify_checksums:
+                backup_cxt.check_checksums = False
+            backup_cxt.database_verify(args.PG_CLUSTER_DIRECTORY)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
@@ -652,3 +682,7 @@ def main():
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
+
+
+if __name__ == "__main__":
+        main()

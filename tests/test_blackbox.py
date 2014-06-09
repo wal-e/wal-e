@@ -1,4 +1,5 @@
 import pytest
+import re
 
 from blackbox import config
 from blackbox import noop_pg_backup_statements
@@ -61,6 +62,8 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
         small_push_dir.join('arbitrary-file').read()
 
     for filename in fetch_dir.listdir():
+        if re.search("/WAL-E.", unicode(filename)):
+            continue
         if filename.check(link=0):
             assert unicode(filename) in fsynced_files
         elif filename.check(link=1):

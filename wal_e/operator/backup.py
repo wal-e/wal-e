@@ -1,10 +1,15 @@
 import sys
 import os
+from datetime import datetime
 import json
 import functools
 import gevent
 import gevent.pool
 import itertools
+
+# XXX only needed for manifest verification which should move
+import hashlib
+import stat
 
 from cStringIO import StringIO
 from wal_e import log_help
@@ -38,6 +43,7 @@ class Backup(object):
         self.creds = creds
         self.gpg_key_id = gpg_key_id
         self.exceptions = []
+        self.check_checksums = True  # XXX
 
     def new_connection(self):
         return self.cinfo.connect(self.creds)
@@ -153,6 +159,98 @@ class Backup(object):
 
         p.join(raise_error=True)
 
+        utc = datetime.utcnow().isoformat()
+        wale_info_dir = os.path.join(backup_info.spec['base_prefix'],
+                                     'WAL-E')
+        wale_rest_dir = os.path.join(backup_info.spec['base_prefix'],
+                                     'WAL-E.{}'.format(utc))
+
+        if not os.path.exists(wale_info_dir):
+            logger.warning('WAL-E info directory not present in backup. '
+                           'Will not verify restore against manifest')
+            os.mkdir(wale_rest_dir)
+            self.check_checksums = False
+        else:
+            os.rename(wale_info_dir, wale_rest_dir)
+
+        with open(os.path.join(wale_rest_dir, 'restore.spec'), 'w') as f:
+            json.dump(backup_info.spec, f)
+
+        logger.info('Verifying database against manifests')
+        if self._database_verify(backup_info.spec['base_prefix'],
+                                 wale_rest_dir,
+                                 backup_info):
+            logger.info('Restore succeeded and passed verification')
+        else:
+            logger.info('Restore finished but FAILED verification')
+
+    def database_verify(self, data_directory):
+        """
+        User command which finds the most recent database restore wale
+        info dir and invokes verification based on that. This only
+        works immediately after restore before any database recovery
+        of course.
+        """
+        wale_dir = ''
+        for dirname in os.listdir(data_directory):
+            if (dirname.startswith('WAL-E.')
+                and dirname > wale_dir):
+                wale_dir = os.path.join(data_directory, dirname)
+
+        if (wale_dir == ''):
+            raise UserException(
+                msg='Did not find a valid WAL-E restore information',
+                detail='Expected to find a directory named WAL-E.<timestamp>')
+
+        logger.info('Verifying database against manifests from {}'
+                    ''.format(wale_dir))
+
+        with open(os.path.join(wale_dir, 'restore.spec'), 'r') as f:
+            spec = json.load(f)
+
+        if self._database_verify(data_directory, wale_dir, spec):
+            logger.info('Verification against manifests passed'
+                        ''.format(wale_dir))
+        else:
+            logger.info('Verification against manifests FAILED'
+                        ''.format(wale_dir))
+
+    def _database_verify(self, data_directory, wale_dir, spec):
+        """
+        Common code for restore and verify that does the actual
+        verification for the given directory and wale info dir.
+        """
+        retval = True
+        num_partitions_verified = 0
+        num_files_verified = 0
+        num_bytes_verified = 0
+
+        for fname in os.listdir(wale_dir):
+            if not fname.endswith('.manifest'):
+                continue
+            logger.debug('verifying manifest file {}'.format(fname))
+            result, nfiles, nbytes = (
+                self._verify_manifest(data_directory,
+                                      os.path.join(wale_dir, fname)))
+            if not result:
+                retval = False
+            num_partitions_verified += 1
+            num_files_verified += nfiles
+            num_bytes_verified += nbytes
+
+        if (hasattr(spec, 'number_of_partitions') and
+            spec.number_of_partitions > num_partitions_verified):
+            logger.error('Only found {} out of {} manifest files to verify')
+            retval = False
+        logger.info('Verified {} bytes in {} files from {} tar partitions '
+                    '{} checksums'
+                    ''.format(num_bytes_verified,
+                              num_files_verified,
+                              num_partitions_verified,
+                              ('Using' if self.check_checksums
+                               else 'NOT using')))
+        return retval
+
     def database_backup(self, data_directory, *args, **kwargs):
         """Uploads a PostgreSQL file cluster to S3 or Windows Azure Blob
         Service
@@ -193,7 +291,7 @@ class Backup(object):
             ret_tuple = self._upload_pg_cluster_dir(
                 start_backup_info, data_directory, version=version, *args,
                 **kwargs)
-            spec, uploaded_to, expanded_size_bytes = ret_tuple
+            spec, uploaded_to, expanded_size_bytes, num_parts = ret_tuple
             upload_good = True
         finally:
             if not upload_good:
@@ -220,12 +318,14 @@ class Backup(object):
             # definitely run its course and also communicates what WAL
             # segments are needed to get to consistency.
             sentinel_content = StringIO()
+            assert(num_parts > 0)
             json.dump(
                 {'wal_segment_backup_stop':
                      stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
                      stop_backup_info['file_offset'],
                  'expanded_size_bytes': expanded_size_bytes,
+                 'number_of_partitions': num_parts,
                  'spec': spec},
                 sentinel_content)
 
@@ -454,6 +554,7 @@ class Backup(object):
         assert per_process_limit > 0 or per_process_limit is None
 
         total_size = 0
+        num_parts = 0
 
         # Make an attempt to upload extended version metadata
         extended_version_url = backup_prefix + '/extended_version.txt'
@@ -475,6 +576,7 @@ class Backup(object):
         # Enqueue uploads for parallel execution
         for tpart in parts:
             total_size += tpart.total_member_size
+            num_parts += 1
 
             # 'put' can raise an exception for a just-failed upload,
             # aborting the process.
@@ -484,7 +586,7 @@ class Backup(object):
         # raised to signal failure of the upload.
         pool.join()
 
-        return spec, backup_prefix, total_size
+        return spec, backup_prefix, total_size, num_parts
 
     def _exception_gather_guard(self, fn):
         """
@@ -540,6 +642,83 @@ class Backup(object):
                       'running backup-fetch, or use --blind-restore to '
                       'ignore symlinking. Alternatively supply a restore '
                       'spec to have WAL-E create tablespace symlinks for you'))
+
+    # XXX This should really move to tar_partition or they should both
+    # move to a common manifest.py file or something but clearly the
+    # manifest generation and verification should be in one file
+    def _verify_manifest(self, base, manifest):
+        retval = True
+        nfiles = 0
+        nbytes = 0
+        # XXX Ponder using ijson to check the checksums as the
+        # manifest is parsed to avoid having to load the entire
+        # manifest into a list of dicts (Yobukos can have pretty big
+        # lists)
+        with open(manifest, 'r') as f:
+            manifest_list = json.load(f)
+        for entry in manifest_list:
+            if 'name' in entry:
+                filename = os.path.join(base, entry['name'])
+            if 'filetype' in entry:
+                filetype = entry['filetype']
+            if 'size' in entry:
+                size = int(entry['size'])
+            if 'hexdigest' in entry:
+                hexdigest = entry['hexdigest'].strip()
+
+            try:
+                statres = os.lstat(filename)
+            except OSError, e:
+                logger.warning('Could not verify {}: {}'
+                               ''.format(entry['name'], e.strerror))
+                retval = False
+                continue
+
+            if stat.S_ISDIR(statres.st_mode) and filetype == 'DIR':
+                nfiles += 1
+            elif stat.S_ISLNK(statres.st_mode) and filetype == 'LNK':
+                nfiles += 1
+            elif not stat.S_ISREG(statres.st_mode) and filetype != 'REG':
+                nfiles += 1
+                logger.debug('found odd file {filename}'
+                             '(filetype={filetype}, mode={mode}'.format(
+                                 filename=filename,
+                                 filetype=filetype,
+                                 mode=statres.st_mode))
+            elif not stat.S_ISREG(statres.st_mode):
+                retval = False
+                logger.warning('expected regular file of length {} '
+                               'instead found {} mode {:06o}'
+                               ''.format(size,
+                                         filename,
+                                         statres.st_mode))
+
+            elif statres.st_size != size:
+                retval = False
+                logger.warning('expected regular file of length {} '
+                               'instead found {} size {}'
+                               ''.format(size,
+                                         filename,
+                                         statres.st_size))
+
+            elif (self.check_checksums
+                  and self._checksum_file(filename) != hexdigest):
+                retval = False
+                logger.warning('file {} checksum mismatch '
+                               '(expected sha1 of {})'
+                               ''.format(filename, hexdigest))
+            else:
+                nfiles += 1
+                nbytes += size
+        return (retval, nfiles, nbytes)
+
+    def _checksum_file(self, filename):
+        sha1 = hashlib.sha1()
+
+        with open(filename, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                sha1.update(chunk)
+        return sha1.hexdigest()
 
 
 def start_prefetches(seg, pd, how_many):

@@ -130,6 +130,7 @@ class BackupInfo(object):
     _fields = ['name',
                'last_modified',
                'expanded_size_bytes',
+               'number_of_partitions',
                'wal_segment_backup_start',
                'wal_segment_offset_backup_start',
                'wal_segment_backup_stop',
@@ -289,6 +290,11 @@ class StorageLayout(object):
         self._error_on_unexpected_version()
         return (self.basebackup_tar_partition_directory(backup_info) +
                 part_name)
+
+    def basebackup_tar_manifest_directory(self, backup_info):
+        self._error_on_unexpected_version()
+        return (self.basebackup_directory(backup_info) +
+                'manifests/')
 
     def wal_directory(self):
         return self._api_path_prefix + 'wal_' + self.VERSION + '/'
