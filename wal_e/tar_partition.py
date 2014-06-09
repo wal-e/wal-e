@@ -46,6 +46,7 @@ import stat
 import tarfile
 import hashlib
 import StringIO
+import json
 
 from wal_e import log_help
 from wal_e import copyfileobj
@@ -143,7 +144,7 @@ class TarBadPathError(Exception):
 
 
 class ExtendedTarInfo(object):
-    __slots__ = ['submitted_path', 'arcname', 'type', 'size', 'hexdigest']
+    __slots__ = ['submitted_path', 'arcname', 'filetype', 'size', 'hexdigest']
 
     _file_type_labels = {
         stat.S_IFREG: 'REG',
@@ -166,14 +167,24 @@ class ExtendedTarInfo(object):
             statres = os.stat(submitted_path)
 
         ifmt = stat.S_IFMT(statres.st_mode)
-        self.type = self._file_type_labels.get(ifmt, '???')
+        self.filetype = self._file_type_labels.get(ifmt, '???')
+        self.size = statres.st_size
 
-        if stat.S_ISREG(statres.st_mode):
-            self.size = statres.st_size
+
+class ETI_Encoder (json.JSONEncoder):
+    def default(self, obj):
+        if (isinstance(obj, ExtendedTarInfo)):
+            retval = {
+                'name': obj.arcname,
+                'filetype': obj.filetype,
+            }
+            if obj.filetype == 'REG':
+                retval['size'] = obj.size
+            if hasattr(obj, 'hexdigest'):
+                retval['hexdigest'] = obj.hexdigest
+            return retval
         else:
-            self.size = 0
-
-        self.hexdigest = ''
+            return obj
 
 
 # 1.5 GiB is 1610612736 bytes, and Postgres allocates 1 GiB files as a
@@ -276,7 +287,7 @@ class TarPartition(list):
                     # We can only pad regular files
                     # XXX currently if a file type changes between
                     # partitioning and archiving we're boned
-                    assert et_info.type == 'REG'
+                    assert et_info.filetype == 'REG'
                     assert tarinfo.type == tarfile.REGTYPE
 
                     # Force the tarinfo to have the size we're going
@@ -396,16 +407,11 @@ class TarPartition(list):
         return sum(et_info.size for et_info in self)
 
     def format_manifest(self):
-        parts = []
-        for et_info in self:
-            logger.debug(
-                msg="manifest for entry:{0}".format(et_info.submitted_path),
-                detail="size={0:d} hexdigest={1}".format(et_info.size,
-                                                       et_info.hexdigest))
-            parts.append("{0}\t{1:d}\t{2}".format(et_info.arcname,
-                                                  et_info.size,
-                                                  et_info.hexdigest))
-        return '\n'.join(parts)
+        """
+        Return a JSON Manifest for the tar partition listing every file
+        in the tar file.
+        """
+        return ETI_Encoder().encode(self)
 
 
 def _segmentation_guts(root, file_paths, max_partition_size):

@@ -585,50 +585,66 @@ class Backup(object):
         retval = True
         nfiles = 0
         nbytes = 0
+        # XXX Ponder using ijson to check the checksums as the
+        # manifest is parsed to avoid having to load the entire
+        # manifest into a list of dicts (Yobukos can have pretty big
+        # lists)
         with open(manifest, 'r') as f:
-            for line in f:
-                name, size, hexdigest = line.split('\t', 3)
+            manifest_list = json.load(f)
+        for entry in manifest_list:
+            if 'name' in entry:
+                filename = os.path.join(base, entry['name'])
+            if 'filetype' in entry:
+                filetype = entry['filetype']
+            if 'size' in entry:
+                size = int(entry['size'])
+            if 'hexdigest' in entry:
+                hexdigest = entry['hexdigest'].strip()
 
-                filename = os.path.join(base, name)
-                size = int(size)
-                hexdigest = hexdigest.strip()
+            try:
+                statres = os.lstat(filename)
+            except OSError, e:
+                logger.warning('Could not verify {}: {}'
+                               ''.format(entry['name'], e.strerror))
+                retval = False
+                continue
 
-                try:
-                    statres = os.lstat(filename)
-                except OSError, e:
-                    logger.warning('Could not verify {}: {}'
-                                   ''.format(name, e.strerror))
-                    retval = False
-                    continue
+            if stat.S_ISDIR(statres.st_mode) and filetype == 'DIR':
+                nfiles += 1
+            elif stat.S_ISLNK(statres.st_mode) and filetype == 'LNK':
+                nfiles += 1
+            elif not stat.S_ISREG(statres.st_mode) and filetype != 'REG':
+                nfiles += 1
+                logger.debug('found odd file {filename}'
+                             '(filetype={filetype}, mode={mode}'.format(
+                                 filename=filename,
+                                 filetype=filetype,
+                                 mode=statres.st_mode))
+            elif not stat.S_ISREG(statres.st_mode):
+                retval = False
+                logger.warning('expected regular file of length {} '
+                               'instead found {} mode {:06o}'
+                               ''.format(size,
+                                         filename,
+                                         statres.st_mode))
 
-                if not stat.S_ISREG(statres.st_mode) and size == 0:
-                    nfiles += 1
-                    pass
-                elif not stat.S_ISREG(statres.st_mode):
-                    retval = False
-                    logger.warning('expected regular file of length {} '
-                                   'instead found {} mode {:06o}'
-                                   ''.format(size,
-                                             filename,
-                                             statres.st_mode))
+            elif statres.st_size != size:
+                retval = False
+                logger.warning('expected regular file of length {} '
+                               'instead found {} size {}'
+                               ''.format(size,
+                                         filename,
+                                         statres.st_size))
 
-                elif statres.st_size != size:
-                    retval = False
-                    logger.warning('expected regular file of length {} '
-                                   'instead found {} size {}'
-                                   ''.format(size,
-                                             filename,
-                                             statres.st_size))
-
-                elif (self.check_checksums
-                      and self._checksum_file(filename) != hexdigest):
-                    retval = False
-                    logger.warning('file {} checksum mismatch '
-                                   '(expected sha1 of {})'
-                                   ''.format(filename, hexdigest))
-                else:
-                    nfiles += 1
-                    nbytes += size
+            elif (self.check_checksums
+                  and self._checksum_file(filename) != hexdigest):
+                retval = False
+                logger.warning('file {} checksum mismatch '
+                               '(expected sha1 of {})'
+                               ''.format(filename, hexdigest))
+            else:
+                nfiles += 1
+                nbytes += size
         return (retval, nfiles, nbytes)
 
     def _checksum_file(self, filename):
