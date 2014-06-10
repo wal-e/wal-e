@@ -446,9 +446,8 @@ def partition(pg_cluster_dir):
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
         if is_cluster_toplevel and 'pg_xlog' in dirnames:
-            if 'pg_xlog' in dirnames:
-                dirnames.remove('pg_xlog')
-                matches.append(os.path.join(root, 'pg_xlog'))
+            dirnames.remove('pg_xlog')
+            matches.append(os.path.join(root, 'pg_xlog'))
 
         # Do not capture any TEMP Space files, although we do want to
         # capture the directory name or symlink
