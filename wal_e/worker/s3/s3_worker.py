@@ -51,6 +51,31 @@ class TarPartitionLister(object):
             else:
                 yield key_last_part
 
+class ManifestLister(object):
+    def __init__(self, s3_conn, layout, backup_info):
+        self.s3_conn = s3_conn
+        self.layout = layout
+        self.backup_info = backup_info
+
+    def __iter__(self):
+        prefix = self.layout.basebackup_manifest_directory(
+            self.backup_info)
+
+        bucket = get_bucket(self.s3_conn, self.layout.store_name())
+        for key in bucket.list(prefix=prefix):
+            url = 's3://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                                name=key.name)
+            key_last_part = key.name.rsplit('/', 1)[-1]
+            match = re.match(storage.MANIFEST_REGEXP, key_last_part)
+            if match is None:
+                logger.warning(
+                    msg='unexpected key found in tar volume directory',
+                    detail=('The unexpected key is stored at "{0}".'
+                            .format(url)),
+                    hint=generic_weird_key_hint_message)
+            else:
+                yield key_last_part
+
 
 class BackupFetcher(object):
     def __init__(self, s3_conn, layout, backup_info, local_root, decrypt):
@@ -76,6 +101,29 @@ class BackupFetcher(object):
         with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
             g = gevent.spawn(s3.write_and_return_error, key, pl.stdin)
             TarPartition.tarfile_extract(pl.stdout, self.local_root)
+
+            # Raise any exceptions guarded by write_and_return_error.
+            exc = g.get()
+            if exc is not None:
+                raise exc
+
+    @retry()
+    def fetch_manifest(self, partition_name):
+        part_abs_name = self.layout.basebackup_manifest(
+            self.backup_info, partition_name)
+
+        logger.info(
+            msg='beginning manifest download',
+            detail='The manifest being downloaded is {0}.'
+            .format(partition_name),
+            hint='The absolute S3 key is {0}.'.format(part_abs_name))
+
+        key = self.bucket.get_key(part_abs_name)
+        with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
+            g = gevent.spawn(s3.write_and_return_error, key, pl.stdin)
+            TarPartition.manifest_extract(pl.stdout, 
+                                          self.local_root, 
+                                          partition_name)
 
             # Raise any exceptions guarded by write_and_return_error.
             exc = g.get()

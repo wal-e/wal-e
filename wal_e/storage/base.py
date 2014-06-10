@@ -8,6 +8,7 @@ backed WAL-E prefix.
 
 """
 import collections
+import re
 
 import wal_e.exception
 
@@ -28,7 +29,7 @@ COMPLETE_BASE_BACKUP_REGEXP = (
     r'_(?P<offset>[0-9A-F]{8})_backup_stop_sentinel\.json')
 
 VOLUME_REGEXP = (r'part_(\d+)\.tar\.lzo')
-
+MANIFEST_REGEXP = (r'part_(\d+)\.json')
 
 # A representation of a log number and segment, naive of timeline.
 # This number always increases, even when diverging into two
@@ -288,13 +289,20 @@ class StorageLayout(object):
 
     def basebackup_tar_partition(self, backup_info, part_name):
         self._error_on_unexpected_version()
+        assert re.match(VOLUME_REGEXP, part_name)
         return (self.basebackup_tar_partition_directory(backup_info) +
                 part_name)
 
-    def basebackup_tar_manifest_directory(self, backup_info):
+    def basebackup_manifest_directory(self, backup_info):
         self._error_on_unexpected_version()
         return (self.basebackup_directory(backup_info) +
                 'manifests/')
+
+    def basebackup_manifest(self, backup_info, part_name):
+        self._error_on_unexpected_version()
+        assert re.match(MANIFEST_REGEXP, part_name)
+        return (self.basebackup_manifest_directory(backup_info) +
+                part_name)
 
     def wal_directory(self):
         return self._api_path_prefix + 'wal_' + self.VERSION + '/'

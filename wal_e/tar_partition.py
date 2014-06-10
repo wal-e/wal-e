@@ -363,6 +363,15 @@ class TarPartition(list):
         tar.close()
         _fsync_files(extracted_files)
 
+    @staticmethod
+    def manifest_extract(infile, dest_path, part_name):
+        filename = os.path.join(dest_path, 'WAL-E.TODO', part_name)
+        with open(outfile, 'w') as manifest:
+            buf = infile.read(4096)
+            while buf:
+                outfile.write(buf)
+                buf = infile.read(4096)
+
     def tarfile_write(self, fileobj):
         tar = None
         try:
