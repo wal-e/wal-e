@@ -168,14 +168,17 @@ class Backup(object):
         start_backup_info = None
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
+        if 'hot_standby' in kwargs:
+            hot_standby = kwargs.pop('hot_standby')
+        parse_control_data = hot_standby or while_offline
 
         try:
-            if not while_offline:
+            if not parse_control_data:
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
-                if os.path.exists(os.path.join(data_directory,
-                                               'postmaster.pid')):
+                if while_offline and os.path.exists(os.path.join(data_directory,
+                                                             'postmaster.pid')):
                     hint = ('Shut down postgres.  '
                             'If there is a stale lockfile, '
                             'then remove it after being very sure postgres '
@@ -202,10 +205,10 @@ class Backup(object):
                             'but we have to wait anyway.  '
                             'See README: TODO about pg_cancel_backup'))
 
-            if not while_offline:
+            if not parse_control_data:
                 stop_backup_info = PgBackupStatements.run_stop_backup()
             else:
-                stop_backup_info = start_backup_info
+                stop_backup_info = ctrl_data.last_xlog_file_name_and_offset()
             backup_stop_good = True
 
         # XXX: Ugly, this is more of a 'worker' task because it might
