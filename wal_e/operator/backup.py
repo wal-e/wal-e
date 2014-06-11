@@ -177,8 +177,8 @@ class Backup(object):
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
-                if while_offline and os.path.exists(os.path.join(data_directory,
-                                                             'postmaster.pid')):
+                postgres_pid = os.path.join(data_directory,'postmaster.pid')
+                if while_offline and os.path.exists(postgres_pid):
                     hint = ('Shut down postgres.  '
                             'If there is a stale lockfile, '
                             'then remove it after being very sure postgres '
@@ -187,6 +187,10 @@ class Backup(object):
                         msg='while_offline set, but pg looks to be running',
                         detail='Found a postmaster.pid lockfile, and aborting',
                         hint=hint)
+                if hot_standby and not PgBackupStatements.pg_is_in_recovery():
+                    raise UserException(
+                        msg='hot-standby set but pg looks to be a master',
+                        detail='pg was not in recovery mode, and aborting')
 
                 ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
@@ -208,7 +212,7 @@ class Backup(object):
             if not parse_control_data:
                 stop_backup_info = PgBackupStatements.run_stop_backup()
             else:
-                stop_backup_info = ctrl_data.last_xlog_file_name_and_offset()
+                stop_backup_info = start_backup_info
             backup_stop_good = True
 
         # XXX: Ugly, this is more of a 'worker' task because it might
