@@ -144,4 +144,4 @@ class PgBackupStatements(object):
         """
         is_hot_standby = cls._dict_transform(psql_csv_run(
                             'SELECT pg_is_in_recovery()'))
-        return is_hot_standby['pg_is_in_recovery']=='t'
+        return is_hot_standby['pg_is_in_recovery'] == 't'

@@ -177,7 +177,7 @@ class Backup(object):
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
-                postgres_pid = os.path.join(data_directory,'postmaster.pid')
+                postgres_pid = os.path.join(data_directory, 'postmaster.pid')
                 if while_offline and os.path.exists(postgres_pid):
                     hint = ('Shut down postgres.  '
                             'If there is a stale lockfile, '
