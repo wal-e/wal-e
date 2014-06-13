@@ -57,6 +57,7 @@ class BackupInfo(object):
     _fields = ['name',
                'last_modified',
                'expanded_size_bytes',
+               'number_of_partitions',
                'wal_segment_backup_start',
                'wal_segment_offset_backup_start',
                'wal_segment_backup_stop',

@@ -40,10 +40,12 @@ extraction.  This coupling between tarfiles makes the extraction
 process considerably more complicated.
 
 """
-import collections
 import errno
 import os
+import stat
 import tarfile
+import hashlib
+import StringIO
 
 from wal_e import log_help
 from wal_e import copyfileobj
@@ -68,28 +70,36 @@ class StreamPadFileObj(object):
     be returned.  Furthermore, if the underlying stream runs out of
     bytes, '\0' will be returned until the target size is reached.
 
+    It also calculates a checksum on the file which can be retrieved
+    later by calling the digest() method.
+
     """
 
     # Try to save space via __slots__ optimization: many of these can
     # be created on systems with many small files that are packed into
     # a tar partition, and memory blows up when instantiating the
     # tarfile instance full of these.
-    __slots__ = ('underlying_fp', 'target_size', 'pos')
+    __slots__ = ('underlying_fp', 'target_size', 'pos', 'digest')
 
     def __init__(self, underlying_fp, target_size):
         self.underlying_fp = underlying_fp
         self.target_size = target_size
         self.pos = 0
+        self.digest = hashlib.sha1()
 
     def read(self, size):
         max_readable = min(self.target_size - self.pos, size)
         ret = self.underlying_fp.read(max_readable)
+        self.digest.update(ret)
         lenret = len(ret)
         self.pos += lenret
         return ret + '\0' * (max_readable - lenret)
 
     def close(self):
         return self.underlying_fp.close()
+
+    def hexdigest(self):
+        return self.digest.hexdigest()
 
     def __enter__(self):
         return self
@@ -131,8 +141,40 @@ class TarBadPathError(Exception):
 
         Exception.__init__(self, *args, **kwargs)
 
-ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
-                                         'submitted_path tarinfo')
+
+class ExtendedTarInfo(object):
+    __slots__ = ['submitted_path', 'arcname', 'type', 'size', 'hexdigest']
+
+    _file_type_labels = {
+        stat.S_IFREG: 'REG',
+        stat.S_IFDIR: 'DIR',
+        stat.S_IFCHR: 'CHR',
+        stat.S_IFBLK: 'BLK',
+        stat.S_IFIFO: 'IFO',
+        stat.S_IFLNK: 'LNK',
+        stat.S_IFSOCK: 'SOCK'
+    }
+
+    def __init__(self, submitted_path, arcname):
+        self.submitted_path = submitted_path
+        self.arcname = arcname
+
+        # We always use tarfile in no-follow mode
+        if hasattr(os, "lstat"):
+            statres = os.lstat(submitted_path)
+        else:
+            statres = os.stat(submitted_path)
+
+        ifmt = stat.S_IFMT(statres.st_mode)
+        self.type = self._file_type_labels.get(ifmt, '???')
+
+        if stat.S_ISREG(statres.st_mode):
+            self.size = statres.st_size
+        else:
+            self.size = 0
+
+        self.hexdigest = ''
+
 
 # 1.5 GiB is 1610612736 bytes, and Postgres allocates 1 GiB files as a
 # nominal maximum.  This must be greater than that.
@@ -226,12 +268,28 @@ class TarPartition(list):
         list.__init__(self, *args, **kwargs)
 
     @staticmethod
-    def _padded_tar_add(tar, et_info):
+    def _padded_tar_add(tar, tarinfo, et_info):
         try:
             with open(et_info.submitted_path, 'rb') as raw_file:
                 with StreamPadFileObj(raw_file,
-                                      et_info.tarinfo.size) as f:
-                    tar.addfile(et_info.tarinfo, f)
+                                      et_info.size) as f:
+                    # We can only pad regular files
+                    # XXX currently if a file type changes between
+                    # partitioning and archiving we're boned
+                    assert et_info.type == 'REG'
+                    assert tarinfo.type == tarfile.REGTYPE
+
+                    # Force the tarinfo to have the size we're going
+                    # to pad/truncate to so the tar header is correct
+                    tarinfo.size = et_info.size
+
+                    # Now actually stream the file to the tarball
+                    # padding it or truncating it to the size in the
+                    # header
+                    tar.addfile(tarinfo, f)
+
+                    # store the checksum from streampadfileobj for the manifest
+                    et_info.hexdigest = f.hexdigest()
 
         except EnvironmentError, e:
             if (e.errno == errno.ENOENT and
@@ -301,12 +359,28 @@ class TarPartition(list):
                                bufsize=pipebuf.PIPE_BUF_BYTES)
 
             for et_info in self:
+                tarinfo = tar.gettarinfo(et_info.submitted_path,
+                                         et_info.arcname)
+
                 # Treat files specially because they may grow, shrink,
                 # or may be unlinked in the meanwhile.
-                if et_info.tarinfo.isfile():
-                    self._padded_tar_add(tar, et_info)
+                if tarinfo.isfile():
+                    self._padded_tar_add(tar, tarinfo, et_info)
+
                 else:
-                    tar.addfile(et_info.tarinfo)
+                    tar.addfile(tarinfo)
+
+            wale_dir = tarfile.TarInfo("WAL-E")
+            wale_dir.type = tarfile.DIRTYPE
+            wale_dir.mode = 0700
+            tar.addfile(wale_dir)
+
+            manifest_text = self.format_manifest().encode('utf-8')
+            manifest = tarfile.TarInfo(
+                "WAL-E/part_{number:08d}.manifest".format(number=self.name))
+            manifest.size = len(manifest_text)
+            tar.addfile(manifest, StringIO.StringIO(manifest_text))
+
         finally:
             if tar is not None:
                 tar.close()
@@ -319,15 +393,18 @@ class TarPartition(list):
         Expressed in bytes.
 
         """
-        return sum(et_info.tarinfo.size for et_info in self)
+        return sum(et_info.size for et_info in self)
 
     def format_manifest(self):
         parts = []
-        for tpart in self:
-            for et_info in tpart:
-                tarinfo = et_info.tarinfo
-                parts.append('\t'.join([tarinfo.name, tarinfo.size]))
-
+        for et_info in self:
+            logger.debug(
+                msg="manifest for entry:{0}".format(et_info.submitted_path),
+                detail="size={0:d} hexdigest={1}".format(et_info.size,
+                                                       et_info.hexdigest))
+            parts.append("{0}\t{1:d}\t{2}".format(et_info.arcname,
+                                                  et_info.size,
+                                                  et_info.hexdigest))
         return '\n'.join(parts)
 
 
@@ -345,81 +422,71 @@ def _segmentation_guts(root, file_paths, max_partition_size):
     if not os.path.isdir(root):
         raise TarBadRootError(root=root)
 
-    bogus_tar = None
+    # Bookkeeping for segmentation of tar members into partitions.
+    partition_number = 0
+    partition_bytes = 0
+    partition_members = 0
+    partition = TarPartition(partition_number)
 
-    try:
-        # Create a bogus TarFile as a contrivance to be able to run
-        # gettarinfo and produce such instances.  Some of the settings
-        # on the TarFile are important, like whether to de-reference
-        # symlinks.
-        bogus_tar = tarfile.TarFile(os.devnull, 'w', dereference=False)
+    for file_path in file_paths:
 
-        # Bookkeeping for segmentation of tar members into partitions.
-        partition_number = 0
-        partition_bytes = 0
-        partition_members = 0
-        partition = TarPartition(partition_number)
+        # Ensure tar members exist within a shared root before
+        # continuing.
+        if not file_path.startswith(root):
+            raise TarBadPathError(root=root, offensive_path=file_path)
 
-        for file_path in file_paths:
+        # Create an ExtendedTarInfo to represent the file
+        # information we need later such as the size and
+        # checksum. This will stat the file so so protect against
+        # the file being removed since the file_paths list was
+        # generated.
+        try:
+            arcname = file_path[len(root):]
+            et_info = ExtendedTarInfo(file_path, arcname)
 
-            # Ensure tar members exist within a shared root before
-            # continuing.
-            if not file_path.startswith(root):
-                raise TarBadPathError(root=root, offensive_path=file_path)
-
-            # Create an ExtendedTarInfo to represent the tarfile.
-            try:
-                et_info = ExtendedTarInfo(
-                    tarinfo=bogus_tar.gettarinfo(
-                        file_path, arcname=file_path[len(root):]),
-                    submitted_path=file_path)
-
-            except EnvironmentError, e:
-                if (e.errno == errno.ENOENT and
-                    e.filename == file_path):
-                    # log a NOTICE/INFO that the file was unlinked.
-                    # Ostensibly harmless (such unlinks should be replayed
-                    # in the WAL) but good to know.
-                    logger.debug(
-                        msg='tar member additions skipping an unlinked file',
-                        detail='Skipping {0}.'.format(et_info.submitted_path))
-                else:
-                    raise
-
-            # Ensure tar members are within an expected size before
-            # continuing.
-            if et_info.tarinfo.size > max_partition_size:
-                raise TarMemberTooBigError(
-                    et_info.tarinfo.name, max_partition_size,
-                    et_info.tarinfo.size)
-
-            if (partition_bytes + et_info.tarinfo.size >= max_partition_size
-                or partition_members >= PARTITION_MAX_MEMBERS):
-                # Partition is full and cannot accept another member,
-                # so yield the complete one to the caller.
-                yield partition
-
-                # Prepare a fresh partition to accrue additional file
-                # paths into.
-                partition_number += 1
-                partition_bytes = et_info.tarinfo.size
-                partition_members = 1
-                partition = TarPartition(
-                    partition_number, [et_info])
+        except EnvironmentError, e:
+            if (e.errno == errno.ENOENT and
+                e.filename == file_path):
+                # log a NOTICE/INFO that the file was unlinked.
+                # Ostensibly harmless (such unlinks should be replayed
+                # in the WAL) but good to know.
+                logger.debug(
+                    msg='tar member additions skipping an unlinked file',
+                    detail='Skipping {0}.'.format(et_info.submitted_path))
             else:
-                # Partition is able to accept this member, so just add
-                # it and increment the size counters.
-                partition_bytes += et_info.tarinfo.size
-                partition_members += 1
-                partition.append(et_info)
+                raise
 
-                # Partition size overflow must not to be possible
-                # here.
-                assert partition_bytes < max_partition_size
+        # Ensure tar members are within an expected size before
+        # continuing.
+        if et_info.size > max_partition_size:
+            raise TarMemberTooBigError(
+                et_info.submitted_path,
+                max_partition_size,
+                et_info.size)
 
-    finally:
-        if bogus_tar is not None:
-            bogus_tar.close()
+        if (partition_bytes + et_info.size >= max_partition_size
+            or partition_members >= PARTITION_MAX_MEMBERS):
+            # Partition is full and cannot accept another member,
+            # so yield the complete one to the caller.
+            yield partition
+
+            # Prepare a fresh partition to accrue additional file
+            # paths into.
+            partition_number += 1
+            partition_bytes = et_info.size
+            partition_members = 1
+            partition = TarPartition(
+                partition_number, [et_info])
+        else:
+            # Partition is able to accept this member, so just add
+            # it and increment the size counters.
+            partition_bytes += et_info.size
+            partition_members += 1
+            partition.append(et_info)
+
+            # Partition size overflow must not to be possible
+            # here.
+            assert partition_bytes < max_partition_size
 
     # Flush out the final partition should it be non-empty.
     if partition:
@@ -443,6 +510,13 @@ def partition(pg_cluster_dir):
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
+        # Do not capture any WAL-E meta information from an earlier
+        # restore (WAL-E renames this directory when it restores but
+        # just in case someone manually restored)
+        if is_cluster_toplevel and 'WAL-E' in dirnames:
+            dirnames.remove('WAL-E')
+            matches.append(os.path.join(root, 'WAL-E'))
+
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
         if is_cluster_toplevel and 'pg_xlog' in dirnames:
