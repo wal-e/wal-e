@@ -1,5 +1,8 @@
 import pytest
 import re
+import random
+import stat
+import os
 
 from blackbox import config
 from blackbox import noop_pg_backup_statements
@@ -68,6 +71,51 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
             assert unicode(filename) in fsynced_files
         elif filename.check(link=1):
             assert unicode(filename) not in fsynced_files
+
+    # verification should be successful
+    config.main('backup-verify', unicode(fetch_dir))
+
+    # But not if a file is missing
+    with pytest.raises(SystemExit):
+        verify_dir = tmpdir.join('missing-file')
+        fetch_dir.copy(verify_dir, True)
+        victim = random.choice(list(
+            verify_dir.visit(lambda f: stat.S_ISREG(f.lstat().mode),
+                             lambda f: not f.fnmatch("*/WAL-E.*"))))
+        print "Removing victim file {}\n".format(unicode(victim))
+        os.unlink(unicode(victim))
+        config.main('backup-verify', unicode(verify_dir))
+
+    # Or if a file is the wrong length
+    with pytest.raises(SystemExit):
+        verify_dir = tmpdir.join('resized-file')
+        fetch_dir.copy(verify_dir, True)
+        victim = random.choice(list(
+            verify_dir.visit(lambda f: stat.S_ISREG(f.lstat().mode),
+                             lambda f: not f.fnmatch("*/WAL-E.*"))))
+        print "Appending to victim file {}\n".format(unicode(victim))
+        with open(unicode(victim), 'ab') as fileobj:
+            fileobj.write('xyzzy')
+        config.main('backup-verify', unicode(verify_dir))
+
+    # By default checksums aren't being checked
+    verify_dir = tmpdir.join('checksum-mismatch')
+    fetch_dir.copy(verify_dir, True)
+    victim = random.choice(list(
+        verify_dir.visit(lambda f: (stat.S_ISREG(f.lstat().mode) and
+                                    f.size() > len('xyzzy')),
+                         lambda f: not f.fnmatch("*/WAL-E.*"))))
+    print "Overwriting victim file {} (size {})\n".format(unicode(victim),
+                                                          victim.size())
+    with open(unicode(victim), 'r+b') as fileobj:
+        # hopefully this string is not in our existing files
+        fileobj.seek(0, os.SEEK_SET)
+        fileobj.write('xyzzy')
+    config.main('backup-verify', unicode(verify_dir))
+
+    # But with --verify-checksums they are
+    with pytest.raises(SystemExit):
+        config.main('backup-verify', '--verify-checksums', unicode(verify_dir))
 
 
 def test_delete_everything(config, small_push_dir, noop_pg_backup_statements):

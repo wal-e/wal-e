@@ -45,7 +45,6 @@ import os
 import stat
 import tarfile
 import hashlib
-import StringIO
 import json
 
 from wal_e import log_help
@@ -364,9 +363,9 @@ class TarPartition(list):
         _fsync_files(extracted_files)
 
     @staticmethod
-    def manifest_extract(infile, dest_path, part_name):
-        filename = os.path.join(dest_path, 'WAL-E.TODO', part_name)
-        with open(outfile, 'w') as manifest:
+    def manifest_extract(infile, dest_path, part_name, wale_info_dir):
+        filename = os.path.join(dest_path, wale_info_dir, part_name)
+        with open(filename, 'w') as outfile:
             buf = infile.read(4096)
             while buf:
                 outfile.write(buf)
@@ -389,18 +388,6 @@ class TarPartition(list):
 
                 else:
                     tar.addfile(tarinfo)
-
-            wale_dir = tarfile.TarInfo("WAL-E")
-            wale_dir.type = tarfile.DIRTYPE
-            wale_dir.mode = 0700
-            tar.addfile(wale_dir)
-
-            manifest_text = self.format_manifest().encode('utf-8')
-            manifest = tarfile.TarInfo(
-                "WAL-E/part_{number:08d}.manifest".format(number=self.name))
-            manifest.size = len(manifest_text)
-            tar.addfile(manifest, StringIO.StringIO(manifest_text))
-
         finally:
             if tar is not None:
                 tar.close()
@@ -525,12 +512,6 @@ def partition(pg_cluster_dir):
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
-        # Do not capture any WAL-E meta information from an earlier
-        # restore (WAL-E renames this directory when it restores but
-        # just in case someone manually restored)
-        if is_cluster_toplevel and 'WAL-E' in dirnames:
-            dirnames.remove('WAL-E')
-            matches.append(os.path.join(root, 'WAL-E'))
 
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink

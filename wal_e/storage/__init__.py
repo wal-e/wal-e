@@ -6,6 +6,7 @@ from wal_e.storage.base import SEGMENT_READY_REGEXP
 from wal_e.storage.base import BASE_BACKUP_REGEXP
 from wal_e.storage.base import COMPLETE_BASE_BACKUP_REGEXP
 from wal_e.storage.base import VOLUME_REGEXP
+from wal_e.storage.base import MANIFEST_REGEXP
 from wal_e.storage.base import StorageLayout
 from wal_e.storage.base import get_backup_info
 from wal_e.storage.base import SegmentNumber
@@ -21,6 +22,7 @@ __all__ = [
     'BASE_BACKUP_REGEXP',
     'COMPLETE_BASE_BACKUP_REGEXP',
     'VOLUME_REGEXP',
+    'MANIFEST_REGEXP',
     'get_backup_info',
     'SegmentNumber',
 ]

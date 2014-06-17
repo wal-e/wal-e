@@ -43,7 +43,9 @@ class Backup(object):
         self.creds = creds
         self.gpg_key_id = gpg_key_id
         self.exceptions = []
-        self.check_checksums = True  # XXX
+        # XXX Default to not using checksums. Should the default be
+        # driven by cmd.py or elsewhere instead of here?
+        self.verify_checksums = False
 
     def new_connection(self):
         return self.cinfo.connect(self.creds)
@@ -130,6 +132,15 @@ class Backup(object):
             # use pg_cluster_dir as the resore prefix
             backup_info.spec['base_prefix'] = pg_cluster_dir
 
+        utc = datetime.utcnow().isoformat()
+        wale_info_dir = os.path.join(backup_info.spec['base_prefix'],
+                                     'WAL-E.{}'.format(utc))
+        try:
+            os.mkdir(wale_info_dir)
+        except OSError:
+            if not os.path.isdir(wale_info_dir):
+                raise
+
         if not blind_restore:
             self._verify_restore_paths(backup_info.spec)
 
@@ -138,6 +149,8 @@ class Backup(object):
             connections.append(self.new_connection())
 
         partition_iter = self.worker.TarPartitionLister(
+            connections[0], self.layout, backup_info)
+        manifest_iter = self.worker.ManifestLister(
             connections[0], self.layout, backup_info)
 
         assert len(connections) == pool_size
@@ -156,33 +169,27 @@ class Backup(object):
                 self._exception_gather_guard(
                     fetcher_cycle.next().fetch_partition),
                 part_name)
-
+        for part_name in manifest_iter:
+            p.spawn(
+                self._exception_gather_guard(
+                    fetcher_cycle.next().fetch_manifest),
+                part_name, wale_info_dir)
         p.join(raise_error=True)
 
-        utc = datetime.utcnow().isoformat()
-        wale_info_dir = os.path.join(backup_info.spec['base_prefix'],
-                                     'WAL-E')
-        wale_rest_dir = os.path.join(backup_info.spec['base_prefix'],
-                                     'WAL-E.{}'.format(utc))
-
-        if not os.path.exists(wale_info_dir):
-            logger.warning('WAL-E info directory not present in backup. '
-                           'Will not verify restore against manifest')
-            os.mkdir(wale_rest_dir)
-            self.check_checksums = False
-        else:
-            os.rename(wale_info_dir, wale_rest_dir)
-
-        with open(os.path.join(wale_rest_dir, 'restore.spec'), 'w') as f:
+        with open(os.path.join(wale_info_dir, 'restore.spec'), 'w') as f:
             json.dump(backup_info.spec, f)
 
-        logger.info('Verifying database against manifests')
+        logger.info('Verifying database against manifests from {}'.
+                    format(wale_info_dir))
         if self._database_verify(backup_info.spec['base_prefix'],
-                                 wale_rest_dir,
+                                 wale_info_dir,
                                  backup_info):
             logger.info('Restore succeeded and passed verification')
         else:
             logger.info('Restore finished but FAILED verification')
+            raise UserException(
+                msg='Verification of database failed',
+                detail='Check logs for details of discrepancies found')
 
     def database_verify(self, data_directory):
         """
@@ -214,6 +221,9 @@ class Backup(object):
         else:
             logger.info('Verification against manifests FAILED'
                         ''.format(wale_dir))
+            raise UserException(
+                msg='Verification of database failed',
+                detail='Check logs for details of discrepancies found')
 
     def _database_verify(self, data_directory, wale_dir, spec):
         """
@@ -226,7 +236,7 @@ class Backup(object):
         num_bytes_verified = 0
 
         for fname in os.listdir(wale_dir):
-            if not fname.endswith('.manifest'):
+            if not fname.endswith('.json'):
                 continue
             logger.debug('verifying manifest file {}'.format(fname))
             result, nfiles, nbytes = (
@@ -242,13 +252,12 @@ class Backup(object):
             spec.number_of_partitions > num_partitions_verified):
             logger.error('Only found {} out of {} manifest files to verify')
             retval = False
-        logger.info('Verified {} bytes in {} files from {} tar partitions '
-                    '{} checksums'
+        logger.info('Verified {} bytes in {} files from {} tar partitions ({})'
                     ''.format(num_bytes_verified,
                               num_files_verified,
                               num_partitions_verified,
-                              ('Using' if self.check_checksums
-                               else 'NOT using')))
+                              ('(using checksums)' if self.verify_checksums
+                               else '(NOT using checksums)')))
         return retval
 
     def database_backup(self, data_directory, *args, **kwargs):
@@ -701,7 +710,7 @@ class Backup(object):
                                          filename,
                                          statres.st_size))
 
-            elif (self.check_checksums
+            elif (self.verify_checksums
                   and self._checksum_file(filename) != hexdigest):
                 retval = False
                 logger.warning('file {} checksum mismatch '

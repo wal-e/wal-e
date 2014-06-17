@@ -280,10 +280,10 @@ def build_parser():
         'backup-verify', help='verify an already-restored backup',
         parents=[backup_fetchpush_parent])
     backup_verify_parser.add_argument(
-        '--no-verify-checksums',
-        help=('Skip verifying checksums of restored files. '
-              'Verify only the size and existence of restored files'),
-        dest='no_verify_checksums',
+        '--verify-checksums',
+        help=('Verify checksums of restored files. '
+              '(by default wal-e verifies only the size of restored files'),
+        dest='verify_checksums',
         action='store_true',
         default=False)
 
@@ -313,10 +313,10 @@ def build_parser():
         type=str,
         default=None)
     backup_fetch_parser.add_argument(
-        '--no-verify-checksums',
-        help=('Skip verifying checksums of restored files. '
-              'Verify only the size and existence of restored files'),
-        dest='no_verify_checksums',
+        '--verify-checksums',
+        help=('Verify checksums of restored files. '
+              '(by default wal-e verifies only the size of restored files'),
+        dest='verify_checksums',
         action='store_true',
         default=False)
 
@@ -560,8 +560,8 @@ def main():
             monkeypatch_tarfile_copyfileobj()
 
             external_program_check([LZOP_BIN])
-            if args.no_verify_checksums:
-                backup_cxt.check_checksums = False
+            if args.verify_checksums:
+                backup_cxt.verify_checksums = True
             backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
@@ -569,8 +569,8 @@ def main():
                 restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
         elif subcommand == 'backup-verify':
-            if args.no_verify_checksums:
-                backup_cxt.check_checksums = False
+            if args.verify_checksums:
+                backup_cxt.verify_checksums = True
             backup_cxt.database_verify(args.PG_CLUSTER_DIRECTORY)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)

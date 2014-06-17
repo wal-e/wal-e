@@ -51,6 +51,7 @@ class TarPartitionLister(object):
             else:
                 yield key_last_part
 
+
 class ManifestLister(object):
     def __init__(self, s3_conn, layout, backup_info):
         self.s3_conn = s3_conn
@@ -108,7 +109,7 @@ class BackupFetcher(object):
                 raise exc
 
     @retry()
-    def fetch_manifest(self, partition_name):
+    def fetch_manifest(self, partition_name, wale_info_dir):
         part_abs_name = self.layout.basebackup_manifest(
             self.backup_info, partition_name)
 
@@ -119,11 +120,14 @@ class BackupFetcher(object):
             hint='The absolute S3 key is {0}.'.format(part_abs_name))
 
         key = self.bucket.get_key(part_abs_name)
-        with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
+        with get_download_pipeline(PIPE, PIPE,
+                                   gpg=self.decrypt,
+                                   lzop=False) as pl:
             g = gevent.spawn(s3.write_and_return_error, key, pl.stdin)
-            TarPartition.manifest_extract(pl.stdout, 
-                                          self.local_root, 
-                                          partition_name)
+            TarPartition.manifest_extract(pl.stdout,
+                                          self.local_root,
+                                          partition_name,
+                                          wale_info_dir)
 
             # Raise any exceptions guarded by write_and_return_error.
             exc = g.get()

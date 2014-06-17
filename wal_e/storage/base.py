@@ -30,6 +30,8 @@ COMPLETE_BASE_BACKUP_REGEXP = (
 
 VOLUME_REGEXP = (r'part_(\d+)\.tar\.lzo')
 MANIFEST_REGEXP = (r'part_(\d+)\.json')
+MANIFEST_FORMAT = 'part_{}.json'
+
 
 # A representation of a log number and segment, naive of timeline.
 # This number always increases, even when diverging into two
@@ -300,6 +302,9 @@ class StorageLayout(object):
 
     def basebackup_manifest(self, backup_info, part_name):
         self._error_on_unexpected_version()
+        match = re.match(VOLUME_REGEXP, part_name)
+        if (match):
+            part_name = MANIFEST_FORMAT.format(match.group(1))
         assert re.match(MANIFEST_REGEXP, part_name)
         return (self.basebackup_manifest_directory(backup_info) +
                 part_name)
