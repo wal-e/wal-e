@@ -150,6 +150,9 @@ class BackupInfo(object):
     def load_detail(self, conn):
         raise NotImplementedError()
 
+    def details(self):
+        return ({k: getattr(self, k) for k in self._fields})
+
 
 class StorageLayout(object):
     """

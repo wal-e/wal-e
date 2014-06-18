@@ -1,5 +1,4 @@
 import pytest
-import re
 import random
 import stat
 import os
@@ -64,9 +63,8 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
     assert fetch_dir.join('arbitrary-file').read() == \
         small_push_dir.join('arbitrary-file').read()
 
-    for filename in fetch_dir.listdir():
-        if re.search("/WAL-E.", unicode(filename)):
-            continue
+    for filename in fetch_dir.visit(lambda f: not f.fnmatch(".wal-e"),
+                                    lambda f: not f.fnmatch(".wal-e")):
         if filename.check(link=0):
             assert unicode(filename) in fsynced_files
         elif filename.check(link=1):
@@ -81,7 +79,7 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
         fetch_dir.copy(verify_dir, True)
         victim = random.choice(list(
             verify_dir.visit(lambda f: stat.S_ISREG(f.lstat().mode),
-                             lambda f: not f.fnmatch("*/WAL-E.*"))))
+                             lambda f: not f.fnmatch(".wal-e"))))
         print "Removing victim file {}\n".format(unicode(victim))
         os.unlink(unicode(victim))
         config.main('backup-verify', unicode(verify_dir))
@@ -92,7 +90,7 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
         fetch_dir.copy(verify_dir, True)
         victim = random.choice(list(
             verify_dir.visit(lambda f: stat.S_ISREG(f.lstat().mode),
-                             lambda f: not f.fnmatch("*/WAL-E.*"))))
+                             lambda f: not f.fnmatch(".wal-e"))))
         print "Appending to victim file {}\n".format(unicode(victim))
         with open(unicode(victim), 'ab') as fileobj:
             fileobj.write('xyzzy')
@@ -104,7 +102,7 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
     victim = random.choice(list(
         verify_dir.visit(lambda f: (stat.S_ISREG(f.lstat().mode) and
                                     f.size() > len('xyzzy')),
-                         lambda f: not f.fnmatch("*/WAL-E.*"))))
+                         lambda f: not f.fnmatch(".wal-e"))))
     print "Overwriting victim file {} (size {})\n".format(unicode(victim),
                                                           victim.size())
     with open(unicode(victim), 'r+b') as fileobj:

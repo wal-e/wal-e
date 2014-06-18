@@ -1,6 +1,5 @@
 import sys
 import os
-from datetime import datetime
 import json
 import functools
 import gevent
@@ -132,13 +131,11 @@ class Backup(object):
             # use pg_cluster_dir as the resore prefix
             backup_info.spec['base_prefix'] = pg_cluster_dir
 
-        utc = datetime.utcnow().isoformat()
-        wale_info_dir = os.path.join(backup_info.spec['base_prefix'],
-                                     'WAL-E.{}'.format(utc))
+        manifests_dir = self._manifests_dir(pg_cluster_dir)
         try:
-            os.mkdir(wale_info_dir)
+            os.makedirs(manifests_dir)
         except OSError:
-            if not os.path.isdir(wale_info_dir):
+            if not os.path.isdir(manifests_dir):
                 raise
 
         if not blind_restore:
@@ -173,16 +170,21 @@ class Backup(object):
             p.spawn(
                 self._exception_gather_guard(
                     fetcher_cycle.next().fetch_manifest),
-                part_name, wale_info_dir)
+                part_name, manifests_dir)
         p.join(raise_error=True)
 
-        with open(os.path.join(wale_info_dir, 'restore.spec'), 'w') as f:
-            json.dump(backup_info.spec, f)
+        with open(os.path.join(pg_cluster_dir,
+                               '.wal-e', 'restore-spec.json'), 'w') as f:
+            json.dump(backup_info.spec, f, indent=4)
+
+        with open(os.path.join(pg_cluster_dir,
+                               '.wal-e', 'backup-info.json'), 'w') as f:
+            json.dump(backup_info.details(), f, indent=4)
 
         logger.info('Verifying database against manifests from {}'.
-                    format(wale_info_dir))
+                    format(manifests_dir))
         if self._database_verify(backup_info.spec['base_prefix'],
-                                 wale_info_dir,
+                                 manifests_dir,
                                  backup_info):
             logger.info('Restore succeeded and passed verification')
         else:
@@ -198,34 +200,30 @@ class Backup(object):
         works immediately after restore before any database recovery
         of course.
         """
-        wale_dir = ''
-        for dirname in os.listdir(data_directory):
-            if (dirname.startswith('WAL-E.')
-                and dirname > wale_dir):
-                wale_dir = os.path.join(data_directory, dirname)
+        manifests_dir = self._manifests_dir(data_directory)
 
-        if (wale_dir == ''):
+        if not os.path.isdir(manifests_dir):
             raise UserException(
                 msg='Did not find a valid WAL-E restore information',
-                detail='Expected to find a directory named WAL-E.<timestamp>')
+                detail='Expected to find a directory named .wal-e/restore_info'
+            )
 
         logger.info('Verifying database against manifests from {}'
-                    ''.format(wale_dir))
+                    ''.format(manifests_dir))
 
-        with open(os.path.join(wale_dir, 'restore.spec'), 'r') as f:
+        with open(os.path.join(data_directory,
+                               '.wal-e', 'restore-spec.json'), 'r') as f:
             spec = json.load(f)
 
-        if self._database_verify(data_directory, wale_dir, spec):
-            logger.info('Verification against manifests passed'
-                        ''.format(wale_dir))
+        if self._database_verify(data_directory, manifests_dir, spec):
+            logger.info('Verification against manifests passed')
         else:
-            logger.info('Verification against manifests FAILED'
-                        ''.format(wale_dir))
+            logger.info('Verification against manifests FAILED')
             raise UserException(
                 msg='Verification of database failed',
                 detail='Check logs for details of discrepancies found')
 
-    def _database_verify(self, data_directory, wale_dir, spec):
+    def _database_verify(self, data_directory, manifests_dir, spec):
         """
         Common code for restore and verify that does the actual
         verification for the given directory and wale info dir.
@@ -235,13 +233,11 @@ class Backup(object):
         num_files_verified = 0
         num_bytes_verified = 0
 
-        for fname in os.listdir(wale_dir):
-            if not fname.endswith('.json'):
-                continue
+        for fname in os.listdir(manifests_dir):
             logger.debug('verifying manifest file {}'.format(fname))
             result, nfiles, nbytes = (
                 self._verify_manifest(data_directory,
-                                      os.path.join(wale_dir, fname)))
+                                      os.path.join(manifests_dir, fname)))
             if not result:
                 retval = False
             num_partitions_verified += 1
@@ -728,6 +724,9 @@ class Backup(object):
             for chunk in iter(lambda: f.read(8192), b''):
                 sha1.update(chunk)
         return sha1.hexdigest()
+
+    def _manifests_dir(self, data_directory):
+        return os.path.join(data_directory, '.wal-e', 'manifests')
 
 
 def start_prefetches(seg, pd, how_many):
