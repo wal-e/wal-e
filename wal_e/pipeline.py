@@ -15,13 +15,14 @@ CAT_BIN = 'cat'
 
 
 def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
-                        gpg_key=None):
+                        gpg_key=None, lzop=True):
     """ Create a UNIX pipeline to process a file for uploading.
         (Compress, and optionally encrypt) """
     commands = []
     if rate_limit is not None:
         commands.append(PipeViewerRateLimitFilter(rate_limit))
-    commands.append(LZOCompressionFilter())
+    if lzop:
+        commands.append(LZOCompressionFilter())
 
     if gpg_key is not None:
         commands.append(GPGEncryptionFilter(gpg_key))
@@ -29,14 +30,14 @@ def get_upload_pipeline(in_fd, out_fd, rate_limit=None,
     return Pipeline(commands, in_fd, out_fd)
 
 
-def get_download_pipeline(in_fd, out_fd, gpg=False):
+def get_download_pipeline(in_fd, out_fd, gpg=False, lzop=True):
     """ Create a pipeline to process a file after downloading.
         (Optionally decrypt, then decompress) """
     commands = []
     if gpg:
         commands.append(GPGDecryptionFilter())
-    commands.append(LZODecompressionFilter())
-
+    if lzop:
+        commands.append(LZODecompressionFilter())
     return Pipeline(commands, in_fd, out_fd)
 
 
@@ -58,6 +59,13 @@ class Pipeline(object):
         self._abort = True
 
     def __enter__(self):
+
+        # Quick hack and possibly the best thing to do anyways since
+        # if we avoid the whole pipeline the whole behaviour changes
+        # dramatically.
+        if len(self.commands) == 0:
+            self.commands.append(CatFilter())
+
         # Teach the first command to take input specially
         self.commands[0].stdinSet = self.in_fd
         last_command = self.commands[0]

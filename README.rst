@@ -23,6 +23,7 @@ WAL-E has four critical operators:
 
 * backup-fetch
 * backup-push
+* backup-verify
 * wal-fetch
 * wal-push
 
@@ -323,6 +324,27 @@ and symlink it appropriately in ``${PG_CLUSTER_DIRECTORY}/pg_tblspc``.
    ``"link"`` properties of tablespaces in the restore specification
    must contain the ``pg_tblspc`` prefix, it will not be added for you.
 
+
+Verification Steps
+------------------
+
+When backup-push runs it generates "manifest" files which list the
+files, sizes, and checksums. By default backup-fetch will verify all
+expected files exist and are the correct size after finishing a
+restore.
+
+To verify the checksum pass the additional argument
+``--verify-checksums``. This requires re-reading all files after
+having written them out.
+
+The manifest files will be present in a directory named ``WAL-E.<utc
+timestamp>`` and will be included in future backups which can be
+useful for determining the ancestry of a database which has undergone
+multiple backup/restore cycles. These files are not needed by WAL-E
+after the restore finishes. If the historical information is not
+needed they can be cleaned up (except see the ``wal-e backup-verify``
+command below).
+
 Auxiliary Commands
 ------------------
 
@@ -334,6 +356,19 @@ operators for taking and restoring backups (``backup-push``,
 database machine, these commands can be productively run from any
 computer with the appropriate _PREFIX set and the necessary credentials to
 manipulate or read data there.
+
+
+backup-verify
+''''''''''''
+
+backup-verify can be run to recheck the restore against the manifest
+files from the most recent ``WAL-E.<utc timestamp>`` directory. This
+will only succeed if it is run *before* the database has been started
+up. Once the database has been started up there will certainly be
+discrepancies.
+
+This command supports the ``--verify-checksums`` option like
+backup-fetch.
 
 
 backup-list

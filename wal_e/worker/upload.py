@@ -4,6 +4,7 @@ import time
 
 import boto.exception
 
+from cStringIO import StringIO
 from wal_e import log_help
 from wal_e import pipebuf
 from wal_e import pipeline
@@ -85,6 +86,10 @@ class PartitionUploader(object):
             url = '{0}/tar_partitions/part_{number:08d}.tar.lzo'.format(
                 self.backup_prefix.rstrip('/'), number=tpart.name)
 
+            manifest_file = StringIO(tpart.format_manifest())
+            manifest_url = '{0}/manifests/part_{number:08d}.json'.format(
+                self.backup_prefix.rstrip('/'), number=tpart.name)
+
             logger.info(msg='begin uploading a base backup volume',
                         detail='Uploading to "{url}".'.format(url=url))
 
@@ -120,18 +125,19 @@ class PartitionUploader(object):
                     raise typ, value, tb
 
             @retry(retry_with_count(log_volume_failures_on_error))
-            def put_file_helper():
-                tf.seek(0)
-                return self.blobstore.uri_put_file(self.creds, url, tf)
+            def put_file_helper(_creds, _url, _file):
+                _file.seek(0)
+                return self.blobstore.uri_put_file(_creds, _url, _file)
 
             # Actually do work, retrying if necessary, and timing how long
             # it takes.
             clock_start = time.time()
-            k = put_file_helper()
+            k = put_file_helper(self.creds, url, tf)
+            k2 = put_file_helper(self.creds, manifest_url, manifest_file)
             clock_finish = time.time()
 
             kib_per_second = format_kib_per_second(clock_start, clock_finish,
-                                                   k.size)
+                                                   k.size + k2.size)
             logger.info(
                 msg='finish uploading a base backup volume',
                 detail=('Uploading to "{url}" complete at '
