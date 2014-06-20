@@ -249,7 +249,7 @@ Primary Commands
 ``backup-push``, ``backup-fetch``, ``wal-push``, ``wal-fetch`` represent
 the primary functionality of WAL-E and must reside on the database machine.
 Unlike ``wal-push`` and ``wal-fetch`` commands, which function as described
-above, the``backup-push`` and ``backup-fetch`` require a little additional
+above, the ``backup-push`` and ``backup-fetch`` require a little additional
 explanation.
 
 backup-push
@@ -275,8 +275,7 @@ User Defined Tablespaces Existed in Backup
 ******************************************
 
 If the archived database *did* contain user defined tablespaces at the
-time of backup you there are specific behaviors of WAL-E you must be
-aware of:
+time of backup there are specific behaviors of WAL-E you must be aware of:
 
 User-directed Restore
 """""""""""""""""""""
