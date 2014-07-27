@@ -78,7 +78,7 @@ def configure(*args, **kwargs):
         # Add syslog output.
         HANDLERS.append(logging.handlers.SysLogHandler(syslog_address))
     except EnvironmentError, e:
-        if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
+        if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
             message = ('wal-e: Could not set up syslog, '
                        'continuing anyway.  '
                        'Reason: {0}').format(errno.errorcode[e.errno])
