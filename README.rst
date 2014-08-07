@@ -617,8 +617,8 @@ communicate with AWS S3, one might run tox_ like this::
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
 invocation.  This ``-n 8`` is after a ``--`` that indicates to tox_
-that the subsequent arguments are for the underlying test program, not
-tox_ itself.
+that the subsequent arguments are for the underlying test program
+pytest_.
 
 This is to enable parallel test execution, which makes the integration
 tests complete a small fraction of the time it would take otherwise.
