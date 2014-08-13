@@ -1,4 +1,5 @@
 import boto
+import os
 
 from boto import s3
 from boto.s3 import connection
@@ -88,6 +89,11 @@ def _connect_secureish(*args, **kwargs):
         kwargs['validate_certs'] = True
 
     kwargs['is_secure'] = True
+    
+    # implement s3 host override
+    host = os.getenv('S3_HOST')
+    if host is not None:
+        kwargs['host'] = host
 
     return connection.S3Connection(*args, **kwargs)
 
