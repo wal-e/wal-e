@@ -78,7 +78,7 @@ Dependencies
 * psql (>= 8.4)
 * pv
 
-This software also has Python dependencies; installing with setup.py
+This software also has Python dependencies: installing with ``pip``
 will attempt to resolve them:
 
 * gevent>=0.13.1
