@@ -9,12 +9,15 @@ PostgreSQL WAL files and base backups.
 
 To correspond on using WAL-E or to collaborate on its development, do
 not hesitate to send mail to the mailing list at
-wal-e@googlegroups.com.  Github issues are also currently being used
-to track known problems, so please feel free to submit those.
+wal-e@googlegroups.com (`archives and subscription settings`_).
+Github issues are also currently being used to track known problems,
+so please feel free to submit those.
 
 
 .. contents:: Table of Contents
 
+.. _archives and subscription settings:
+   https://groups.google.com/forum/#!forum/wal-e
 
 Primary Commands and Concepts
 -----------------------------
