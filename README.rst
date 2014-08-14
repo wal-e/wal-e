@@ -19,23 +19,23 @@ so please feel free to submit those.
 .. _archives and subscription settings:
    https://groups.google.com/forum/#!forum/wal-e
 
-Primary Commands and Concepts
------------------------------
+Primary Commands
+----------------
 
-WAL-E has four critical operators:
+WAL-E has four key commands:
 
 * backup-fetch
 * backup-push
 * wal-fetch
 * wal-push
 
-Of these, the "push" operators send things to storage and "fetch"
-operators get things from storage.  "wal" operators send/get write ahead
-log, and "backup" send/get a hot backup of the base database that WAL
-segments can be applied to.
+Of these, the "push" operators send backup data to storage and "fetch"
+operators get backup data from storage.  "wal" operators send/get
+write ahead log, and "backup" send/get a hot backup of the base
+database that WAL segments can be applied to.
 
-All of these operators work in a context of three important
-environment-variable based settings:
+All of these operators work in a context of three environment-variable
+based settings:
 
 * AWS_ACCESS_KEY_ID or WABS_ACCOUNT_NAME
 * AWS_SECRET_ACCESS_KEY or WABS_ACCESS_KEY
