@@ -553,6 +553,15 @@ Quieter Logging
 To restrict log statements to warnings and errors, use the ``--terse``
 option. This is supported on all WAL-E operations.
 
+WAL-E supports logging configuration with following env vars
+
+* WALE_LOG_DESTINATION comma separated values, **syslog** and
+  **stderr** are supported
+* WALE_SYSLOG_FACILITY as describe in `Python SyslogHandler`_
+
+.. _Python SyslogHandler:
+  https://docs.python.org/2/library/logging.handlers.html#sysloghandler
+
 Increasing throughput of wal_push
 '''''''''''''''''''''''''''''''''
 
