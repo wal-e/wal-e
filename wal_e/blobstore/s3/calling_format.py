@@ -1,7 +1,10 @@
 import boto
+import os
+import re
 
 from boto import s3
 from boto.s3 import connection
+from boto.s3.connection import OrdinaryCallingFormat, SubdomainCallingFormat, VHostCallingFormat
 from wal_e import log_help
 
 logger = log_help.WalELogger(__name__)
@@ -127,6 +130,39 @@ class CallingInfo(object):
                 provider=creds,
                 calling_format=self.calling_format(),
                 **kwargs)
+
+        # If S3_IMPLEMENTATION is set, we override some defaults and return
+        # the connection early.
+        # S3_IMPLEMENTATION should look like <protocol>+<calling_format>://[user:pass]@<host>[:port]
+        # https+virtualhost://user:pass@localhost:1235
+        implementation = os.getenv('S3_IMPLEMENTATION')
+        if implementation is not None:
+            p = re.compile('(?P<protocol>http|https)\+(?P<format>virtualhost|path|subdomain)://(?P<auth>[a-zA-Z0-9]*[:]?[a-zA-Z0-9]*@)?(?P<host>[-\.a-zA-Z0-9]+)(?P<port>:[0-9]*)?')
+            m = p.match(implementation)
+
+            opts = {}
+
+            if m.group('protocol') == 'http':
+                opts['is_secure'] = False
+            else:
+                opts['is_secure'] = True
+
+            if m.group('format') == 'virtualhost':
+                opts['calling_format'] = VHostCallingFormat()
+            elif m.group('format') == 'path':
+                opts['calling_format'] = OrdinaryCallingFormat()
+            elif m.group('format') == 'subdomain':
+                opts['calling_format'] = SubdomainCallingFormat()
+
+            opts['host'] = m.group('host')
+
+            if m.group('port') is not None:
+                opts['port'] = int(m.group('port').replace(':',''))
+
+            #if m.group('auth') is not None:
+                # Not yet supported
+
+            return connection.S3Connection(**opts)
 
         # Check if subdomain format compatible; no need to go through
         # any region detection mumbo-jumbo of any kind.
