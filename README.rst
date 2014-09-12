@@ -587,6 +587,31 @@ Instance profiles may *not* be preferred in more complex scenarios
 when one has multiple AWS IAM policies written for multiple programs
 run on an instance, or an existing key management infrastructure.
 
+Manually specifying the S3 Endpoint
+'''''''''''''''''''''''''''''''''''
+
+If one wishes to target WAL-E against an alternate S3 endpoint
+(e.g. Ceph RADOS), one can set the ``WALE_S3_ENDPOINT`` environment
+variable.  This can also be used take fine-grained control over
+endpoints and calling conventions with AWS.
+
+The format is that of::
+
+  protocol+convention://hostname:port
+
+Where valid protocols are ``http`` and ``https``, and conventions are
+``path``, ``virtualhost``, and ``subdomain``.
+
+Example::
+
+  # Turns off encryption and specifies us-west-1 endpoint.
+  WALE_S3_ENDPOINT=http+path://s3-us-west-1.amazonaws.com:80
+
+  # For radosgw.
+  WALE_S3_ENDPOINT=http+path://hostname
+
+  # As seen when using Deis, which uses radosgw.
+  WALE_S3_ENDPOINT=http+path://deis-store-gateway:8888
 
 Development
 -----------

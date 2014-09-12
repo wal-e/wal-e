@@ -43,6 +43,17 @@ class AwsTestConfig(object):
         return cmd.main()
 
 
+class AwsTestConfigSetImpl(AwsTestConfig):
+    name = 'aws+impl'
+
+    # The same as AwsTestConfig but with a WALE_S3_ENDPOINT override.
+    def patch(self, test_name, default_test_bucket):
+        self.monkeypatch.setenv(
+            'WALE_S3_ENDPOINT',
+            'http+path://s3-us-west-1.amazonaws.com:80')
+        return AwsTestConfig.patch(self, test_name, default_test_bucket)
+
+
 class AwsInstanceProfileTestConfig(object):
     name = 'aws+instance-profile'
 
@@ -114,6 +125,7 @@ def _make_fixture_param_and_ids():
 
     if not s3_integration_help.no_real_s3_credentials():
         _add_config(AwsTestConfig)
+        _add_config(AwsTestConfigSetImpl)
         _add_config(AwsInstanceProfileTestConfig)
 
     return ret
