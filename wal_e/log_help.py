@@ -115,9 +115,9 @@ def get_syslog_facility():
     facil = os.getenv('WALE_SYSLOG_FACILITY') or 'user'
 
     try:
-        facility = SysLogHandler.facility_names[facil]
+        facility = logging.handlers.SysLogHandler.facility_names[facil]
     except KeyError:
-        facility = SysLogHandler.LOG_USER
+        facility = logging.handlers.SysLogHandler.LOG_USER
 
     return facility
 
