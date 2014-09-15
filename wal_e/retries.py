@@ -1,13 +1,12 @@
 import functools
-import logging
 import sys
 import traceback
 
 import gevent
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+logger = log_help.WalELogger(__name__)
 
 
 def generic_exception_processor(exc_tup, **kwargs):
@@ -57,13 +56,13 @@ def retry(exception_processor=generic_exception_processor):
 
             while True:
                 # Avoid livelocks while spinning on retry by yielding.
-                gevent.sleep(0)
+                gevent.sleep(0.1)
 
                 try:
                     return f(*args, **kwargs)
                 except KeyboardInterrupt:
                     raise
-                except StandardError:
+                except:
                     exception_info_tuple = None
 
                     try:

@@ -3,10 +3,10 @@ import os
 import re
 import traceback
 
-from gevent import queue
 from os import path
+from wal_e import channel
+from wal_e import storage
 from wal_e.exception import UserCritical
-from wal_e.storage import s3_storage
 
 
 class WalSegment(object):
@@ -14,6 +14,18 @@ class WalSegment(object):
         self.path = seg_path
         self.explicit = explicit
         self.name = path.basename(self.path)
+
+        # If possible, extract TLI and SegmentNumber information.
+        # Cases where this is not possible include a .history file.
+        self.tli = None
+        self.segment_number = None
+        match = re.match(storage.SEGMENT_REGEXP, self.name)
+
+        if match is not None:
+            gd = match.groupdict()
+            self.tli = gd['tli']
+            self.segment_number = storage.SegmentNumber(log=gd['log'],
+                                                        seg=gd['seg'])
 
     def mark_done(self):
         """Mark the archive status of this segment as 'done'.
@@ -46,7 +58,7 @@ class WalSegment(object):
             done_metadata = path.join(status_dir, self.name + '.done')
 
             os.rename(ready_metadata, done_metadata)
-        except StandardError:
+        except:
             raise UserCritical(
                 msg='problem moving .ready archive status to .done',
                 detail='Traceback is: {0}'.format(traceback.format_exc()),
@@ -66,13 +78,28 @@ class WalSegment(object):
             # more likely to change than that of the WAL segments,
             # which are bulky and situated in a particular place for
             # crash recovery.
-            match = re.match(s3_storage.SEGMENT_READY_REGEXP, status)
+            match = re.match(storage.SEGMENT_READY_REGEXP, status)
 
             if match:
                 seg_name = match.groupdict()['filename']
                 seg_path = path.join(xlog_dir, seg_name)
 
                 yield WalSegment(seg_path, explicit=False)
+
+    def future_segment_stream(self):
+        sn = self.segment_number
+
+        if sn is None:
+            # Can't project from this 'segment'; it's probably
+            # actually a .history file or something like that.
+            return
+
+        while True:
+            sn = sn.next_larger()
+            segment = self.__class__(
+                path.join(path.dirname(self.path),
+                          self.tli + sn.log + sn.seg))
+            yield segment
 
 
 class WalTransferGroup(object):
@@ -87,9 +114,18 @@ class WalTransferGroup(object):
         self.transferer = transferer
 
         # Synchronization and tasks
-        self.wait_change = queue.Queue(maxsize=0)
+        self.wait_change = channel.Channel()
         self.expect = 0
         self.closed = False
+
+        # Maintain a list of running greenlets for gevent.killall.
+        #
+        # Abrupt termination of WAL-E (e.g. calling exit, as seen with
+        # a propagated error) will not result in clean-ups
+        # (e.g. 'finally' clauses) being run, so it's necessary to
+        # retain the greenlets, inject asynchronous exceptions, and
+        # then wait on termination.
+        self.greenlets = set([])
 
     def join(self):
         """Wait for transfer to exit, raising errors as necessary."""
@@ -100,6 +136,15 @@ class WalTransferGroup(object):
             self.expect -= 1
 
             if val is not None:
+                # Kill all the running greenlets, waiting for them to
+                # clean up and exit.
+                #
+                # As a fail-safe against indefinite blocking of
+                # gevent.killall, time out after a liberal amount of
+                # time.  This is not expected to ever occur except for
+                # bugs and very dire situations, so do not take pains
+                # to convert it into a UserException or anything.
+                gevent.killall(list(self.greenlets), block=True, timeout=60)
                 raise val
 
     def start(self, segment):
@@ -111,6 +156,7 @@ class WalTransferGroup(object):
 
         g = gevent.Greenlet(self.transferer, segment)
         g.link(self._complete_execution)
+        self.greenlets.add(g)
 
         # Increment .expect before starting the greenlet, or else a
         # very unlucky .join could be fooled as to when pool is
@@ -128,6 +174,7 @@ class WalTransferGroup(object):
         # exception, if any, to fail the entire transfer in event of
         # trouble.
         assert g.ready()
+        self.greenlets.remove(g)
 
         placed = UserCritical(msg='placeholder bogus exception',
                               hint='report a bug')
@@ -138,7 +185,7 @@ class WalTransferGroup(object):
 
                 if not segment.explicit:
                     segment.mark_done()
-            except StandardError, e:
+            except BaseException as e:
                 # Absorb and forward exceptions across the channel.
                 placed = e
             else:

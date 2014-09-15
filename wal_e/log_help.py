@@ -8,6 +8,12 @@ import logging
 import logging.handlers
 import os
 
+from os import path
+
+
+# Global logging handlers created by configure.
+HANDLERS = []
+
 
 # Set by a command-line option to suppress INFO and DEBUG
 # messages.
@@ -41,60 +47,72 @@ def configure(*args, **kwargs):
     be printed to the other log handlers.
 
     """
+    # Configuration must only happen once: no mechanism for avoiding
+    # duplication of handlers exists.
+    assert len(HANDLERS) == 0
+
+    # Add stderr output.
+    HANDLERS.append(logging.StreamHandler())
 
     def terrible_log_output(s):
         import sys
 
         print >>sys.stderr, s
 
-    syslog_address = kwargs.setdefault('syslog_address', '/dev/log')
-    handlers = []
+    places = [
+        # Linux
+        '/dev/log',
 
-    if len(logging.root.handlers) == 0:
-        filename = kwargs.get("filename")
-        if filename:
-            mode = kwargs.get("filemode", 'a')
-            handlers.append(logging.FileHandler(filename, mode))
-        else:
-            stream = kwargs.get("stream")
-            handlers.append(logging.StreamHandler(stream))
+        # FreeBSD
+        '/var/run/log',
 
-        try:
-            # Nobody can escape syslog, for now, and this default only
-            # works on Linux.
-            handlers.append(logging.handlers.SysLogHandler(syslog_address))
-        except EnvironmentError, e:
-            if e.errno in [errno.ENOENT, errno.EACCES, errno.ECONNREFUSED]:
-                message = ('wal-e: Could not set up syslog, '
-                           'continuing anyway.  '
-                           'Reason: {0}').format(errno.errorcode[e.errno])
+        # Macintosh
+        '/var/run/syslog',
+    ]
 
-                terrible_log_output(message)
+    default_syslog_address = places[0]
+    for p in places:
+        if path.exists(p):
+            default_syslog_address = p
+            break
 
-        fs = kwargs.get("format", logging.BASIC_FORMAT)
-        dfs = kwargs.get("datefmt", None)
-        fmt = IndentFormatter(fs, dfs)
+    syslog_address = kwargs.setdefault('syslog_address',
+                                       default_syslog_address)
 
-        for handler in handlers:
-            handler.setFormatter(fmt)
-            logging.root.addHandler(handler)
+    try:
+        # Add syslog output.
+        HANDLERS.append(logging.handlers.SysLogHandler(syslog_address))
+    except EnvironmentError, e:
+        if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
+            message = ('wal-e: Could not set up syslog, '
+                       'continuing anyway.  '
+                       'Reason: {0}').format(errno.errorcode[e.errno])
 
-        level = kwargs.get("level")
-        if level is not None:
-            logging.root.setLevel(level)
+            terrible_log_output(message)
+
+    fs = kwargs.get("format", logging.BASIC_FORMAT)
+    dfs = kwargs.get("datefmt", None)
+    fmt = IndentFormatter(fs, dfs)
+
+    for handler in HANDLERS:
+        handler.setFormatter(fmt)
+        logging.root.addHandler(handler)
+
+    # Default to INFO level logging.
+    set_level(kwargs.get('level', logging.INFO))
+
+
+def set_level(level):
+    """Adjust the logging level of WAL-E"""
+    for handler in HANDLERS:
+        handler.setLevel(level)
+
+    logging.root.setLevel(level)
 
 
 class WalELogger(object):
     def __init__(self, *args, **kwargs):
-        # Enable a shortcut to create the logger and set its level all
-        # at once.  To do that, pop the level out of the dictionary,
-        # which will otherwise cause getLogger to explode.
-        level = kwargs.pop('level', None)
-
         self._logger = logging.getLogger(*args, **kwargs)
-
-        if level is not None:
-            self._logger.setLevel(level)
 
     @staticmethod
     def _fmt_structured(d):

@@ -1,11 +1,14 @@
 import boto
-import logging
+import os
+import re
+import urlparse
 
 from boto import s3
 from boto.s3 import connection
 from wal_e import log_help
+from wal_e.exception import UserException
 
-logger = log_help.WalELogger(__name__, level=logging.INFO)
+logger = log_help.WalELogger(__name__)
 
 _S3_REGIONS = {
     # A map like this is actually defined in boto.s3 in newer versions of boto
@@ -93,6 +96,68 @@ def _connect_secureish(*args, **kwargs):
     return connection.S3Connection(*args, **kwargs)
 
 
+def _s3connection_opts_from_uri(impl):
+    # 'impl' should look like:
+    #
+    #    <protocol>+<calling_format>://[user:pass]@<host>[:port]
+    #
+    # A concrete example:
+    #
+    #     https+virtualhost://user:pass@localhost:1235
+    o = urlparse.urlparse(impl, allow_fragments=False)
+
+    if o.scheme is not None:
+        proto_match = re.match(
+            r'(?P<protocol>http|https)\+'
+            r'(?P<format>virtualhost|path|subdomain)', o.scheme)
+        if proto_match is None:
+            raise UserException(
+                msg='WALE_S3_ENDPOINT URI scheme is invalid',
+                detail='The scheme defined is ' + repr(o.scheme),
+                hint='An example of a valid scheme is https+virtualhost.')
+
+    opts = {}
+
+    if proto_match.group('protocol') == 'http':
+        opts['is_secure'] = False
+    else:
+        # Constrained by prior regexp.
+        proto_match.group('protocol') == 'https'
+        opts['is_secure'] = True
+
+    f = proto_match.group('format')
+    if f == 'virtualhost':
+        opts['calling_format'] = connection.VHostCallingFormat()
+    elif f == 'path':
+        opts['calling_format'] = connection.OrdinaryCallingFormat()
+    elif f == 'subdomain':
+        opts['calling_format'] = connection.SubdomainCallingFormat()
+    else:
+        # Constrained by prior regexp.
+        assert False
+
+    if o.username is not None or o.password is not None:
+        raise UserException(
+            msg='WALE_S3_ENDPOINT does not support username or password')
+
+    if o.hostname is not None:
+        opts['host'] = o.hostname
+
+    if o.port is not None:
+        opts['port'] = o.port
+
+    if o.path:
+        raise UserException(
+            msg='WALE_S3_ENDPOINT does not support a URI path',
+            detail='Path is {0!r}'.format(o.path))
+
+    if o.query:
+        raise UserException(
+            msg='WALE_S3_ENDPOINT does not support query parameters')
+
+    return opts
+
+
 class CallingInfo(object):
     """Encapsulate information used to produce a S3Connection."""
 
@@ -110,7 +175,7 @@ class CallingInfo(object):
     def __str__(self):
         return repr(self)
 
-    def connect(self, aws_access_key_id, aws_secret_access_key):
+    def connect(self, creds):
         """Return a boto S3Connection set up with great care.
 
         This includes TLS settings, calling format selection, and
@@ -125,10 +190,16 @@ class CallingInfo(object):
         def _conn_help(*args, **kwargs):
             return _connect_secureish(
                 *args,
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
+                provider=creds,
                 calling_format=self.calling_format(),
                 **kwargs)
+
+        # If WALE_S3_ENDPOINT is set, do not attempt to guess
+        # the right calling conventions and instead honor the explicit
+        # settings within WALE_S3_ENDPOINT.
+        impl = os.getenv('WALE_S3_ENDPOINT')
+        if impl:
+            return connection.S3Connection(**_s3connection_opts_from_uri(impl))
 
         # Check if subdomain format compatible; no need to go through
         # any region detection mumbo-jumbo of any kind.
@@ -192,7 +263,7 @@ class CallingInfo(object):
         return _conn_help(host=self.ordinary_endpoint)
 
 
-def from_bucket_name(bucket_name):
+def from_store_name(bucket_name):
     """Construct a CallingInfo value from a bucket name.
 
     This is useful to encapsulate the ugliness of setting up S3

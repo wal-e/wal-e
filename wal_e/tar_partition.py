@@ -45,9 +45,18 @@ import errno
 import os
 import tarfile
 
-import wal_e.log_help as log_help
+from wal_e import log_help
+from wal_e import copyfileobj
+from wal_e import pipebuf
+from wal_e import pipeline
+from wal_e.exception import UserException
 
 logger = log_help.WalELogger(__name__)
+
+PG_CONF = ('postgresql.conf',
+           'pg_hba.conf',
+           'recovery.conf',
+           'pg_ident.conf')
 
 
 class StreamPadFileObj(object):
@@ -86,16 +95,22 @@ class StreamPadFileObj(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return self.close()
+        self.close()
+        return False
 
 
-class TarMemberTooBigError(Exception):
+class TarMemberTooBigError(UserException):
     def __init__(self, member_name, limited_to, requested, *args, **kwargs):
         self.member_name = member_name
         self.max_size = limited_to
         self.requested = requested
 
-        Exception.__init__(self, *args, **kwargs)
+        msg = 'Attempted to archive a file that is too large.'
+        hint = ('There is a file in the postgres database directory that '
+                'is larger than %d bytes. If no such file exists, please '
+                'report this as a bug. In particular, check %s, which appears '
+                'to be %d bytes.') % (limited_to, member_name, requested)
+        UserException.__init__(self, msg=msg, hint=hint, *args, **kwargs)
 
 
 class TarBadRootError(Exception):
@@ -135,6 +150,75 @@ PARTITION_MAX_SZ = 1610612736
 PARTITION_MAX_MEMBERS = int(PARTITION_MAX_SZ / 262144)
 
 
+def _fsync_files(filenames):
+    """Call fsync() a list of file names
+
+    The filenames should be absolute paths already.
+
+    """
+    touched_directories = set()
+
+    mode = os.O_RDONLY
+
+    # Windows
+    if hasattr(os, 'O_BINARY'):
+        mode |= os.O_BINARY
+
+    for filename in filenames:
+        fd = os.open(filename, mode)
+        os.fsync(fd)
+        os.close(fd)
+        touched_directories.add(os.path.dirname(filename))
+
+    # Some OSes also require us to fsync the directory where we've
+    # created files or subdirectories.
+    if hasattr(os, 'O_DIRECTORY'):
+        for dirname in touched_directories:
+            fd = os.open(dirname, os.O_RDONLY | os.O_DIRECTORY)
+            os.fsync(fd)
+            os.close(fd)
+
+
+def cat_extract(tar, member, targetpath):
+    """Extract a regular file member using cat for async-like I/O
+
+    Mostly adapted from tarfile.py.
+
+    """
+    assert member.isreg()
+
+    # Fetch the TarInfo object for the given name and build the
+    # destination pathname, replacing forward slashes to platform
+    # specific separators.
+    targetpath = targetpath.rstrip("/")
+    targetpath = targetpath.replace("/", os.sep)
+
+    # Create all upper directories.
+    upperdirs = os.path.dirname(targetpath)
+    if upperdirs and not os.path.exists(upperdirs):
+        try:
+            # Create directories that are not part of the archive with
+            # default permissions.
+            os.makedirs(upperdirs)
+        except EnvironmentError as e:
+            if e.errno == errno.EEXIST:
+                # Ignore an error caused by the race of
+                # the directory being created between the
+                # check for the path and the creation.
+                pass
+            else:
+                raise
+
+    with open(targetpath, 'wb') as dest:
+        with pipeline.get_cat_pipeline(pipeline.PIPE, dest) as pl:
+            fp = tar.extractfile(member)
+            copyfileobj.copyfileobj(fp, pl.stdin)
+
+    tar.chown(member, targetpath)
+    tar.chmod(member, targetpath)
+    tar.utime(member, targetpath)
+
+
 class TarPartition(list):
 
     def __init__(self, name, *args, **kwargs):
@@ -161,10 +245,60 @@ class TarPartition(list):
             else:
                 raise
 
+    @staticmethod
+    def tarfile_extract(fileobj, dest_path):
+        """Extract a tarfile described by a file object to a specified path.
+
+        Args:
+            fileobj (file): File object wrapping the target tarfile.
+            dest_path (str): Path to extract the contents of the tarfile to.
+        """
+        # Though this method doesn't fit cleanly into the TarPartition object,
+        # tarballs are only ever extracted for partitions so the logic jives
+        # for the most part.
+        tar = tarfile.open(mode='r|', fileobj=fileobj,
+                           bufsize=pipebuf.PIPE_BUF_BYTES)
+
+        # canonicalize dest_path so the prefix check below works
+        dest_path = os.path.realpath(dest_path)
+
+        # list of files that need fsyncing
+        extracted_files = []
+
+        # Iterate through each member of the tarfile individually. We must
+        # approach it this way because we are dealing with a pipe and the
+        # getmembers() method will consume it before we extract any data.
+        for member in tar:
+            assert not member.name.startswith('/')
+            relpath = os.path.join(dest_path, member.name)
+
+            if member.isreg() and member.size >= pipebuf.PIPE_BUF_BYTES:
+                cat_extract(tar, member, relpath)
+            else:
+                tar.extract(member, path=dest_path)
+
+            if member.issym():
+                # It does not appear possible to fsync a symlink, or
+                # so it seems, as there is no portable way to open()
+                # one to get a fd to run fsync on.
+                pass
+            else:
+                filename = os.path.realpath(relpath)
+                extracted_files.append(filename)
+
+            # avoid accumulating an unbounded list of strings which
+            # could be quite large for a large database
+            if len(extracted_files) > 1000:
+                _fsync_files(extracted_files)
+                del extracted_files[:]
+        tar.close()
+        _fsync_files(extracted_files)
+
     def tarfile_write(self, fileobj):
         tar = None
         try:
-            tar = tarfile.open(fileobj=fileobj, mode='w|')
+            tar = tarfile.open(fileobj=fileobj, mode='w|',
+                               bufsize=pipebuf.PIPE_BUF_BYTES)
 
             for et_info in self:
                 # Treat files specially because they may grow, shrink,
@@ -203,12 +337,10 @@ def _segmentation_guts(root, file_paths, max_partition_size):
     These TarPartitions are disjoint and roughly below the prescribed
     size.
     """
-
     # Canonicalize root to include the trailing slash, since root is
     # intended to be a directory anyway.
     if not root.endswith(os.path.sep):
         root += os.path.sep
-
     # Ensure that the root path is a directory before continuing.
     if not os.path.isdir(root):
         raise TarBadRootError(root=root)
@@ -229,6 +361,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         partition = TarPartition(partition_number)
 
         for file_path in file_paths:
+
             # Ensure tar members exist within a shared root before
             # continuing.
             if not file_path.startswith(root):
@@ -296,28 +429,49 @@ def _segmentation_guts(root, file_paths, max_partition_size):
 def partition(pg_cluster_dir):
     def raise_walk_error(e):
         raise e
+    if not pg_cluster_dir.endswith(os.path.sep):
+        pg_cluster_dir += os.path.sep
 
     # Accumulates a list of archived files while walking the file
     # system.
     matches = []
+    # Maintain a manifest of archived files. Tra
+    spec = {'base_prefix': pg_cluster_dir,
+            'tablespaces': []}
 
     walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
-
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
-        if is_cluster_toplevel:
-            if 'pg_xlog' in dirnames:
-                dirnames.remove('pg_xlog')
-                matches.append(os.path.join(root, 'pg_xlog'))
+        if is_cluster_toplevel and 'pg_xlog' in dirnames:
+            dirnames.remove('pg_xlog')
+            matches.append(os.path.join(root, 'pg_xlog'))
+
+        # Do not capture any TEMP Space files, although we do want to
+        # capture the directory name or symlink
+        if 'pgsql_tmp' in dirnames:
+                dirnames.remove('pgsql_tmp')
+                matches.append(os.path.join(root, 'pgsql_tmp'))
+        if 'pg_stat_tmp' in dirnames:
+                dirnames.remove('pg_stat_tmp')
+                matches.append(os.path.join(root, 'pg_stat_tmp'))
+
+        # Do not capture ".wal-e" directories which also contain
+        # temporary working space.
+        if '.wal-e' in dirnames:
+            dirnames.remove('.wal-e')
+            matches.append(os.path.join(root, '.wal-e'))
 
         for filename in filenames:
             if is_cluster_toplevel and filename in ('postmaster.pid',
-                                                    'postgresql.conf'):
+                                                    'postmaster.opts'):
                 # Do not include the postmaster pid file or the
                 # configuration file in the backup.
+                pass
+            elif is_cluster_toplevel and filename in PG_CONF:
+                # Do not include config files in the backup
                 pass
             else:
                 matches.append(os.path.join(root, filename))
@@ -326,16 +480,56 @@ def partition(pg_cluster_dir):
         if not filenames:
             matches.append(root)
 
-    # Absolute upload paths are used for telling lzop what to
-    # compress.
-    local_abspaths = [os.path.abspath(match) for match in matches]
+        # Special case for tablespaces
+        if root == os.path.join(pg_cluster_dir, 'pg_tblspc'):
+            for tablespace in dirnames:
+                ts_path = os.path.join(root, tablespace)
+                ts_name = os.path.basename(ts_path)
 
-    # Computed to subtract out extra extraneous absolute path
-    # information when storing on S3.
-    common_local_prefix = os.path.commonprefix(local_abspaths)
+                if os.path.islink(ts_path) and os.path.isdir(ts_path):
+                    ts_loc = os.readlink(ts_path)
+                    ts_walker = os.walk(ts_path)
+                    if not ts_loc.endswith(os.path.sep):
+                        ts_loc += os.path.sep
+
+                    if ts_name not in spec['tablespaces']:
+                        spec['tablespaces'].append(ts_name)
+                        link_start = len(spec['base_prefix'])
+                        spec[ts_name] = {
+                            'loc': ts_loc,
+                            # Link path is relative to base_prefix
+                            'link': ts_path[link_start:]
+                        }
+
+                    for ts_root, ts_dirnames, ts_filenames in ts_walker:
+                        if 'pgsql_tmp' in ts_dirnames:
+                            ts_dirnames.remove('pgsql_tmp')
+                            matches.append(os.path.join(ts_root, 'pgsql_tmp'))
+
+                        for ts_filename in ts_filenames:
+                            matches.append(os.path.join(ts_root, ts_filename))
+
+                        # pick up the empty directories, make sure ts_root
+                        # isn't duplicated
+                        if not ts_filenames and ts_root not in matches:
+                            matches.append(ts_root)
+
+                    # The symlink for this tablespace is now in the match list,
+                    # remove it.
+                    if ts_path in matches:
+                        matches.remove(ts_path)
+
+    # Absolute upload paths are used for telling lzop what to compress. We
+    # must evaluate tablespace storage dirs separately from core file to handle
+    # the case where a common prefix does not exist between the two.
+    local_abspaths = [os.path.abspath(match) for match in matches]
+    # Common local prefix is the prefix removed from the path all tar members.
+    # Core files first
+    local_prefix = os.path.commonprefix(local_abspaths)
+    if not local_prefix.endswith(os.path.sep):
+        local_prefix += os.path.sep
 
     parts = _segmentation_guts(
-        common_local_prefix, local_abspaths,
-        PARTITION_MAX_SZ)
+        local_prefix, matches, PARTITION_MAX_SZ)
 
-    return parts
+    return spec, parts

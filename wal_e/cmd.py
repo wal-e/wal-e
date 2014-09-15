@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """WAL-E is a program to assist in performing PostgreSQL continuous
-archiving on S3: it handles pushing and fetching of WAL segments and
-base backups of the PostgreSQL data directory.
+archiving on S3 or Windows Azure Blob Service (WABS): it handles pushing
+and fetching of WAL segments and base backups of the PostgreSQL data directory.
 
 """
+import sys
 
 
 def gevent_monkey(*args, **kwargs):
     import gevent.monkey
+    gevent.monkey.patch_os()
     gevent.monkey.patch_socket(dns=True, aggressive=True)
     gevent.monkey.patch_ssl()
     gevent.monkey.patch_time()
@@ -16,29 +18,89 @@ def gevent_monkey(*args, **kwargs):
 # sadly it cannot be used (easily) in WAL-E.
 gevent_monkey()
 
+# Instate a cipher suite that bans a series of weak and slow ciphers.
+# Both RC4 (weak) 3DES (slow) have been seen in use.
+#
+# Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
+if sys.version_info >= (2, 7):
+    def getresponse_monkey():
+        import httplib
+        original = httplib.HTTPConnection.getresponse
+
+        def monkey(*args, **kwargs):
+            kwargs['buffering'] = True
+            return original(*args, **kwargs)
+
+        httplib.HTTPConnection.getresponse = monkey
+
+    getresponse_monkey()
+
+    def ssl_monkey():
+        import ssl
+
+        original = ssl.wrap_socket
+
+        def wrap_socket_monkey(*args, **kwargs):
+            # Set up an OpenSSL cipher string.
+            #
+            # Rationale behind each part:
+            #
+            # * HIGH: only use the most secure class of ciphers and
+            #   key lengths, generally being 128 bits and larger.
+            #
+            # * !aNULL: exclude cipher suites that contain anonymous
+            #   key exchange, making man in the middle attacks much
+            #   more tractable.
+            #
+            # * !SSLv2: exclude any SSLv2 cipher suite, as this
+            #   category has security weaknesses.  There is only one
+            #   OpenSSL cipher suite that is in the "HIGH" category
+            #   but uses SSLv2 protocols: DES_192_EDE3_CBC_WITH_MD5
+            #   (see s2_lib.c)
+            #
+            #   Technically redundant given "!3DES", but the intent in
+            #   listing it here is more apparent.
+            #
+            # * !RC4: exclude because it's a weak block cipher.
+            #
+            # * !3DES: exclude because it's very CPU intensive and
+            #   most peers support another reputable block cipher.
+            #
+            # * !MD5: although it doesn't seem use of known flaws in
+            #   MD5 is able to compromise an SSL session, the wide
+            #   deployment of SHA-family functions means the
+            #   compatibility benefits of allowing it are slim to
+            #   none, so disable it until someone produces material
+            #   complaint.
+            kwargs['ciphers'] = 'HIGH:!aNULL:!SSLv2:!RC4:!3DES:!MD5'
+            return original(*args, **kwargs)
+
+        ssl.wrap_socket = wrap_socket_monkey
+
+    ssl_monkey()
 
 import argparse
 import logging
 import os
 import re
-import sys
 import textwrap
 import traceback
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 
 from wal_e import subprocess
+from wal_e.exception import UserCritical
 from wal_e.exception import UserException
-from wal_e.operator import s3_operator
+from wal_e import storage
 from wal_e.piper import popen_sp
-from wal_e.worker.psql_worker import PSQL_BIN, psql_csv_run
+from wal_e.worker.pg import PSQL_BIN, psql_csv_run
 from wal_e.pipeline import LZOP_BIN, PV_BIN, GPG_BIN
-from wal_e.worker.pg_controldata_worker import CONFIG_BIN, PgControlDataParser
+from wal_e.worker.pg import CONFIG_BIN, PgControlDataParser
 
 log_help.configure(
     format='%(name)-12s %(levelname)-8s %(message)s')
 
-logger = log_help.WalELogger('wal_e.main', level=logging.INFO)
+logger = log_help.WalELogger('wal_e.main')
 
 
 def external_program_check(
@@ -105,8 +167,8 @@ def external_program_check(
 
 
 def extract_segment(text_with_extractable_segment):
-    from wal_e.storage.s3_storage import BASE_BACKUP_REGEXP
-    from wal_e.storage.s3_storage import SegmentNumber
+    from wal_e.storage import BASE_BACKUP_REGEXP
+    from wal_e.storage.base import SegmentNumber
 
     match = re.match(BASE_BACKUP_REGEXP, text_with_extractable_segment)
     if match is None:
@@ -116,24 +178,38 @@ def extract_segment(text_with_extractable_segment):
         return SegmentNumber(log=groupdict['log'], seg=groupdict['seg'])
 
 
-def main(argv=None):
-    if argv is None:
-        argv = sys.argv
-
+def build_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__)
 
-    parser.add_argument('-k', '--aws-access-key-id',
-                        help='public AWS access key. Can also be defined in '
-                        'an environment variable. If both are defined, '
-                        'the one defined in the programs arguments takes '
-                        'precedence.')
+    aws_group = parser.add_mutually_exclusive_group()
+    aws_group.add_argument('-k', '--aws-access-key-id',
+                           help='public AWS access key. Can also be defined '
+                           'in an environment variable. If both are defined, '
+                           'the one defined in the programs arguments takes '
+                           'precedence.')
+
+    aws_group.add_argument('--aws-instance-profile', action='store_true',
+                           help='Use the IAM Instance Profile associated '
+                           'with this instance to authenticate with the S3 '
+                           'API.')
+
+    parser.add_argument('-a', '--wabs-account-name',
+                        help='Account name of Windows Azure Blob Service '
+                        'account. Can also be defined in an environment'
+                        'variable. If both are defined, the one defined'
+                        'in the programs arguments takes precedence.')
 
     parser.add_argument('--s3-prefix',
                         help='S3 prefix to run all commands against.  '
                         'Can also be defined via environment variable '
-                        'WALE_S3_PREFIX')
+                        'WALE_S3_PREFIX.')
+
+    parser.add_argument('--wabs-prefix',
+                        help='Storage prefix to run all commands against.  '
+                        'Can also be defined via environment variable '
+                        'WALE_WABS_PREFIX.')
 
     parser.add_argument(
         '--gpg-key-id',
@@ -141,9 +217,10 @@ def main(argv=None):
         'Can also be defined via environment variable '
         'WALE_GPG_KEY_ID')
 
-    parser.add_argument('-q', '--quiet', action='store_true',
-                        help='Suppress INFO and DEBUG-level messages.')
-                        
+    parser.add_argument(
+        '--terse', action='store_true',
+        help='Only log messages as or more severe than a warning.')
+
     subparsers = parser.add_subparsers(title='subcommands',
                                        dest='subcommand')
 
@@ -172,13 +249,13 @@ def main(argv=None):
                                       help='Path to a WAL segment to upload')
 
     backup_fetch_parser = subparsers.add_parser(
-        'backup-fetch', help='fetch a hot backup from S3',
+        'backup-fetch', help='fetch a hot backup from S3 or WABS',
         parents=[backup_fetchpush_parent, backup_list_nodetail_parent])
     backup_list_parser = subparsers.add_parser(
         'backup-list', parents=[backup_list_nodetail_parent],
-        help='list backups in S3')
+        help='list backups in S3 or WABS')
     backup_push_parser = subparsers.add_parser(
-        'backup-push', help='pushing a fresh hot backup to S3',
+        'backup-push', help='pushing a fresh hot backup to S3 or WABS',
         parents=[backup_fetchpush_parent])
     backup_push_parser.add_argument(
         '--cluster-read-rate-limit',
@@ -197,7 +274,7 @@ def main(argv=None):
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
-        'wal-push', help='push a WAL file to S3',
+        'wal-push', help='push a WAL file to S3 or WABS',
         parents=[wal_fetchpush_parent])
 
     wal_push_parser.add_argument(
@@ -207,6 +284,19 @@ def main(argv=None):
     # backup-fetch operator section
     backup_fetch_parser.add_argument('BACKUP_NAME',
                                      help='the name of the backup to fetch')
+    backup_fetch_parser.add_argument(
+        '--blind-restore',
+        help='Restore from backup without verification of tablespace symlinks',
+        dest='blind_restore',
+        action='store_true',
+        default=False)
+
+    backup_fetch_parser.add_argument(
+        '--restore-spec',
+        help=('Specification for the directory structure of the database '
+              'restoration (optional, see README for more information).'),
+        type=str,
+        default=None)
 
     # backup-list operator section
     backup_list_parser.add_argument(
@@ -218,14 +308,25 @@ def main(argv=None):
 
     # wal-fetch operator section
     wal_fetch_parser = subparsers.add_parser(
-        'wal-fetch', help='fetch a WAL file from S3',
+        'wal-fetch', help='fetch a WAL file from S3 or WABS',
         parents=[wal_fetchpush_parent])
     wal_fetch_parser.add_argument('WAL_DESTINATION',
                                   help='Path to download the WAL segment to')
+    wal_fetch_parser.add_argument(
+        '--prefetch', '-p', type=int, default=8,
+        help='Set the maximum number of WAL segments to prefetch.')
+
+    wal_prefetch_parser = subparsers.add_parser('wal-prefetch',
+                                                help='Prefetch WAL')
+    wal_prefetch_parser.add_argument(
+        'BASE_DIRECTORY',
+        help='Contains writable directory to place ".wal-e" directory in.')
+    wal_prefetch_parser.add_argument('SEGMENT',
+                                     help='Segment by name to download.')
 
     # delete subparser section
     delete_parser = subparsers.add_parser(
-        'delete', help=('operators to destroy specified data in S3'))
+        'delete', help='operators to destroy specified data in S3 or WABS')
     delete_parser.add_argument('--dry-run', '-n', action='store_true',
                                help=('Only print what would be deleted, '
                                      'do not actually delete anything'))
@@ -248,6 +349,15 @@ def main(argv=None):
         'BEFORE_SEGMENT_EXCLUSIVE',
         help='A WAL segment number or base backup name')
 
+    # delete 'retain' operator
+    delete_retain_parser = delete_subparsers.add_parser(
+        'retain', help=('Delete backups and WAL segments older than the '
+                        'NUM_TO_RETAIN oldest base backup. This will leave '
+                        'NUM_TO_RETAIN working backups in place.'))
+    delete_retain_parser.add_argument(
+        'NUM_TO_RETAIN', type=int,
+        help='The number of base backups to retain')
+
     # delete old versions operator
     delete_subparsers.add_parser(
         'old-versions',
@@ -262,14 +372,160 @@ def main(argv=None):
         help=('Delete all data in the current WAL-E context.  '
               'Typically this is only appropriate when decommissioning an '
               'entire WAL-E archive.'))
+    return parser
 
-    # Okay, parse some arguments, finally
-    args = parser.parse_args()
-    subcommand = args.subcommand
 
+<<<<<<< HEAD
     # Set the quiet flag in the logger
     log_help.QUIET = args.quiet
     
+    # Handle version printing specially, because it doesn't need
+    # credentials.
+    if subcommand == 'version':
+        import pkgutil
+=======
+def _config_hint_generate(optname, both_env_and_param):
+    """Generate HINT language for missing configuration"""
+    env = optname.replace('-', '_').upper()
+>>>>>>> upstream/master
+
+    if both_env_and_param:
+        option = '--' + optname.lower()
+        return ('Pass "{0}" or set the environment variable "{1}".'
+                .format(option, env))
+    else:
+        return 'Set the environment variable {0}.'.format(env)
+
+
+def s3_explicit_creds(args):
+    access_key = args.aws_access_key_id or os.getenv('AWS_ACCESS_KEY_ID')
+    if access_key is None:
+        raise UserException(
+            msg='AWS Access Key credential is required but not provided',
+            hint=(_config_hint_generate('aws-access-key-id', True)))
+
+    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    if secret_key is None:
+        raise UserException(
+            msg='AWS Secret Key credential is required but not provided',
+            hint=_config_hint_generate('aws-secret-access-key', False))
+
+    security_token = os.getenv('AWS_SECURITY_TOKEN')
+
+    from wal_e.blobstore import s3
+
+    return s3.Credentials(access_key, secret_key, security_token)
+
+
+def s3_instance_profile(args):
+    from wal_e.blobstore import s3
+
+    assert args.aws_instance_profile
+    return s3.InstanceProfileCredentials()
+
+
+def configure_backup_cxt(args):
+    # Try to find some WAL-E prefix to store data in.
+    prefix = (args.s3_prefix or args.wabs_prefix
+              or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX')
+              or os.getenv('WALE_SWIFT_PREFIX'))
+
+    if prefix is None:
+        raise UserException(
+            msg='no storage prefix defined',
+            hint=(
+                'Either set one of the --wabs-prefix or --s3-prefix options or'
+                ' define one of the WALE_WABS_PREFIX, WALE_S3_PREFIX, or '
+                'WALE_SWIFT_PREFIX environment variables.'
+            )
+        )
+
+    store = storage.StorageLayout(prefix)
+
+    # GPG can be optionally layered atop of every backend, so a common
+    # code path suffices.
+    gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
+    if gpg_key_id is not None:
+        external_program_check([GPG_BIN])
+<<<<<<< HEAD
+    
+=======
+
+    # Enumeration of reading in configuration for all supported
+    # backend data stores, yielding value adhering to the
+    # 'operator.Backup' protocol.
+    if store.is_s3:
+        if args.aws_instance_profile:
+            creds = s3_instance_profile(args)
+        else:
+            creds = s3_explicit_creds(args)
+
+        from wal_e.operator import s3_operator
+
+        return s3_operator.S3Backup(store, creds, gpg_key_id)
+    elif store.is_wabs:
+        account_name = args.wabs_account_name or os.getenv('WABS_ACCOUNT_NAME')
+        if account_name is None:
+            raise UserException(
+                msg='WABS account name is undefined',
+                hint=_config_hint_generate('wabs-account-name', True))
+
+        access_key = os.getenv('WABS_ACCESS_KEY')
+        if access_key is None:
+            raise UserException(
+                msg='WABS access key credential is required but not provided',
+                hint=_config_hint_generate('wabs-access-key', False))
+
+        from wal_e.blobstore import wabs
+        from wal_e.operator.wabs_operator import WABSBackup
+
+        creds = wabs.Credentials(account_name, access_key)
+
+        return WABSBackup(store, creds, gpg_key_id)
+    elif store.is_swift:
+        from wal_e.blobstore import swift
+        from wal_e.operator.swift_operator import SwiftBackup
+
+        creds = swift.Credentials(
+            os.getenv('SWIFT_AUTHURL'),
+            os.getenv('SWIFT_USER'),
+            os.getenv('SWIFT_PASSWORD'),
+            os.getenv('SWIFT_TENANT'),
+            os.getenv('SWIFT_REGION'),
+            os.getenv('SWIFT_ENDPOINT_TYPE', 'publicURL'),
+        )
+        return SwiftBackup(store, creds, gpg_key_id)
+    else:
+        raise UserCritical(
+            msg='no unsupported blob stores should get here',
+            hint='Report a bug.')
+
+
+def monkeypatch_tarfile_copyfileobj():
+    """Monkey-patch tarfile.copyfileobj to exploit large buffers"""
+    import tarfile
+    from wal_e import copyfileobj
+
+    tarfile.copyfileobj = copyfileobj.copyfileobj
+
+
+def render_subcommand(args):
+    """Render a subcommand for human-centric viewing"""
+    if args.subcommand == 'delete':
+        return 'delete ' + args.delete_subcommand
+    else:
+        return args.subcommand
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    subcommand = args.subcommand
+
+    # Adjust logging level if terse output is set.
+    if args.terse:
+        log_help.set_level(logging.WARNING)
+
     # Handle version printing specially, because it doesn't need
     # credentials.
     if subcommand == 'version':
@@ -278,56 +534,33 @@ def main(argv=None):
         print pkgutil.get_data('wal_e', 'VERSION').strip()
         sys.exit(0)
 
-    # Attempt to read a few key parameters from environment variables
-    # *or* the command line, enforcing a precedence order and
-    # complaining should the required parameter not be defined in
-    # either location.
-    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-    if secret_key is None:
-        logger.error(
-            msg='no AWS_SECRET_ACCESS_KEY defined',
-            hint='Define the environment variable AWS_SECRET_ACCESS_KEY.')
-        sys.exit(1)
+    # Print a start-up message right away.
+    #
+    # Otherwise, it is hard to tell when and how WAL-E started in logs
+    # because often emits status output too late.
+    logger.info(msg='starting WAL-E',
+                detail=('The subcommand is "{0}".'
+                        .format(render_subcommand(args))))
 
-    s3_prefix = args.s3_prefix or os.getenv('WALE_S3_PREFIX')
-
-    if s3_prefix is None:
-        logger.error(
-            msg='no storage prefix defined',
-            hint=('Either set the --s3-prefix option or define the '
-                  'environment variable WALE_S3_PREFIX.'))
-        sys.exit(1)
-
-    if args.aws_access_key_id is None:
-        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-        if aws_access_key_id is None:
-            logger.error(
-                msg='no storage prefix defined',
-                hint=('Either set the --aws-access-key-id option or define '
-                      'the environment variable AWS_ACCESS_KEY_ID.'))
-            sys.exit(1)
-    else:
-        aws_access_key_id = args.aws_access_key_id
-
-    # This will be None if we're not encrypting
-    gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
-
-    backup_cxt = s3_operator.S3Backup(aws_access_key_id, secret_key, s3_prefix,
-                                      gpg_key_id)
-
-    if gpg_key_id is not None:
-        external_program_check([GPG_BIN])
-    
+>>>>>>> upstream/master
     try:
+        backup_cxt = configure_backup_cxt(args)
+
         if subcommand == 'backup-fetch':
+            monkeypatch_tarfile_copyfileobj()
+
             external_program_check([LZOP_BIN])
-            backup_cxt.database_s3_fetch(
+            backup_cxt.database_fetch(
                 args.PG_CLUSTER_DIRECTORY,
                 args.BACKUP_NAME,
+                blind_restore=args.blind_restore,
+                restore_spec=args.restore_spec,
                 pool_size=args.pool_size)
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
+            monkeypatch_tarfile_copyfileobj()
+
             if args.while_offline:
                 # we need to query pg_config first for the
                 # pg_controldata's bin location
@@ -345,21 +578,25 @@ def main(argv=None):
             rate_limit = args.rate_limit
 
             while_offline = args.while_offline
-            backup_cxt.database_s3_backup(
+            backup_cxt.database_backup(
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
                 pool_size=args.pool_size)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
-            res = backup_cxt.wal_s3_restore(args.WAL_SEGMENT,
-                                            args.WAL_DESTINATION)
+            res = backup_cxt.wal_restore(args.WAL_SEGMENT,
+                                         args.WAL_DESTINATION,
+                                         args.prefetch)
             if not res:
                 sys.exit(1)
+        elif subcommand == 'wal-prefetch':
+            external_program_check([LZOP_BIN])
+            backup_cxt.wal_prefetch(args.BASE_DIRECTORY, args.SEGMENT)
         elif subcommand == 'wal-push':
             external_program_check([LZOP_BIN])
-            backup_cxt.wal_s3_archive(args.WAL_SEGMENT,
-                                      concurrency=args.pool_size)
+            backup_cxt.wal_archive(args.WAL_SEGMENT,
+                                   concurrency=args.pool_size)
         elif subcommand == 'delete':
             # Set up pruning precedence, optimizing for *not* deleting data
             #
@@ -368,10 +605,10 @@ def main(argv=None):
             if args.dry_run is False and args.confirm is True:
                 # Actually delete data *only* if there are *no* --dry-runs
                 # present and --confirm is present.
-                logger.info(msg='deleting data in S3')
+                logger.info(msg='deleting data in the store')
                 is_dry_run_really = False
             else:
-                logger.info(msg='performing dry run of S3 data deletion')
+                logger.info(msg='performing dry run of data deletion')
                 is_dry_run_really = True
 
                 import boto.s3.key
@@ -391,8 +628,12 @@ def main(argv=None):
                 backup_cxt.delete_old_versions(is_dry_run_really)
             elif args.delete_subcommand == 'everything':
                 backup_cxt.delete_all(is_dry_run_really)
+            elif args.delete_subcommand == 'retain':
+                backup_cxt.delete_with_retention(is_dry_run_really,
+                                                 args.NUM_TO_RETAIN)
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
+                assert segment_info is not None
                 backup_cxt.delete_before(is_dry_run_really, segment_info)
             else:
                 assert False, 'Should be rejected by argument parsing.'
@@ -408,21 +649,20 @@ def main(argv=None):
         # code management.
         if backup_cxt.exceptions:
             for exc in backup_cxt.exceptions[:-1]:
-                logger.log(level=exc.severity,
-                           msg=log_help.WalELogger
-                           .fmt_logline(exc.msg, exc.detail, exc.hint))
+                if isinstance(exc, UserException):
+                    logger.log(level=exc.severity,
+                               msg=exc.msg, detail=exc.detail, hint=exc.hint)
+                else:
+                    logger.error(msg=exc)
+
             raise backup_cxt.exceptions[-1]
 
     except UserException, e:
         logger.log(level=e.severity,
-                   msg=log_help.WalELogger
-                   .fmt_logline(e.msg, e.detail, e.hint))
+                   msg=e.msg, detail=e.detail, hint=e.hint)
         sys.exit(1)
     except Exception, e:
         logger.critical(
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
-
-if __name__ == "__main__":
-    sys.exit(main())

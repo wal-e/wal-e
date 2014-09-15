@@ -1,6 +1,6 @@
 import re
 
-import wal_e.log_help as log_help
+from wal_e import log_help
 
 
 def sanitize_log(log):
@@ -9,9 +9,10 @@ def sanitize_log(log):
                   log)
 
 
-def test_nonexisting_socket(tmpdir):
+def test_nonexisting_socket(tmpdir, monkeypatch):
     # Must not raise an exception, silently failing is preferred for
     # now.
+    monkeypatch.setattr(log_help, 'HANDLERS', [])
     log_help.configure(syslog_address=tmpdir.join('bogus'))
 
 
@@ -24,11 +25,7 @@ def test_format_structured_info():
     many = ({'hello': 'world', 'goodbye': 'world'},
             u'time=2012-01-01T00.1234-00 pid=1234 goodbye=world hello=world')
 
-    otherTyps = ({1: None, frozenset([1, ' ']): 7.0, '': ''},
-                 u"time=2012-01-01T00.1234-00 pid=1234 "
-                 "1=None = frozenset([1, ' '])=7.0")
-
-    for d, expect in [zero, one, many, otherTyps]:
+    for d, expect in [zero, one, many]:
         result = log_help.WalELogger._fmt_structured(d)
         assert sanitize_log(result) == expect
 

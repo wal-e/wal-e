@@ -24,7 +24,7 @@ class FakeUploader(object):
         return tpart
 
 
-class Explosion(StandardError):
+class Explosion(Exception):
     """Marker type of injected faults."""
     pass
 

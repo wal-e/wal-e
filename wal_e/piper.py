@@ -5,88 +5,19 @@ Utilities for handling subprocesses.
 Mostly necessary only because of http://bugs.python.org/issue1652.
 
 """
-
 import copy
 import errno
-import fcntl
 import gevent
 import gevent.socket
-import os
 import signal
 
-import sys
-
-from cStringIO import StringIO
-
+from wal_e import pipebuf
 from wal_e import subprocess
 from wal_e.subprocess import PIPE
 
 # This is not used in this module, but is imported by dependent
 # modules, so do this to quiet pyflakes.
 assert PIPE
-
-
-class NonBlockPipeFileWrap(object):
-    def __init__(self, fp):
-        # Make the file nonblocking (but don't lose its previous flags)
-        flags = fcntl.fcntl(fp, fcntl.F_GETFL)
-        fcntl.fcntl(fp, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-        self._fp = fp
-
-    def read(self, size=None):
-        # Some adaptation from gevent's examples/processes.py
-        accum = StringIO()
-
-        while size is None or accum.tell() < size:
-            try:
-                if size is None:
-                    max_read = 4096
-                else:
-                    max_read = min(4096, size - accum.tell())
-
-                chunk = self._fp.read(max_read)
-
-                # End of the stream: leave the loop
-                if not chunk:
-                    break
-                accum.write(chunk)
-            except IOError, ex:
-                if ex[0] != errno.EAGAIN:
-                    raise
-                sys.exc_clear()
-            gevent.socket.wait_read(self._fp.fileno())
-
-        return accum.getvalue()
-
-    def write(self, data):
-        # Some adaptation from gevent's examples/processes.py
-        buf = StringIO(data)
-        bytes_total = len(data)
-        bytes_written = 0
-        while bytes_written < bytes_total:
-            try:
-                # self._fp.write() doesn't return anything, so use
-                # os.write.
-                bytes_written += os.write(self._fp.fileno(), buf.read(4096))
-            except IOError, ex:
-                if ex[0] != errno.EAGAIN:
-                    raise
-                sys.exc_clear()
-            gevent.socket.wait_write(self._fp.fileno())
-
-    def fileno(self):
-        return self._fp.fileno()
-
-    def close(self):
-        return self._fp.close()
-
-    def flush(self):
-        return self._fp.flush()
-
-    @property
-    def closed(self):
-        return self._fp.closed
 
 
 def subprocess_setup(f=None):
@@ -174,21 +105,20 @@ popen_sp = PopenShim()
 def popen_nonblock(*args, **kwargs):
     """
     Create a process in the same way as popen_sp, but patch the file
-    descriptors so they can can be accessed from Python/gevent
+    descriptors so they can be accessed from Python/gevent
     in a non-blocking manner.
     """
 
     proc = popen_sp(*args, **kwargs)
 
-    # Patch up the process object to use non-blocking I/O that yields
-    # to the gevent hub.
-    for fp_symbol in ['stdin', 'stdout', 'stderr']:
-        value = getattr(proc, fp_symbol)
+    if proc.stdin:
+        proc.stdin = pipebuf.NonBlockBufferedWriter(proc.stdin)
 
-        if value is not None:
-            # this branch is only taken if a descriptor is sent in
-            # with 'PIPE' mode.
-            setattr(proc, fp_symbol, NonBlockPipeFileWrap(value))
+    if proc.stdout:
+        proc.stdout = pipebuf.NonBlockBufferedReader(proc.stdout)
+
+    if proc.stderr:
+        proc.stderr = pipebuf.NonBlockBufferedReader(proc.stderr)
 
     return proc
 

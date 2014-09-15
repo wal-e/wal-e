@@ -1,23 +1,142 @@
 import boto
+import json
 import os
+import pytest
+
+from boto import sts
+from boto.s3.connection import Location
+from wal_e.blobstore import s3
+from wal_e.blobstore.s3 import calling_format
 
 
 def no_real_s3_credentials():
+    """Helps skip integration tests without live credentials.
+
+    Phrased in the negative to make it read better with 'skipif'.
+    """
+    if os.getenv('WALE_S3_INTEGRATION_TESTS') != 'TRUE':
+        return True
+
     for e_var in ('AWS_ACCESS_KEY_ID',
-                  'AWS_SECRET_ACCESS_KEY',
-                  'WALE_S3_INTEGRATION_TESTS'):
+                  'AWS_SECRET_ACCESS_KEY'):
         if os.getenv(e_var) is None:
             return True
 
     return False
 
 
+def prepare_s3_default_test_bucket():
+    # Check credentials are present: this procedure should not be
+    # called otherwise.
+    if no_real_s3_credentials():
+        assert False
+
+    bucket_name = 'waletdefwuy' + os.getenv('AWS_ACCESS_KEY_ID').lower()
+
+    creds = s3.Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
+                           os.getenv('AWS_SECRET_ACCESS_KEY'),
+                           os.getenv('AWS_SECURITY_TOKEN'))
+
+    cinfo = calling_format.from_store_name(bucket_name)
+    conn = cinfo.connect(creds)
+
+    def _clean():
+        bucket = conn.get_bucket(bucket_name)
+        bucket.delete_keys(key.name for key in bucket.list())
+
+    try:
+        conn.create_bucket(bucket_name, location=Location.USWest)
+    except boto.exception.S3CreateError, e:
+        if e.status == 409:
+            # Conflict: bucket already present.  Re-use it, but
+            # clean it out first.
+            _clean()
+        else:
+            raise
+    else:
+        # Success
+        _clean()
+
+    return bucket_name
+
+
+@pytest.fixture(scope='session')
+def default_test_bucket():
+    if not no_real_s3_credentials():
+        return prepare_s3_default_test_bucket()
+
+
 def boto_supports_certs():
     return tuple(int(x) for x in boto.__version__.split('.')) >= (2, 6, 0)
 
 
-def apathetic_bucket_delete(bucket_name, *args, **kwargs):
+def make_policy(bucket_name, prefix, allow_get_location=False):
+    """Produces a S3 IAM text for selective access of data.
+
+    Only a prefix can be listed, gotten, or written to when a
+    credential is subject to this policy text.
+    """
+    bucket_arn = "arn:aws:s3:::" + bucket_name
+    prefix_arn = "arn:aws:s3:::{0}/{1}/*".format(bucket_name, prefix)
+
+    structure = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": ["s3:ListBucket"],
+                "Effect": "Allow",
+                "Resource": [bucket_arn],
+                "Condition": {"StringLike": {"s3:prefix": [prefix + '/*']}},
+            },
+            {
+                "Effect": "Allow",
+                "Action": ["s3:PutObject", "s3:GetObject"],
+                "Resource": [prefix_arn]
+            }]}
+
+    if allow_get_location:
+        structure["Statement"].append(
+            {"Action": ["s3:GetBucketLocation"],
+             "Effect": "Allow",
+             "Resource": [bucket_arn]})
+
+    return json.dumps(structure, indent=2)
+
+
+@pytest.fixture
+def sts_conn():
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    return sts.connect_to_region(
+        'us-east-1',
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key)
+
+
+def _delete_keys(bucket, keys):
+    for name in keys:
+        while True:
+            try:
+                k = boto.s3.connection.Key(bucket, name)
+                bucket.delete_key(k)
+            except boto.exception.S3ResponseError, e:
+                if e.status == 404:
+                    # Key is already not present.  Continue the
+                    # deletion iteration.
+                    break
+
+                raise
+            else:
+                break
+
+
+def apathetic_bucket_delete(bucket_name, keys, *args, **kwargs):
     conn = boto.s3.connection.S3Connection(*args, **kwargs)
+    bucket = conn.lookup(bucket_name)
+
+    if bucket:
+        # Delete key names passed by the test code.
+        _delete_keys(conn.lookup(bucket_name), keys)
 
     try:
         conn.delete_bucket(bucket_name)
@@ -32,7 +151,13 @@ def apathetic_bucket_delete(bucket_name, *args, **kwargs):
     return conn
 
 
-def insistent_bucket_delete(conn, bucket_name):
+def insistent_bucket_delete(conn, bucket_name, keys):
+    bucket = conn.lookup(bucket_name)
+
+    if bucket:
+        # Delete key names passed by the test code.
+        _delete_keys(bucket, keys)
+
     while True:
         try:
             conn.delete_bucket(bucket_name)
@@ -64,8 +189,9 @@ def insistent_bucket_create(conn, bucket_name, *args, **kwargs):
 
 class FreshBucket(object):
 
-    def __init__(self, bucket_name, *args, **kwargs):
+    def __init__(self, bucket_name, keys=[], *args, **kwargs):
         self.bucket_name = bucket_name
+        self.keys = keys
         self.conn_args = args
         self.conn_kwargs = kwargs
         self.created_bucket = False
@@ -78,6 +204,7 @@ class FreshBucket(object):
         # Clean up a dangling bucket from a previous test run, if
         # necessary.
         self.conn = apathetic_bucket_delete(self.bucket_name,
+                                            self.keys,
                                             *self.conn_args,
                                             **self.conn_kwargs)
 
@@ -92,9 +219,8 @@ class FreshBucket(object):
 
     def __exit__(self, typ, value, traceback):
         if not self.created_bucket:
-            return
+            return False
 
-        insistent_bucket_delete(self.conn, self.bucket_name)
+        insistent_bucket_delete(self.conn, self.bucket_name, self.keys)
 
-        if typ:
-            raise typ, value, traceback
+        return False

@@ -87,7 +87,7 @@ def gevent_fastsleep(monkeypatch):
 
     def fast_sleep(tm):
         # Ignore time passed and just yield.
-        old_sleep(0)
+        old_sleep(0.1)
 
     monkeypatch.setattr(gevent, 'sleep', fast_sleep)
 
