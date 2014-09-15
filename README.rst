@@ -547,11 +547,20 @@ To reduce the read load on base backups, they are sent through the
 tool ``pv`` first.  To use this rate-limited-read mode, use the option
 ``--cluster-read-rate-limit`` as seen in ``wal-e backup-push``.
 
-Quieter Logging
-'''''''''''''''
+Logging
+'''''''
+
+WAL-E supports logging configuration with following environment
+variables:
+
+* ``WALE_LOG_DESTINATION`` comma separated values, **syslog** and
+  **stderr** are supported.  The default is equivalent to:
+  ``syslog,stderr``.
+
+* ``WALE_SYSLOG_FACILITY`` from ``LOCAL0`` to ``LOCAL7`` and ``USER``.
 
 To restrict log statements to warnings and errors, use the ``--terse``
-option. This is supported on all WAL-E operations.
+option.
 
 Increasing throughput of wal_push
 '''''''''''''''''''''''''''''''''
