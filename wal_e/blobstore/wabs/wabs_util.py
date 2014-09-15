@@ -121,8 +121,8 @@ def uri_get_file(creds, uri, conn=None):
     data = ''
     # WABS requires large files to be downloaded in 4MB chunks
     while ret_size < blob_size:
-        ms_range = 'bytes={}-{}'.format(ret_size,
-                                        ret_size + WABS_CHUNK_SIZE - 1)
+        ms_range = 'bytes={0}-{1}'.format(ret_size,
+                                          ret_size + WABS_CHUNK_SIZE - 1)
         while True:
             # Because we're downloading in chunks, catch rate limiting and
             # connection errors here instead of letting them bubble up to the
