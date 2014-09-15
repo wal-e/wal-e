@@ -106,13 +106,13 @@ def configure(*args, **kwargs):
 def get_log_destinations():
     """Parse env string"""
     # if env var is not set default to stderr + syslog
-    env = os.getenv('WALE_LOG_DESTINATION') or 'stderr,syslog'
+    env = os.getenv('WALE_LOG_DESTINATION', 'stderr,syslog')
     return env.split(",")
 
 
 def get_syslog_facility():
     """Get syslog facility from ENV var"""
-    facil = os.getenv('WALE_SYSLOG_FACILITY') or 'user'
+    facil = os.getenv('WALE_SYSLOG_FACILITY', 'user')
 
     try:
         facility = logging.handlers.SysLogHandler.facility_names[facil]
