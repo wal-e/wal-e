@@ -54,7 +54,7 @@ STRUCTURED: time=2012-01-01T00.1234-00 pid=1234"""
 
 def test_get_log_destinations_empty():
     """WALE_LOG_DESTINATION is not set"""
-    env = os.environ.clear()
+    os.environ.clear()
     out = log_help.get_log_destinations()
 
     assert out == ['stderr', 'syslog']
@@ -70,7 +70,7 @@ def test_get_log_destinations_notempty():
 
 def test_get_syslog_facility_empty():
     """WALE_SYSLOG_FACILITY is not set"""
-    env = os.environ.clear()
+    os.environ.clear()
     out = log_help.get_syslog_facility()
 
     assert out == logging.handlers.SysLogHandler.LOG_USER
