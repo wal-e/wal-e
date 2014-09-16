@@ -46,8 +46,11 @@ def configure(*args, **kwargs):
     # duplication of handlers exists.
     assert len(HANDLERS) == 0
 
-    # Add stderr output.
-    HANDLERS.append(logging.StreamHandler())
+    log_destinations = get_log_destinations()
+
+    if 'stderr' in log_destinations:
+        # Add stderr output.
+        HANDLERS.append(logging.StreamHandler())
 
     def terrible_log_output(s):
         import sys
@@ -74,16 +77,19 @@ def configure(*args, **kwargs):
     syslog_address = kwargs.setdefault('syslog_address',
                                        default_syslog_address)
 
-    try:
-        # Add syslog output.
-        HANDLERS.append(logging.handlers.SysLogHandler(syslog_address))
-    except EnvironmentError, e:
-        if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
-            message = ('wal-e: Could not set up syslog, '
-                       'continuing anyway.  '
-                       'Reason: {0}').format(errno.errorcode[e.errno])
+    if 'syslog' in log_destinations:
+        facility = os.getenv('WALE_SYSLOG_FACILITY') or 'user'
+        try:
+            # Add syslog output.
+            HANDLERS.append(logging.handlers.SysLogHandler(syslog_address,
+                                                           facility=facility))
+        except EnvironmentError, e:
+            if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
+                message = ('wal-e: Could not set up syslog, '
+                           'continuing anyway.  '
+                           'Reason: {0}').format(errno.errorcode[e.errno])
 
-            terrible_log_output(message)
+                terrible_log_output(message)
 
     fs = kwargs.get("format", logging.BASIC_FORMAT)
     dfs = kwargs.get("datefmt", None)
@@ -95,6 +101,25 @@ def configure(*args, **kwargs):
 
     # Default to INFO level logging.
     set_level(kwargs.get('level', logging.INFO))
+
+
+def get_log_destinations():
+    """Parse env string"""
+    # if env var is not set default to stderr + syslog
+    env = os.getenv('WALE_LOG_DESTINATION', 'stderr,syslog')
+    return env.split(",")
+
+
+def get_syslog_facility():
+    """Get syslog facility from ENV var"""
+    facil = os.getenv('WALE_SYSLOG_FACILITY', 'user')
+
+    try:
+        facility = logging.handlers.SysLogHandler.facility_names[facil]
+    except KeyError:
+        facility = logging.handlers.SysLogHandler.LOG_USER
+
+    return facility
 
 
 def set_level(level):
