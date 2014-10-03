@@ -443,6 +443,11 @@ def partition(pg_cluster_dir):
     for root, dirnames, filenames in walker:
         is_cluster_toplevel = (os.path.abspath(root) ==
                                os.path.abspath(pg_cluster_dir))
+
+        # Append root so we will create the directory during restore even if
+        # PostgreSQL empties the directory before tar and upload completes
+        matches.append(root)
+
         # Do not capture any WAL files, although we do want to
         # capture the WAL directory or symlink
         if is_cluster_toplevel and 'pg_xlog' in dirnames:
@@ -475,10 +480,6 @@ def partition(pg_cluster_dir):
                 pass
             else:
                 matches.append(os.path.join(root, filename))
-
-        # Special case for empty directories
-        if not filenames:
-            matches.append(root)
 
         # Special case for tablespaces
         if root == os.path.join(pg_cluster_dir, 'pg_tblspc'):
