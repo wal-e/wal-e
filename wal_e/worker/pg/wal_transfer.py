@@ -136,15 +136,11 @@ class WalTransferGroup(object):
             self.expect -= 1
 
             if val is not None:
-                # Kill all the running greenlets, waiting for them to
-                # clean up and exit.
-                #
-                # As a fail-safe against indefinite blocking of
-                # gevent.killall, time out after a liberal amount of
-                # time.  This is not expected to ever occur except for
-                # bugs and very dire situations, so do not take pains
-                # to convert it into a UserException or anything.
-                gevent.killall(list(self.greenlets), block=True, timeout=60)
+                # Wait a while for all running greenlets to exit, and
+                # then attempt to force them to exit so join()
+                # terminates in a reasonable amount of time.
+                gevent.joinall(list(self.greenlets), timeout=30)
+                gevent.killall(list(self.greenlets), block=True, timeout=30)
                 raise val
 
     def start(self, segment):

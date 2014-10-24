@@ -5,9 +5,9 @@ A module to assist with using the Python logging module
 import datetime
 import errno
 import logging
-import logging.handlers
 import os
 
+from logging import handlers
 from os import path
 
 
@@ -51,8 +51,11 @@ def configure(*args, **kwargs):
     # duplication of handlers exists.
     assert len(HANDLERS) == 0
 
-    # Add stderr output.
-    HANDLERS.append(logging.StreamHandler())
+    log_destinations = get_log_destinations()
+
+    if 'stderr' in log_destinations:
+        # Add stderr output.
+        HANDLERS.append(logging.StreamHandler())
 
     def terrible_log_output(s):
         import sys
@@ -79,16 +82,20 @@ def configure(*args, **kwargs):
     syslog_address = kwargs.setdefault('syslog_address',
                                        default_syslog_address)
 
-    try:
-        # Add syslog output.
-        HANDLERS.append(logging.handlers.SysLogHandler(syslog_address))
-    except EnvironmentError, e:
-        if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
-            message = ('wal-e: Could not set up syslog, '
-                       'continuing anyway.  '
-                       'Reason: {0}').format(errno.errorcode[e.errno])
+    valid_facility = False
+    if 'syslog' in log_destinations:
+        facility, valid_facility = get_syslog_facility()
+        try:
+            # Add syslog output.
+            HANDLERS.append(handlers.SysLogHandler(syslog_address,
+                                                           facility=facility))
+        except EnvironmentError, e:
+            if e.errno in [errno.EACCES, errno.ECONNREFUSED]:
+                message = ('wal-e: Could not set up syslog, '
+                           'continuing anyway.  '
+                           'Reason: {0}').format(errno.errorcode[e.errno])
 
-            terrible_log_output(message)
+                terrible_log_output(message)
 
     fs = kwargs.get("format", logging.BASIC_FORMAT)
     dfs = kwargs.get("datefmt", None)
@@ -100,6 +107,31 @@ def configure(*args, **kwargs):
 
     # Default to INFO level logging.
     set_level(kwargs.get('level', logging.INFO))
+
+    if not valid_facility:
+        WalELogger(__name__).warning(
+            msg='invalid syslog facility level specified')
+
+
+def get_log_destinations():
+    """Parse env string"""
+    # if env var is not set default to stderr + syslog
+    env = os.getenv('WALE_LOG_DESTINATION', 'stderr,syslog')
+    return env.split(",")
+
+
+def get_syslog_facility():
+    """Get syslog facility from ENV var"""
+    facil = os.getenv('WALE_SYSLOG_FACILITY', 'user')
+
+    valid_facility = True
+    try:
+        facility = handlers.SysLogHandler.facility_names[facil.lower()]
+    except KeyError:
+        valid_facility = False
+        facility = handlers.SysLogHandler.LOG_USER
+
+    return facility, valid_facility
 
 
 def set_level(level):

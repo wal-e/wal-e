@@ -1,3 +1,4 @@
+import datetime
 import pytest
 
 from blackbox import config
@@ -55,7 +56,23 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
     config.main('backup-push', unicode(small_push_dir))
 
     fetch_dir = tmpdir.join('fetch-to').ensure(dir=True)
-    config.main('backup-fetch', unicode(fetch_dir), 'LATEST')
+
+    # Spin around backup-fetch LATEST for a while to paper over race
+    # conditions whereby a backup may not be visible to backup-fetch
+    # immediately.
+    from boto import exception
+    start = datetime.datetime.now()
+    deadline = start + datetime.timedelta(seconds=15)
+    while True:
+        try:
+            config.main('backup-fetch', unicode(fetch_dir), 'LATEST')
+        except exception.S3ResponseError:
+            if datetime.datetime.now() > deadline:
+                raise
+            else:
+                continue
+        else:
+            break
 
     assert fetch_dir.join('arbitrary-file').read() == \
         small_push_dir.join('arbitrary-file').read()

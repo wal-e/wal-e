@@ -71,6 +71,38 @@ def test_fsync_tar_members(monkeypatch, tmpdir):
         assert unicode(dirb) in synced_filenames
 
 
+def test_dynamically_emptied_directories(tmpdir):
+    """Ensure empty directories in the base backup are created
+
+    Particularly in the case when PostgreSQL empties the files in
+    those directories in parallel.  This emptying can happen after the
+    files are partitioned into their tarballs but before the tar and
+    upload process is complete.
+
+    """
+    # Create a directory structure with a file in it, e.g:
+    #
+    #   ./adir/bdir/afile
+    adir = tmpdir.join('adir').ensure(dir=True)
+    bdir = adir.join('bdir').ensure(dir=True)
+    some_file = bdir.join('afile')
+    some_file.write('1234567890')
+
+    # Generate the partition for the tar files
+    base_dir = adir.strpath
+    spec, parts = tar_partition.partition(base_dir)
+    tar_paths = []
+    for part in parts:
+        for tar_info in part:
+            rel_path = os.path.relpath(tar_info.submitted_path, base_dir)
+            tar_paths.append(rel_path)
+
+    # Ensure the "bdir" directory is included in the partition so
+    # "bdir" is created even if postgres removes "afile" during the
+    # tarring process.
+    assert 'bdir' in tar_paths
+
+
 def test_creation_upper_dir(tmpdir, monkeypatch):
     """Check for upper-directory creation in untarring
 
