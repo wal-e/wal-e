@@ -49,6 +49,14 @@ For Swift the following environment variables are needed:
 * SWIFT_PASSWORD
 * WALE_SWIFT_PREFIX
 
+There are also these variables:
+
+* SWIFT_AUTH_VERSION which defaults to 2. Some object stores such as
+Softlayer require version 1.
+* SWIFT_ENDPOINT_TYPE defaults to publicURL, this needs to be set
+to internalURL on object stores like Rackspace Cloud Files in order
+to use the internal network
+
 With the exception of AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY, all
 of these can be specified as arguments as well.  The AWS_* variables
 are the standard access-control keying system provided by Amazon,

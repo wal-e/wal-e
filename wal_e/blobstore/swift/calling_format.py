@@ -9,7 +9,7 @@ def connect(creds):
         authurl=creds.authurl,
         user=creds.user,
         key=creds.password,
-        auth_version="2",
+        auth_version=creds.auth_version,
         tenant_name=creds.tenant_name,
         os_options={
             "region_name": creds.region,
