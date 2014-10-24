@@ -15,11 +15,6 @@ from os import path
 HANDLERS = []
 
 
-# Set by a command-line option to suppress INFO and DEBUG
-# messages.
-QUIET = False
-
-
 class IndentFormatter(logging.Formatter):
 
     def format(self, record, *args, **kwargs):
@@ -184,14 +179,10 @@ class WalELogger(object):
         return '\n'.join(msg_parts)
 
     def log(self, level, msg, *args, **kwargs):
-            
-        if QUIET and (level==logging.DEBUG or level==logging.INFO):
-            return
-        
         detail = kwargs.pop('detail', None)
         hint = kwargs.pop('hint', None)
         structured = kwargs.pop('structured', None)
-        
+
         self._logger.log(
             level,
             self.fmt_logline(msg, detail, hint, structured),
