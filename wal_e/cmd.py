@@ -375,19 +375,9 @@ def build_parser():
     return parser
 
 
-<<<<<<< HEAD
-    # Set the quiet flag in the logger
-    log_help.QUIET = args.quiet
-    
-    # Handle version printing specially, because it doesn't need
-    # credentials.
-    if subcommand == 'version':
-        import pkgutil
-=======
 def _config_hint_generate(optname, both_env_and_param):
     """Generate HINT language for missing configuration"""
     env = optname.replace('-', '_').upper()
->>>>>>> upstream/master
 
     if both_env_and_param:
         option = '--' + optname.lower()
@@ -447,9 +437,6 @@ def configure_backup_cxt(args):
     gpg_key_id = args.gpg_key_id or os.getenv('WALE_GPG_KEY_ID')
     if gpg_key_id is not None:
         external_program_check([GPG_BIN])
-<<<<<<< HEAD
-    
-=======
 
     # Enumeration of reading in configuration for all supported
     # backend data stores, yielding value adhering to the
@@ -542,7 +529,6 @@ def main():
                 detail=('The subcommand is "{0}".'
                         .format(render_subcommand(args))))
 
->>>>>>> upstream/master
     try:
         backup_cxt = configure_backup_cxt(args)
 
