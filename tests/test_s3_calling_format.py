@@ -288,4 +288,5 @@ def test_cipher_suites():
     # harmlessly, but do the simple thing and insist on an exact match
     # for now.
     assert (chosen_cipher_suite == ['AES256', 'SHA']
-            or chosen_cipher_suite == ['AES128', 'SHA'])
+            or chosen_cipher_suite == ['AES128', 'SHA']
+            or chosen_cipher_suite == ['ECDHE', 'RSA', 'AES128', 'SHA'])
