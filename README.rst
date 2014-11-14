@@ -562,7 +562,7 @@ variables:
 To restrict log statements to warnings and errors, use the ``--terse``
 option.
 
-Increasing throughput of wal_push
+Increasing throughput of wal-push
 '''''''''''''''''''''''''''''''''
 
 In certain situations, the ``wal-push`` process can take long enough
