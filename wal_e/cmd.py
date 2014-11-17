@@ -271,6 +271,14 @@ def build_parser():
         dest='while_offline',
         action='store_true',
         default=False)
+    backup_push_parser.add_argument(
+        '--hot-standby',
+        help=('Backup a Postgres cluster that is on standby '
+              'as if it was offline'
+              ),
+        dest='hot_standby',
+        action='store_true',
+        default=False)
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
@@ -568,7 +576,8 @@ def main():
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
-                pool_size=args.pool_size)
+                pool_size=args.pool_size,
+                hot_standby=args.hot_standby)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_restore(args.WAL_SEGMENT,

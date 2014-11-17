@@ -116,7 +116,7 @@ class Backup(object):
                 with open(restore_spec, 'r') as fs:
                     spec = json.load(fs)
                 backup_info.spec.update(spec)
-            if 'base_prefix' not in spec or not spec['base_prefix']:
+            if 'base_prefix' not in backup_info.spec or not backup_info.spec['base_prefix']:
                 backup_info.spec['base_prefix'] = pg_cluster_dir
             self._build_restore_paths(backup_info.spec)
         else:
@@ -169,14 +169,17 @@ class Backup(object):
         start_backup_info = None
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
+        if 'hot_standby' in kwargs:
+            hot_standby = kwargs.pop('hot_standby')
+        parse_control_data = hot_standby or while_offline
 
         try:
-            if not while_offline:
+            if not parse_control_data:
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
-                if os.path.exists(os.path.join(data_directory,
-                                               'postmaster.pid')):
+                postgres_pid = os.path.join(data_directory, 'postmaster.pid')
+                if while_offline and os.path.exists(postgres_pid):
                     hint = ('Shut down postgres.  '
                             'If there is a stale lockfile, '
                             'then remove it after being very sure postgres '
@@ -185,6 +188,10 @@ class Backup(object):
                         msg='while_offline set, but pg looks to be running',
                         detail='Found a postmaster.pid lockfile, and aborting',
                         hint=hint)
+                if hot_standby and not PgBackupStatements.pg_is_in_recovery():
+                    raise UserException(
+                        msg='hot-standby set but pg looks to be a master',
+                        detail='pg was not in recovery mode, and aborting')
 
                 ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
@@ -203,7 +210,7 @@ class Backup(object):
                             'but we have to wait anyway.  '
                             'See README: TODO about pg_cancel_backup'))
 
-            if not while_offline:
+            if not parse_control_data:
                 stop_backup_info = PgBackupStatements.run_stop_backup()
             else:
                 stop_backup_info = start_backup_info
@@ -520,6 +527,8 @@ class Backup(object):
 
         if not os.path.isdir(path_prefix):
             os.mkdir(path_prefix, DEFAULT_DIR_MODE)
+
+        if not os.path.isdir(tblspc_prefix):
             os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
 
         for tblspc in restore_spec['tablespaces']:

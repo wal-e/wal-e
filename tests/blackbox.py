@@ -161,6 +161,10 @@ class NoopPgBackupStatements(object):
     def pg_version(cls):
         return {'version': 'FAKE-PG-VERSION'}
 
+    @classmethod
+    def pg_is_in_recovery(cls):
+        return False
+
 
 @pytest.fixture
 def noop_pg_backup_statements(monkeypatch):

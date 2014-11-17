@@ -136,3 +136,12 @@ class PgBackupStatements(object):
 
         """
         return cls._dict_transform(psql_csv_run('SELECT * FROM version()'))
+
+    @classmethod
+    def pg_is_in_recovery(cls):
+        """
+        Return a boolean indicating whether Postgres is in Recovery
+        """
+        is_hot_standby = cls._dict_transform(psql_csv_run(
+                            'SELECT pg_is_in_recovery()'))
+        return is_hot_standby['pg_is_in_recovery'] == 't'
