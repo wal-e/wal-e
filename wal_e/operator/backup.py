@@ -520,6 +520,8 @@ class Backup(object):
 
         if not os.path.isdir(path_prefix):
             os.mkdir(path_prefix, DEFAULT_DIR_MODE)
+
+        if not os.path.isdir(tblspc_prefix):
             os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
 
         for tblspc in restore_spec['tablespaces']:
