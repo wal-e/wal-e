@@ -115,7 +115,7 @@ class Backup(object):
                 with open(restore_spec, 'r') as fs:
                     spec = json.load(fs)
                 backup_info.spec.update(spec)
-            if 'base_prefix' not in spec or not spec['base_prefix']:
+            if 'base_prefix' not in backup_info.spec or not backup_info.spec['base_prefix']:
                 backup_info.spec['base_prefix'] = pg_cluster_dir
             self._build_restore_paths(backup_info.spec)
         else:
@@ -451,6 +451,8 @@ class Backup(object):
 
         if not os.path.isdir(path_prefix):
             os.mkdir(path_prefix, DEFAULT_DIR_MODE)
+
+        if not os.path.isdir(tblspc_prefix):
             os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
 
         for tblspc in restore_spec['tablespaces']:
