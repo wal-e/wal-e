@@ -222,9 +222,9 @@ class Backup(object):
             sentinel_content = StringIO()
             json.dump(
                 {'wal_segment_backup_stop':
-                     stop_backup_info['file_name'],
+                    stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
-                     stop_backup_info['file_offset'],
+                    stop_backup_info['file_offset'],
                  'expanded_size_bytes': expanded_size_bytes,
                  'spec': spec},
                 sentinel_content)
@@ -451,7 +451,7 @@ class Backup(object):
 
         # TODO :: Move arbitray path construction to StorageLayout Object
         backup_prefix = '{0}/basebackups_{1}/base_{file_name}_{file_offset}'\
-                .format(self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION,
+            .format(self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION,
                         **start_backup_info)
 
         if rate_limit is None:
