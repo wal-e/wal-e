@@ -116,7 +116,7 @@ class Backup(object):
                 with open(restore_spec, 'r') as fs:
                     spec = json.load(fs)
                 backup_info.spec.update(spec)
-            if 'base_prefix' not in spec or not spec['base_prefix']:
+            if 'base_prefix' not in backup_info.spec or not backup_info.spec['base_prefix']:
                 backup_info.spec['base_prefix'] = pg_cluster_dir
             self._build_restore_paths(backup_info.spec)
         else:
