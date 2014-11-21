@@ -480,6 +480,7 @@ def configure_backup_cxt(args):
             os.getenv('SWIFT_TENANT'),
             os.getenv('SWIFT_REGION'),
             os.getenv('SWIFT_ENDPOINT_TYPE', 'publicURL'),
+            os.getenv('SWIFT_AUTH_VERSION', '2'),
         )
         return SwiftBackup(store, creds, gpg_key_id)
     else:
