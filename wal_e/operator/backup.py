@@ -116,7 +116,8 @@ class Backup(object):
                 with open(restore_spec, 'r') as fs:
                     spec = json.load(fs)
                 backup_info.spec.update(spec)
-            if 'base_prefix' not in spec or not spec['base_prefix']:
+            if 'base_prefix' not in backup_info.spec \
+                    or not backup_info.spec['base_prefix']:
                 backup_info.spec['base_prefix'] = pg_cluster_dir
             self._build_restore_paths(backup_info.spec)
         else:
@@ -222,9 +223,9 @@ class Backup(object):
             sentinel_content = StringIO()
             json.dump(
                 {'wal_segment_backup_stop':
-                     stop_backup_info['file_name'],
+                    stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
-                     stop_backup_info['file_offset'],
+                    stop_backup_info['file_offset'],
                  'expanded_size_bytes': expanded_size_bytes,
                  'spec': spec},
                 sentinel_content)
@@ -451,7 +452,7 @@ class Backup(object):
 
         # TODO :: Move arbitray path construction to StorageLayout Object
         backup_prefix = '{0}/basebackups_{1}/base_{file_name}_{file_offset}'\
-                .format(self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION,
+            .format(self.layout.prefix.rstrip('/'), FILE_STRUCTURE_VERSION,
                         **start_backup_info)
 
         if rate_limit is None:
@@ -520,6 +521,8 @@ class Backup(object):
 
         if not os.path.isdir(path_prefix):
             os.mkdir(path_prefix, DEFAULT_DIR_MODE)
+
+        if not os.path.isdir(tblspc_prefix):
             os.mkdir(tblspc_prefix, DEFAULT_DIR_MODE)
 
         for tblspc in restore_spec['tablespaces']:
