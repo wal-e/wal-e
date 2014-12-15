@@ -1,8 +1,11 @@
 import gevent
 import pytest
 
+from fast_wait import fast_wait
 from wal_e import worker
 from wal_e.exception import UserCritical
+
+assert fast_wait
 
 
 class Explosion(Exception):
