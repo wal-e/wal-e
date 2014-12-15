@@ -3,10 +3,13 @@ import pytest
 from collections import namedtuple
 
 from azure.storage import BlobService
+from fast_wait import fast_wait
 from gevent import coros
 
 from wal_e import exception
 from wal_e.worker.wabs import wabs_deleter
+
+assert fast_wait
 
 B = namedtuple('Blob', ['name'])
 
@@ -64,23 +67,7 @@ def collect(monkeypatch):
     return collect
 
 
-@pytest.fixture(autouse=True)
-def gevent_fastsleep(monkeypatch):
-    """Stub out gevent.sleep to only yield briefly.
-
-    In production one may want to wait a bit having no work to do to
-    avoid spinning, but during testing this adds quite a bit of time.
-    """
-    old_sleep = gevent.sleep
-
-    def fast_sleep(tm):
-        # Ignore time passed and just yield.
-        old_sleep(0.1)
-
-    monkeypatch.setattr(gevent, 'sleep', fast_sleep)
-
-
-def test_fast_sleep():
+def test_fast_wait():
     """Annoy someone who causes fast-sleep test patching to regress.
 
     Someone could break the test-only monkey-patching of gevent.sleep

@@ -5,9 +5,11 @@ from gevent import coros
 
 from boto.s3 import bucket
 from boto.s3 import key
-
+from fast_wait import fast_wait
 from wal_e import exception
 from wal_e.worker.s3 import s3_deleter
+
+assert fast_wait
 
 
 class BucketDeleteKeysCollector(object):
@@ -81,35 +83,6 @@ def never_use_single_delete(monkeypatch):
 
     monkeypatch.setattr(key.Key, 'delete', die)
     monkeypatch.setattr(bucket.Bucket, 'delete_key', die)
-
-
-@pytest.fixture(autouse=True)
-def gevent_fastsleep(monkeypatch):
-    """Stub out gevent.sleep to only yield briefly.
-
-    In production one may want to wait a bit having no work to do to
-    avoid spinning, but during testing this adds quite a bit of time.
-    """
-    old_sleep = gevent.sleep
-
-    def fast_sleep(tm):
-        # Ignore time passed and just yield.
-        old_sleep(0.1)
-
-    monkeypatch.setattr(gevent, 'sleep', fast_sleep)
-
-
-def test_fast_sleep():
-    """Annoy someone who causes fast-sleep test patching to regress.
-
-    Someone could break the test-only monkey-patching of gevent.sleep
-    without noticing and costing quite a bit of aggravation aggregated
-    over time waiting in tests, added bit by bit.
-
-    To avoid that, add this incredibly huge/annoying delay that can
-    only be avoided by monkey-patch to catch the regression.
-    """
-    gevent.sleep(300)
 
 
 def test_construction():
