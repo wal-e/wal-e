@@ -185,15 +185,26 @@ class NonBlockBufferedReader(object):
             assert False
 
     def close(self):
-        # Invalidate state.
-        self._fd = -1
-        del self._bd
+        if self.closed:
+            return
 
         # Delegate close to self._fp -- it'll try to do it during its
         # destructor which is why delegation is used rather than
         # manipulation of the fd directly.
         self._fp.close()
-        del self._fp
+        try:
+            del self._fp
+        except AttributeError:
+            pass
+
+        try:
+            del self._bd
+        except AttributeError:
+            pass
+
+        # Invalidate state and flag total completion of the close
+        # operation.
+        self._fd = -1
 
     def fileno(self):
         return self._fd
@@ -256,15 +267,26 @@ class NonBlockBufferedWriter(object):
         return self._fd
 
     def close(self):
-        # Invalidate state.
-        self._fd = -1
-        del self._bd
+        if self.closed:
+            return
 
         # Delegate close to self._fp -- it'll try to do it during its
         # destructor which is why delegation is used rather than
         # manipulation of the fd directly.
         self._fp.close()
-        del self._fp
+        try:
+            del self._fp
+        except AttributeError:
+            pass
+
+        try:
+            del self._bd
+        except AttributeError:
+            pass
+
+        # Invalidate state and flag total completion of the close
+        # operation.
+        self._fd = -1
 
     @property
     def closed(self):

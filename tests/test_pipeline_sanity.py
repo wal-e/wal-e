@@ -1,6 +1,7 @@
 import pytest
 
 from wal_e import pipeline
+from wal_e import pipebuf
 
 
 def create_bogus_payload(dirname):
@@ -82,6 +83,24 @@ def test_close_process_when_aborted():
         pl.abort()
 
     # Failure means a failure to terminate the process.
+    pipeline_wait(pl)
+
+
+def test_double_close():
+    """A file should is able to be closed twice without raising"""
+    with pipeline.get_cat_pipeline(pipeline.PIPE, pipeline.PIPE) as pl:
+        assert isinstance(pl.stdin, pipebuf.NonBlockBufferedWriter)
+        assert not pl.stdin.closed
+        pl.stdin.close()
+        assert pl.stdin.closed
+        pl.stdin.close()
+
+        assert isinstance(pl.stdout, pipebuf.NonBlockBufferedReader)
+        assert not pl.stdout.closed
+        pl.stdout.close()
+        assert pl.stdout.closed
+        pl.stdout.close()
+
     pipeline_wait(pl)
 
 
