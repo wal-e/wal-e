@@ -1,3 +1,4 @@
+import errno
 import socket
 import tempfile
 import time
@@ -38,20 +39,33 @@ class WalUploader(object):
                                 'prefix': self.layout.path_prefix,
                                 'state': 'begin'})
 
-        # Upload and record the rate at which it happened.
-        kib_per_second = do_lzop_put(self.creds, url, segment.path,
-                                     self.gpg_key_id)
+        structured_template = {'action': 'push-wal',
+                               'key': url,
+                               'seg': segment.name,
+                               'prefix': self.layout.path_prefix}
 
-        logger.info(msg='completed archiving to a file ',
-                    detail=('Archiving to "{url}" complete at '
-                            '{kib_per_second}KiB/s. '
-                            .format(url=url, kib_per_second=kib_per_second)),
-                    structured={'action': 'push-wal',
-                                'key': url,
-                                'rate': kib_per_second,
-                                'seg': segment.name,
-                                'prefix': self.layout.path_prefix,
-                                'state': 'complete'})
+        try:
+            # Upload and record the rate at which it happened.
+            kib_per_second = do_lzop_put(self.creds, url, segment.path,
+                                         self.gpg_key_id)
+        except EnvironmentError as e:
+            if not segment.explicit and e.errno == errno.ENOENT:
+                structured = dict(state='skip', **structured_template)
+                logger.info(msg='skip parallel archiving of a file',
+                            detail=('The segment {0} did not exist.'
+                                    .format(segment.path)),
+                            structured=structured)
+            else:
+                raise
+        else:
+            structured = dict(rate=str(kib_per_second), state='complete',
+                              **structured_template)
+            logger.info(msg='completed archiving to a file',
+                        detail=('Archiving to "{url}" complete at '
+                                '{kib_per_second}KiB/s.'
+                                .format(url=url,
+                                        kib_per_second=kib_per_second)),
+                        structured=structured)
 
         return segment
 

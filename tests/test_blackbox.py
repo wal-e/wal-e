@@ -32,6 +32,60 @@ def test_wal_push_fetch(pg_xlog, tmpdir, config):
     assert tmpdir.join('.wal-e', 'prefetch', seg_name).check(file=1)
 
 
+def test_wal_push_parallel(pg_xlog, config, monkeypatch):
+    from wal_e.worker import upload
+
+    old_info = upload.logger.info
+
+    class GatherActions(object):
+        def __init__(self):
+            self.actions = set()
+
+        def __call__(self, *args, **kwargs):
+            s = kwargs['structured']
+            self.actions.add((s['action'], s['state']))
+            return old_info(*args, **kwargs)
+
+    ga = GatherActions()
+    monkeypatch.setattr(upload.logger, 'info', ga)
+
+    def seg_name(*parts):
+        return ''.join(str(p).zfill(8) for p in parts)
+
+    segments = [seg_name(1, 1, x) for x in xrange(1, 4)]
+
+    for s in segments:
+        pg_xlog.touch(s, '.ready')
+
+    # Prepare the second segment with *only* a ready file, to make
+    # sure parallel-push doesn't crash when pg_xlog's file is missing.
+    pg_xlog.seg(segments[1]).remove()
+
+    # This push has enough parallelism that it should attempt all the
+    # wal segments staged.
+    config.main('wal-push', '-p8', 'pg_xlog/' + segments[0])
+
+    # Ensure all three action types, particularly the "skip" state,
+    # are encountered.
+    assert ga.actions == set([('push-wal', 'begin'),
+                              ('push-wal', 'skip'),
+                              ('push-wal', 'complete')])
+
+    # An explicit request to upload a segment that doesn't exist must
+    # yield a failure.
+    #
+    # NB: Normally one would use pytest.raises, but in this case,
+    # e.value was *sometimes* giving an integer value, and sometimes
+    # the SystemExit value, whereas the builtin try/except constructs
+    # appear reliable by comparison.
+    try:
+        config.main('wal-push', '-p8', 'pg_xlog/' + segments[1])
+    except SystemExit as e:
+        assert e.code == 1
+    else:
+        assert False
+
+
 def test_wal_fetch_non_existent(tmpdir, config):
     # Recall file and check for equality.
     download_file = tmpdir.join('TEST-DOWNLOADED')
