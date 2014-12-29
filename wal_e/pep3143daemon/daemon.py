@@ -317,13 +317,14 @@ def close_filenos(preserve):
     if maxfd == resource.RLIM_INFINITY:
         maxfd = 4096
     for fileno in range(maxfd):
-        if not fileno in preserve:
+        if fileno not in preserve:
             try:
                 os.close(fileno)
             except OSError as err:
                 if not err.errno == errno.EBADF:
-                    raise DaemonError('Failed to close file descriptor {0}: {1}'
-                                      .format(fileno, err))
+                    raise DaemonError(
+                        'Failed to close file descriptor {0}: {1}'
+                        .format(fileno, err))
 
 
 def default_signal_map():

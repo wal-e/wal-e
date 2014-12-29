@@ -11,3 +11,9 @@ License: MIT (see LICENSE for details)
 
 from wal_e.pep3143daemon.daemon import DaemonContext, DaemonError
 from wal_e.pep3143daemon.pidfile import PidFile
+
+__all__ = [
+    "DaemonContext",
+    "DaemonError",
+    "PidFile",
+]
