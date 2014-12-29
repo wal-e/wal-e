@@ -566,7 +566,7 @@ class Backup(object):
 
 
 def start_prefetches(seg, pd, how_many):
-    import daemon
+    from wal_e import pep3143daemon as daemon
 
     split = sys.argv.index('wal-fetch')
     if split < 0:
