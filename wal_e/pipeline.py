@@ -227,14 +227,14 @@ class LZOCompressionFilter(PipelineCommand):
     """ Compress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
-            self, [LZOP_BIN, '--stdout'], stdin, stdout)
+            self, [LZOP_BIN, '-c'], stdin, stdout)
 
 
 class LZODecompressionFilter(PipelineCommand):
     """ Decompress using LZO. """
     def __init__(self, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
-                self, [LZOP_BIN, '-d', '--stdout', '-'], stdin, stdout)
+                self, [LZOP_BIN, '-d', '-c', '-'], stdin, stdout)
 
 
 class GPGEncryptionFilter(PipelineCommand):
