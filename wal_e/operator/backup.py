@@ -363,7 +363,8 @@ class Backup(object):
             # prefetch since prefetch execution is daemonized.
             # I.e., PostgreSQL has no knowledge of prefetch
             # exit codes.
-            raise SystemExit('Failed to prefetch %s' % wal_name)
+            os.remove(wal_destination)
+            raise SystemExit('Failed to fetch %s' % wal_name)
 
         logger.info(
             msg='complete wal restore',
