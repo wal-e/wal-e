@@ -80,6 +80,10 @@ def configure(*args, **kwargs):
     valid_facility = False
     if 'syslog' in log_destinations:
         facility, valid_facility = get_syslog_facility()
+    
+        if not valid_facility:
+            terrible_log_output('invalid syslog facility level specified')
+    
         try:
             # Add syslog output.
             HANDLERS.append(handlers.SysLogHandler(syslog_address,
@@ -102,10 +106,6 @@ def configure(*args, **kwargs):
 
     # Default to INFO level logging.
     set_level(kwargs.get('level', logging.INFO))
-
-    if not valid_facility:
-        WalELogger(__name__).warning(
-            msg='invalid syslog facility level specified')
 
 
 def get_log_destinations():
