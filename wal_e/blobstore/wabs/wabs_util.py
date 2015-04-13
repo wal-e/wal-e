@@ -14,6 +14,7 @@ from . import calling_format
 from hashlib import md5
 from urlparse import urlparse
 from wal_e import log_help
+from wal_e import files
 from wal_e.pipeline import get_download_pipeline
 from wal_e.piper import PIPE
 from wal_e.retries import retry, retry_with_count
@@ -201,8 +202,8 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
         del tb
 
     def download():
-        with open(path, 'wb') as decomp_out:
-            with get_download_pipeline(PIPE, decomp_out, decrypt) as pl:
+        with files.DeleteOnError(path) as decomp_out:
+            with get_download_pipeline(PIPE, decomp_out.f, decrypt) as pl:
                 g = gevent.spawn(write_and_return_error, url, conn, pl.stdin)
 
                 try:
@@ -223,6 +224,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                         hint=('This can be normal when Postgres is trying '
                               'to detect what timelines are available '
                               'during restoration.'))
+                    decomp_out.remove_regardless = True
                     return False
 
             logger.info(
