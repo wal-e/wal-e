@@ -80,10 +80,10 @@ def configure(*args, **kwargs):
     valid_facility = False
     if 'syslog' in log_destinations:
         facility, valid_facility = get_syslog_facility()
-    
+
         if not valid_facility:
             terrible_log_output('invalid syslog facility level specified')
-    
+
         try:
             # Add syslog output.
             HANDLERS.append(handlers.SysLogHandler(syslog_address,
