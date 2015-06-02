@@ -3,3 +3,6 @@ boto>=2.6.0
 azure>=0.7.0
 python-swiftclient>=1.8.0
 python-keystoneclient>=0.4.2
+requests>=2.5.2
+six>=1.9.0
+pbr>=0.11,<1.0
