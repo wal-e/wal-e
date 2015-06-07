@@ -81,7 +81,7 @@ is appropriate for the store you are using.
 Dependencies
 ------------
 
-* python (>= 2.6)
+* python (>= 2.7)
 * lzop
 * psql (>= 8.4)
 * pv
@@ -640,14 +640,11 @@ the tox_ configuration included with WAL-E.
 
 To run the tests, one need only run::
 
-  $ tox
-
-However, if one does not have both Python 2.6 and 2.7 installed
-simultaneously (WAL-E supports both and tests both), there will be
-errors in running tox_ as seen previously.  One can restrict the test
-to the Python of one's choice to avoid that::
-
   $ tox -e py27
+
+There are a variety of other environments tested by ``tox`` handling
+old and new library versions, but ``-e py27`` is normally the
+environment one should iterate with.
 
 To run a somewhat more lengthy suite of integration tests that
 communicate with AWS S3, one might run tox_ like this::
@@ -658,7 +655,7 @@ communicate with AWS S3, one might run tox_ like this::
     WALE_WABS_INTEGRATION_TESTS=TRUE    \
     WABS_ACCOUNT_NAME=[...]             \
     WABS_ACCESS_KEY=[...]               \
-    tox -- -n 8
+    tox -e py27 -- -n 8
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
 invocation.  This ``-n 8`` is after a ``--`` that indicates to tox_
