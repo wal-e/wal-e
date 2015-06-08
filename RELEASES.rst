@@ -1,8 +1,36 @@
 Releases
 ========
 
+v0.8.1
+------
+
+Release v0.8.1 drops Python 2.6 support and has minor bug fixes from
+v0.8.0:
+
+* Python 2.6 support dropped.  This is on account of the Azure driver
+  having dropped support for it.
+
+* Busybox compatability
+
+  "lzop" on busybox does not have the "--stdout" flag, instead the
+  shorthand "-c" must be used.
+
+  There is an investigation of backwards compatability by Manuel
+  Alejandro de Brito Fontes at
+  https://github.com/wal-e/wal-e/pull/171.
+
+* Delete files when there is an error in their creation.  Such partial
+  files could cause confusion for Postgres, particularly when
+  ``standby_mode=off`` is in ``recovery.conf``.
+
+  Ivan Evtuhovich reported the issue, tested solutions, and wrote a
+  proof of concept of a fix: https://github.com/wal-e/wal-e/pull/169
+
+* Avoid annoying error message "invalid facility" when stderr is set
+  as the log target.  Report and fixed by Noah Yetter.
+
 v0.8.0
--------
+------
 
 Release v0.8.0 is deemed backwards and forwards compatible with WAL-E
 v0.7 in terms of archival format and interface.  Upgrading and
