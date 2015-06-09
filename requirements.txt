@@ -1,5 +1,6 @@
 gevent>=0.13.1
 boto>=2.6.0
 azure>=0.7.0
+oslo.config>=1.12.0
 python-swiftclient>=1.8.0
 python-keystoneclient>=0.4.2
