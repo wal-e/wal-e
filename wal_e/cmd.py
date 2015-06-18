@@ -271,6 +271,14 @@ def build_parser():
         dest='while_offline',
         action='store_true',
         default=False)
+    backup_push_parser.add_argument(
+        '--timeout',
+        help=('Statement timeout in milliseconds per psql command. '
+              '"0" disables the timeout. See '
+              'http://www.postgresql.org/docs/9.3/static/'
+              'runtime-config-client.html#GUC-STATEMENT-TIMEOUT'),
+        type=int,
+        default=None)
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(
@@ -569,7 +577,8 @@ def main():
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
-                pool_size=args.pool_size)
+                pool_size=args.pool_size,
+                timeout=args.timeout)
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_restore(args.WAL_SEGMENT,

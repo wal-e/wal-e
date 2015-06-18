@@ -171,11 +171,16 @@ class Backup(object):
         start_backup_info = None
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
+        if 'timeout' in kwargs:
+            timeout = kwargs.pop('timeout')
+        else:
+            timeout = None
 
+        pg_backup = PgBackupStatements(timeout)
         try:
             if not while_offline:
-                start_backup_info = PgBackupStatements.run_start_backup()
-                version = PgBackupStatements.pg_version()['version']
+                start_backup_info = pg_backup.run_start_backup()
+                version = pg_backup.pg_version()['version']
             else:
                 if os.path.exists(os.path.join(data_directory,
                                                'postmaster.pid')):
@@ -206,7 +211,7 @@ class Backup(object):
                             'See README: TODO about pg_cancel_backup'))
 
             if not while_offline:
-                stop_backup_info = PgBackupStatements.run_stop_backup()
+                stop_backup_info = pg_backup.run_stop_backup()
             else:
                 stop_backup_info = start_backup_info
             backup_stop_good = True
