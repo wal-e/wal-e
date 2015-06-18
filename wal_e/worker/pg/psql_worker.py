@@ -38,11 +38,12 @@ def psql_csv_run(sql_command, error_handler=None):
     situations.  The output is fully buffered into Python.
 
     """
-    csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
-                 .format(query=sql_command))
+    # Explicitly disable the query timeout.
+    csv_query = ['SET statement_timeout = 0']
+    csv_query.append('COPY ({}) TO STDOUT WITH CSV HEADER'.format(sql_command))
 
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
-                                '-c', csv_query],
+                                '-c', '; '.join(csv_query)],
                                stdout=PIPE)
     stdout = psql_proc.communicate()[0]
 
