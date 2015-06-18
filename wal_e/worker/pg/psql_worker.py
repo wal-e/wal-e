@@ -30,7 +30,7 @@ class UTC(datetime.tzinfo):
         return self.ZERO
 
 
-def psql_csv_run(sql_command, error_handler=None):
+def psql_csv_run(sql_command, error_handler=None, timeout=None):
     """
     Runs psql and returns a CSVReader object from the query
 
@@ -38,11 +38,17 @@ def psql_csv_run(sql_command, error_handler=None):
     situations.  The output is fully buffered into Python.
 
     """
-    csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
-                 .format(query=sql_command))
+    if timeout is None:
+        csv_query = []
+    else:
+        # Explicitly set the query timeout. The commit is needed or else the
+        # setting won't be applied, however psql will output a warning which
+        # is safe to ignore: "WARNING:  there is no transaction in progress"
+        csv_query = ['SET statement_timeout = {}'.format(timeout), 'COMMIT']
+    csv_query.append('COPY ({}) TO STDOUT WITH CSV HEADER'.format(sql_command))
 
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
-                                '-c', csv_query],
+                                '-c', '; '.join(csv_query)],
                                stdout=PIPE)
     stdout = psql_proc.communicate()[0]
 
@@ -73,6 +79,8 @@ class PgBackupStatements(object):
     Relies on PsqlHelp for underlying mechanism.
 
     """
+    def __init__(self, timeout):
+        self.timeout = timeout
 
     @staticmethod
     def _dict_transform(csv_reader):
@@ -80,8 +88,7 @@ class PgBackupStatements(object):
         assert len(rows) == 2, 'Expect header row and data row'
         return dict(zip(*rows))
 
-    @classmethod
-    def run_start_backup(cls):
+    def run_start_backup(self):
         """
         Connects to a server and attempts to start a hot backup
 
@@ -100,15 +107,14 @@ class PgBackupStatements(object):
         label = 'freeze_start_' + (datetime.datetime.utcnow()
                                    .replace(tzinfo=UTC()).isoformat())
 
-        return cls._dict_transform(psql_csv_run(
+        return self._dict_transform(psql_csv_run(
                 "SELECT file_name, "
                 "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
                 "  pg_start_backup('{0}'))".format(label),
-                error_handler=handler))
+                error_handler=handler, timeout=self.timeout))
 
-    @classmethod
-    def run_stop_backup(cls):
+    def run_stop_backup(self):
         """
         Stop a hot backup, if it was running, or error
 
@@ -120,14 +126,14 @@ class PgBackupStatements(object):
             assert popen.returncode != 0
             raise UserException('Could not stop hot backup')
 
-        return cls._dict_transform(psql_csv_run(
+        return self._dict_transform(psql_csv_run(
                 "SELECT file_name, "
                 "  lpad(file_offset::text, 8, '0') AS file_offset "
                 "FROM pg_xlogfile_name_offset("
-                "  pg_stop_backup())", error_handler=handler))
+                "  pg_stop_backup())",
+                error_handler=handler, timeout=self.timeout))
 
-    @classmethod
-    def pg_version(cls):
+    def pg_version(self):
         """
         Get a very informative version string from Postgres
 
@@ -135,4 +141,5 @@ class PgBackupStatements(object):
         other details.
 
         """
-        return cls._dict_transform(psql_csv_run('SELECT * FROM version()'))
+        return self._dict_transform(psql_csv_run('SELECT * FROM version()',
+                timeout=self.timeout))
