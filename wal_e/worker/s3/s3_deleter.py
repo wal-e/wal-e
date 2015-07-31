@@ -1,3 +1,7 @@
+import os
+
+from boto.s3.connection import Key
+
 from wal_e import exception
 from wal_e import retries
 from wal_e.worker.base import _Deleter
@@ -24,4 +28,12 @@ class Deleter(_Deleter):
                     hint='This should be reported as a bug.')
 
         bucket = page[0].bucket
-        bucket.delete_keys([key.name for key in page])
+
+        impl = os.getenv('WALE_S3_ENDPOINT')
+        if impl and 'storage.googleapis.com' in impl:
+            for key in page:
+                k = Key(bucket)
+                k.key = key.name
+                bucket.delete_key(k)
+        else:
+            bucket.delete_keys([key.name for key in page])
