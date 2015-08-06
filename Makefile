@@ -7,7 +7,7 @@ all: $(VIRTUALENV)
 
 $(VIRTUALENV): requirements.txt
 	@virtualenv --no-site-packages $(VIRTUALENV)
-	@$(VIRTUALENV)/bin/pip install -M -r requirements.txt
+	@$(VIRTUALENV)/bin/pip install -r requirements.txt
 	$(PYTHON) setup.py develop
 	touch $(VIRTUALENV)
 
