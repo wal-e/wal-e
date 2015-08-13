@@ -117,7 +117,7 @@ class SegmentNumber(collections.namedtuple('SegmentNumber',
 
 OBSOLETE_VERSIONS = frozenset(('004', '003', '002', '001', '000'))
 
-SUPPORTED_STORE_SCHEMES = ('s3', 'wabs', 'swift')
+SUPPORTED_STORE_SCHEMES = ('s3', 'wabs', 'swift', 'gs')
 
 
 # Exhaustively enumerates all possible metadata about a backup.  These
@@ -222,10 +222,10 @@ class StorageLayout(object):
 
         if url_tup.scheme not in SUPPORTED_STORE_SCHEMES:
             raise wal_e.exception.UserException(
-                msg='bad S3, Windows Azure Blob Storage, or OpenStack Swift '
-                    'URL scheme passed',
-                detail=('The scheme {0} was passed when "s3", "wabs", or '
-                        '"swift" was expected.'.format(url_tup.scheme)))
+                msg='bad S3, Windows Azure Blob Storage, OpenStack Swift, or '
+                    'Google Cloud Storage URL scheme passed',
+                detail='The scheme {0} was passed when "s3", "wabs", '
+                       '"swift", or "gs" was expected.'.format(url_tup.scheme))
 
         for scheme in SUPPORTED_STORE_SCHEMES:
             setattr(self, 'is_%s' % scheme, scheme == url_tup.scheme)
@@ -308,7 +308,12 @@ class StorageLayout(object):
     def key_last_modified(self, key):
         if hasattr(key, 'last_modified'):
             return key.last_modified
-        return key.properties.last_modified
+        elif hasattr(key, 'properties'):
+            return key.properties.last_modified
+        elif hasattr(key, 'updated'):
+            return key.updated
+        else:
+            assert False
 
 
 def get_backup_info(layout, **kwargs):
@@ -322,4 +327,7 @@ def get_backup_info(layout, **kwargs):
     elif layout.is_swift:
         from wal_e.storage.swift_storage import SwiftBackupInfo
         bi = SwiftBackupInfo(**kwargs)
+    elif layout.is_gs:
+        from wal_e.storage.gs_storage import GSBackupInfo
+        bi = GSBackupInfo(**kwargs)
     return bi

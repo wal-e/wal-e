@@ -195,6 +195,18 @@ def build_parser():
                            'with this instance to authenticate with the S3 '
                            'API.')
 
+    gs_group = parser.add_mutually_exclusive_group()
+    gs_group.add_argument('--gs-access-key-id',
+                          help='public GS access key. Can also be defined '
+                          'in an environment variable. If both are defined, '
+                          'the one defined in the programs arguments takes '
+                          'precedence.')
+
+    gs_group.add_argument('--gs-instance-metadata', action='store_true',
+                          help='Use the GCE Metadata server associated '
+                          'with this instance to authenticate with the GS '
+                          'API.')
+
     parser.add_argument('-a', '--wabs-account-name',
                         help='Account name of Windows Azure Blob Service '
                         'account. Can also be defined in an environment'
@@ -210,6 +222,11 @@ def build_parser():
                         help='Storage prefix to run all commands against.  '
                         'Can also be defined via environment variable '
                         'WALE_WABS_PREFIX.')
+
+    parser.add_argument('--gs-prefix',
+                        help='Storage prefix to run all commands against. '
+                        'Can also be defined via environment variable '
+                        'WALE_GS_PREFIX.')
 
     parser.add_argument(
         '--gpg-key-id',
@@ -414,19 +431,41 @@ def s3_instance_profile(args):
     return s3.InstanceProfileCredentials()
 
 
+def gs_creds(args):
+    from wal_e.blobstore import gs
+
+    if args.gs_instance_metadata:
+        access_key, secret_key = None, None
+    else:
+        access_key = args.gs_access_key_id or os.getenv('GS_ACCESS_KEY_ID')
+        if access_key is None:
+            raise UserException(
+                msg='GS Access Key credential is required but not provided',
+                hint=(_config_hint_generate('gs-access-key-id', True)))
+
+        secret_key = os.getenv('GS_SECRET_ACCESS_KEY')
+        if secret_key is None:
+            raise UserException(
+                msg='GS Secret Key credential is required but not provided',
+                hint=_config_hint_generate('gs-secret-access-key', False))
+
+    return gs.Credentials(access_key, secret_key)
+
+
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
-    prefix = (args.s3_prefix or args.wabs_prefix
+    prefix = (args.s3_prefix or args.wabs_prefix or args.gs_prefix
               or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX')
-              or os.getenv('WALE_SWIFT_PREFIX'))
+              or os.getenv('WALE_GS_PREFIX') or os.getenv('WALE_SWIFT_PREFIX'))
 
     if prefix is None:
         raise UserException(
             msg='no storage prefix defined',
             hint=(
-                'Either set one of the --wabs-prefix or --s3-prefix options or'
-                ' define one of the WALE_WABS_PREFIX, WALE_S3_PREFIX, or '
-                'WALE_SWIFT_PREFIX environment variables.'
+                'Either set one of the --wabs-prefix, --s3-prefix or '
+                '--gs-prefix options or define one of the WALE_WABS_PREFIX, '
+                'WALE_S3_PREFIX, WALE_SWIFT_PREFIX or WALE_GS_PREFIX '
+                'environment variables.'
             )
         )
 
@@ -485,6 +524,9 @@ def configure_backup_cxt(args):
             os.getenv('SWIFT_AUTH_VERSION', '2'),
         )
         return SwiftBackup(store, creds, gpg_key_id)
+    elif store.is_gs:
+        from wal_e.operator.gs_operator import GSBackup
+        return GSBackup(store, gpg_key_id)
     else:
         raise UserCritical(
             msg='no unsupported blob stores should get here',
@@ -610,6 +652,7 @@ def main():
 
                 boto.s3.key.Key.delete = just_error
                 boto.s3.bucket.Bucket.delete_keys = just_error
+                boto.s3.bucket.Bucket.delete_key = just_error
 
             # Handle the subcommands and route them to the right
             # implementations.
