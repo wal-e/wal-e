@@ -70,6 +70,13 @@ Azure Blob Store
 * WABS_ACCESS_KEY or
 * WABS_SAS_TOKEN
 
+Google Storage
+''''''''''''''
+
+* WALE_GS_PREFIX (e.g. ``gs://bucket/path/optionallymorepath``)
+* GCLOUD_PROJECT: Name of the project that hosts your bucket.
+* GOOGLE_APPLICATION_CREDENTIALS
+
 Swift
 '''''
 
@@ -107,6 +114,7 @@ will attempt to resolve them:
 * gevent>=1.0.2
 * boto>=2.24.0
 * azure>=0.7.0
+* gcloud>=0.8.0
 * python-swiftclient>=1.8.0
 * python-keystoneclient>=0.4.2
 * argparse, if not on Python 2.7
@@ -140,6 +148,12 @@ Push a base backup to Swift::
     SWIFT_USER="my_user"                                       \
     SWIFT_PASSWORD="my_password" wal-e                         \
     backup-push /var/lib/my/database
+
+Push a base backup to Google Cloud Storage::
+
+  $ WALE_GS_PREFIX="gs://some-bucket/directory-or-whatever"     \
+    GOOGLE_APPLICATION_CREDENTIALS=...                          \
+    wal-e backup-push /var/lib/my/database
 
 It is generally recommended that one use some sort of environment
 variable management with WAL-E: working with it this way is less verbose,

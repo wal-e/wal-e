@@ -1,5 +1,6 @@
 gevent>=1.0.2
 boto>=2.24.0
 azure>=0.7.0
+gcloud>=0.8.0
 python-swiftclient>=1.8.0
 python-keystoneclient>=0.4.2
