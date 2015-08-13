@@ -37,9 +37,9 @@ database that WAL segments can be applied to.
 All of these operators work in a context of three environment-variable
 based settings:
 
-* AWS_ACCESS_KEY_ID or WABS_ACCOUNT_NAME
-* AWS_SECRET_ACCESS_KEY or WABS_ACCESS_KEY
-* WALE_S3_PREFIX or WALE_WABS_PREFIX
+* AWS_ACCESS_KEY_ID or WABS_ACCOUNT_NAME or GS_ACCESS_KEY_ID
+* AWS_SECRET_ACCESS_KEY or WABS_ACCESS_KEY or GS_SECRET_ACCESS_KEY
+* WALE_S3_PREFIX or WALE_WABS_PREFIX or WALE_GS_PREFIX
 
 For Swift the following environment variables are needed:
 
@@ -57,15 +57,16 @@ There are also these variables:
   object stores like Rackspace Cloud Files in order to use the internal
   network.
 
-With the exception of AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY, all
-of these can be specified as arguments as well.  The AWS_* variables
-are the standard access-control keying system provided by Amazon,
-where the WABS_* are the standard access credentials defined by
-Windows Azure.
+With the exception of AWS_SECRET_ACCESS_KEY, WABS_ACCESS_KEY and
+GS_SECRET_ACCESS_KEY, all of these can be specified as arguments as well. The
+AWS_* variables are the standard access-control keying system provided by
+Amazon, where the WABS_* are the standard access credentials defined by
+Windows Azure. However, the GS_* variables are non-standard access credentials
+that are enabled through Google Cloud Storage `Interoperability API`_.
 
-The WALE_S3_PREFIX, WALE_WABS_PREFIX and WALE_SWIFT_PREFIX (_PREFIX)
-variables can be thought of as a context whereby this program operates
-on a single database cluster at a time.  Generally, for any one
+The WALE_S3_PREFIX, WALE_WABS_PREFIX, WALE_SWIFT_PREFIX and WALE_GS_PREFIX
+(_PREFIX) variables can be thought of as a context whereby this program
+operates on a single database cluster at a time.  Generally, for any one
 database the _PREFIX will be the same between all four operators.
 This context-driven approach attempts to help users avoid errors such
 as one database overwriting the WAL segments of another, as long as
@@ -120,6 +121,9 @@ Example OpenStack Swift Prefix:
 
   swift://some-container/directory/or/whatever
 
+Example Google Cloud Storage Prefix:
+
+  gs://some-bucket/directory/or/whatever
 
 Examples
 --------
@@ -147,15 +151,22 @@ Push a base backup to Swift::
     SWIFT_PASSWORD="my_password" wal-e                         \
     backup-push /var/lib/my/database
 
+Push a base backup to Google Cloud Storage::
+
+  $ GS_SECRET_ACCESS_KEY=... wal-e                      \
+    -k GS_ACCESS_KEY_ID                                 \
+    --gs-prefix=gs://some-bucket/directory/or/whatever  \
+    backup-push /var/lib/my/database
+
 It is generally recommended that one use some sort of environment
 variable management with WAL-E: working with it this way is less verbose,
 less prone to error, and less likely to expose secret information in
 logs.
 
-At this time, AWS_SECRET_ACCESS_KEY and WABS_ACCESS_KEY are the only
-secret values, and recording it frequently in logs is not recommended.
-The tool has never and should never accept secret information in argv
-to avoid process table security problems.  However, the user running
+At this time, AWS_SECRET_ACCESS_KEY, WABS_ACCESS_KEY and GS_SECRET_ACCESS_KEY
+are the only secret values, and recording it frequently in logs is not
+recommended. The tool has never and should never accept secret information in
+argv to avoid process table security problems.  However, the user running
 PostgreSQL (typically 'postgres') must be able to run a program that
 can access this secret information, as part of its archive_command_.
 
@@ -630,6 +641,16 @@ Example::
   # As seen when using Deis, which uses radosgw.
   WALE_S3_ENDPOINT=http+path://deis-store-gateway:8888
 
+Using GCE VM Instance Metadata Server
+'''''''''''''''''''''''''''''''''''''
+
+Similar to using IAM instance profiles on AWS (described above), WAL-E would
+benefit from use with the `GCE Metadata Server`_, which supplies access
+credentials for a GCE service account associated witht he VM instance.
+
+To instruct WAL-E to use these credentials for access to GS, pass the
+``--gs-instance-metadata`` flag.
+
 Development
 -----------
 
@@ -695,3 +716,5 @@ preference for pytest_ idiom be an impediment to submitting code.
 .. _pytest: https://pypi.python.org/pypi/pytest
 .. _unittest: http://docs.python.org/2/library/unittest.html
 .. _pytest-cov: https://pypi.python.org/pypi/pytest-cov
+.. _Interoperability API: https://cloud.google.com/storage/docs/interoperability
+.. _GCE Metadata Service: https://cloud.google.com/compute/docs/metadata
