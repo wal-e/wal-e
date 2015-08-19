@@ -322,4 +322,7 @@ def get_backup_info(layout, **kwargs):
     elif layout.is_swift:
         from wal_e.storage.swift_storage import SwiftBackupInfo
         bi = SwiftBackupInfo(**kwargs)
+    elif layout.is_gs:
+        from wal_e.storage.gs_storage import GSBackupInfo
+        bi = GSBackupInfo(**kwargs)
     return bi

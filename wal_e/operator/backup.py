@@ -53,7 +53,7 @@ class Backup(object):
         bl = self._backup_list(detail)
 
         # If there is no query, return an exhaustive list, otherwise
-        # find a backup instad.
+        # find a backup instead.
         if query is None:
             bl_iter = bl
         else:

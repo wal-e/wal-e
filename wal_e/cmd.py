@@ -652,6 +652,7 @@ def main():
 
                 boto.s3.key.Key.delete = just_error
                 boto.s3.bucket.Bucket.delete_keys = just_error
+                boto.s3.bucket.Bucket.delete_key = just_error
 
             # Handle the subcommands and route them to the right
             # implementations.
