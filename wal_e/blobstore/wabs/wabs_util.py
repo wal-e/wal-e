@@ -7,8 +7,25 @@ import socket
 import sys
 import traceback
 
-from azure import WindowsAzureMissingResourceError
-from azure.storage import BlobService
+try:
+    # New class name in the Azure SDK sometime after v1.0.
+    #
+    # See
+    # https://github.com/Azure/azure-sdk-for-python/blob/master/ChangeLog.txt
+    from azure.common import AzureMissingResourceHttpError
+except ImportError:
+    # Backwards compatbility for older Azure drivers.
+    from azure import WindowsAzureMissingResourceError \
+        as AzureMissingResourceHttpError
+
+try:
+    # New module location sometime after Azure SDK v1.0.
+    #
+    # See
+    # https://github.com/Azure/azure-sdk-for-python/blob/master/ChangeLog.txt
+    from azure.storage.blob import BlobService
+except ImportError:
+    from azure.storage import BlobService
 
 from . import calling_format
 from hashlib import md5
@@ -212,7 +229,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                     exc = g.get()
                     if exc is not None:
                         raise exc
-                except WindowsAzureMissingResourceError:
+                except AzureMissingResourceHttpError:
                     # Short circuit any re-try attempts under certain race
                     # conditions.
                     pl.abort()
