@@ -1,5 +1,5 @@
 import os
-import datetime
+from datetime import datetime
 
 
 def remove_empty_dirs(path):
@@ -23,6 +23,10 @@ def common_dir_path(args, sep='/'):
     return os.path.commonprefix(args).rpartition(sep)[0]
 
 
+def epoch_to_iso8601(timestamp):
+    return datetime.utcfromtimestamp(timestamp).isoformat()
+
+
 class FileKey:
     def __init__(self, bucket, name):
         self.bucket = bucket
@@ -30,7 +34,7 @@ class FileKey:
         self.path = os.path.normpath("/" + name)
         if os.path.isfile(self.path):
             stat = os.stat(self.path)
-            self.last_modified = datetime.datetime.utcfromtimestamp(stat.st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
+            self.last_modified = epoch_to_iso8601(stat.st_mtime)
             self.size = stat.st_size
 
     def get_contents_as_string(self):
@@ -76,7 +80,8 @@ class Bucket(object):
     def list(self, prefix):
         # TODO: handle errors from missing path
         path = "/" + prefix
-        file_paths = [os.path.join(root, f) for root, dirs, files in os.walk(path) for f in files]
+        file_paths = [os.path.join(root, f)
+                      for root, dirs, files in os.walk(path) for f in files]
         # convert to an array of Keys
         return [FileKey(bucket=self, name=f) for f in file_paths]
 

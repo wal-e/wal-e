@@ -1,5 +1,4 @@
 from urlparse import urlparse
-import socket
 import traceback
 import gevent
 
@@ -11,6 +10,7 @@ from wal_e.piper import PIPE
 from wal_e.retries import retry, retry_with_count
 
 logger = log_help.WalELogger(__name__)
+
 
 def _uri_to_key(creds, uri, conn=None):
     assert uri.startswith('file://')
@@ -61,7 +61,8 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
             detail=standard_detail_message(
                 'The exception type is {etype} and its value is '
                 '{evalue} and its traceback is {etraceback}'
-                .format(etype=typ, evalue=value, etraceback=''.join(traceback.format_tb(tb)))))
+                .format(etype=typ, evalue=value,
+                        etraceback=''.join(traceback.format_tb(tb)))))
 
         # Help Python GC by resolving possible cycles
         del tb

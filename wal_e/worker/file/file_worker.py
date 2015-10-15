@@ -38,7 +38,8 @@ class TarPartitionLister(object):
 
         bucket = get_bucket(self.file_conn, self.layout.store_name())
         for key in bucket.list(prefix=prefix):
-            url = 'file://{bucket}/{name}'.format(bucket=key.bucket.name, name=key.name)
+            url = 'file://{bucket}/{name}'.format(bucket=key.bucket.name,
+                                                  name=key.name)
             key_last_part = key.name.rsplit('/', 1)[-1]
             match = re.match(storage.VOLUME_REGEXP, key_last_part)
             if match is None:

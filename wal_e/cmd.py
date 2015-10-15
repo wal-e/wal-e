@@ -6,6 +6,7 @@ and fetching of WAL segments and base backups of the PostgreSQL data directory.
 """
 import sys
 
+
 def gevent_monkey(*args, **kwargs):
     import gevent.monkey
     gevent.monkey.patch_os()
@@ -206,12 +207,12 @@ def build_parser():
                         'WALE_S3_PREFIX.')
 
     parser.add_argument('--wabs-prefix',
-                        help='Windows Azure Blob Service prefix to run all commands against.  '
+                        help='WABS prefix to run all commands against.  '
                         'Can also be defined via environment variable '
                         'WALE_WABS_PREFIX.')
 
     parser.add_argument('--file-prefix',
-                        help='Storage prefix to run all commands against.  '
+                        help='File prefix to run all commands against.  '
                         'Can also be defined via environment variable '
                         'WALE_FILE_PREFIX.')
 
@@ -421,16 +422,21 @@ def s3_instance_profile(args):
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
     prefix = (args.s3_prefix or args.wabs_prefix or args.file_prefix
-              or os.getenv('WALE_S3_PREFIX') or os.getenv('WALE_WABS_PREFIX')
-              or os.getenv('WALE_SWIFT_PREFIX') or os.getenv('WALE_FILE_PREFIX'))
+              or os.getenv('WALE_S3_PREFIX')
+              or os.getenv('WALE_WABS_PREFIX')
+              or os.getenv('WALE_SWIFT_PREFIX')
+              or os.getenv('WALE_FILE_PREFIX'))
 
     if prefix is None:
         raise UserException(
             msg='no storage prefix defined',
             hint=(
-                'Either set one of the --wabs-prefix, --s3-prefix, --file-prefix options or'
-                ' define one of the WALE_WABS_PREFIX, WALE_S3_PREFIX, WALE_SWIFT_PREFIX or '
-                'WALE_FILE_PREFIX environment variables.'
+                'Either set one of the'
+                ' --wabs-prefix, --s3-prefix, --file-prefix options'
+                ' or define one of the'
+                ' WALE_WABS_PREFIX,'
+                ' WALE_S3_PREFIX,'
+                ' WALE_SWIFT_PREFIX or WALE_FILE_PREFIX environment variables.'
             )
         )
 
@@ -665,4 +671,5 @@ def main():
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

@@ -222,10 +222,10 @@ class StorageLayout(object):
 
         if url_tup.scheme not in SUPPORTED_STORE_SCHEMES:
             raise wal_e.exception.UserException(
-                msg='bad S3, Windows Azure Blob Storage, OpenStack Swift or File System'
-                    'URL scheme passed',
-                detail=('The scheme {0} was passed when "s3", "wabs", or '
-                        '"swift" or "file" was expected.'.format(url_tup.scheme)))
+                msg='bad S3, Windows Azure Blob Storage, OpenStack Swift'
+                    ' or File URL scheme passed',
+                detail=('The scheme {0} was passed when "s3", "wabs", "swift"'
+                        ' or "file" was expected.'.format(url_tup.scheme)))
 
         for scheme in SUPPORTED_STORE_SCHEMES:
             setattr(self, 'is_%s' % scheme, scheme == url_tup.scheme)
