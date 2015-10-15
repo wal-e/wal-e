@@ -12,4 +12,7 @@ def get_blobstore(layout):
     elif layout.is_swift:
         from wal_e.blobstore import swift
         blobstore = swift
+    elif layout.is_file:
+        from wal_e.blobstore import file
+        blobstore = file
     return blobstore

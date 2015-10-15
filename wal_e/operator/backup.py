@@ -44,6 +44,7 @@ class Backup(object):
         return self.cinfo.connect(self.creds)
 
     def backup_list(self, query, detail):
+
         """
         Lists base backups and basic information about them
 
