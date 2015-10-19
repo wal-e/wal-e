@@ -8,7 +8,7 @@ def remove_empty_dirs(path):
         for d in dirs:
             dir_path = os.path.join(root, d)
             if not os.listdir(dir_path):
-                os.removedirs(dir_path)
+                os.rmdir(dir_path)
 
 
 def ensure_dir_exists(path):
@@ -27,11 +27,11 @@ def epoch_to_iso8601(timestamp):
     return datetime.utcfromtimestamp(timestamp).isoformat()
 
 
-class FileKey:
+class FileKey(object):
     def __init__(self, bucket, name):
         self.bucket = bucket
         self.name = name
-        self.path = os.path.normpath("/" + name)
+        self.path = os.path.join("/", name.strip("/"))
         if os.path.isfile(self.path):
             stat = os.stat(self.path)
             self.last_modified = epoch_to_iso8601(stat.st_mtime)
@@ -73,12 +73,13 @@ class Bucket(object):
 
     def delete_keys(self, keys):
         for k in keys:
-            os.remove(k)
+            key_path = os.path.join("/", k.strip("/"))
+            os.remove(key_path)
         # deleting files can leave empty dirs => trim them
-        remove_empty_dirs(common_dir_path(keys))
+        common_path = os.path.join("/", common_dir_path(keys).strip("/"))
+        remove_empty_dirs(common_path)
 
     def list(self, prefix):
-        # TODO: handle errors from missing path
         path = "/" + prefix
         file_paths = [os.path.join(root, f)
                       for root, dirs, files in os.walk(path) for f in files]
