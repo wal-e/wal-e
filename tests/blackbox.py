@@ -8,7 +8,7 @@ from wal_e import cmd
 _PREFIX_VARS = ['WALE_S3_PREFIX', 'WALE_WABS_PREFIX', 'WALE_SWIFT_PREFIX']
 
 _AWS_CRED_ENV_VARS = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
-                      'AWS_SECURITY_TOKEN']
+                      'AWS_SECURITY_TOKEN', 'AWS_REGION']
 
 
 class AwsTestConfig(object):
@@ -37,6 +37,7 @@ class AwsTestConfig(object):
 
         self.monkeypatch.setenv('WALE_S3_PREFIX', 's3://{0}/{1}'
                                 .format(default_test_bucket, test_name))
+        self.monkeypatch.setenv('AWS_REGION', 'us-west-1')
 
     def main(self, *args):
         self.monkeypatch.setattr(sys, 'argv', ['wal-e'] + list(args))
@@ -77,6 +78,7 @@ class AwsInstanceProfileTestConfig(object):
 
         self.monkeypatch.setenv('WALE_S3_PREFIX', 's3://{0}/{1}'
                                 .format(default_test_bucket, test_name))
+        self.monkeypatch.setenv('AWS_REGION', 'us-west-1')
 
         # Patch boto.utils.get_instance_metadata to return a ginned up
         # credential.

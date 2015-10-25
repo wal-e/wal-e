@@ -3,7 +3,6 @@ import os
 import re
 import urlparse
 
-from boto import s3
 from boto.s3 import connection
 from wal_e import log_help
 from wal_e.exception import UserException
@@ -11,17 +10,16 @@ from wal_e.exception import UserException
 logger = log_help.WalELogger(__name__)
 
 _S3_REGIONS = {
-    # A map like this is actually defined in boto.s3 in newer versions of boto
-    # but we reproduce it here for the folks (notably, Ubuntu 12.04) on older
-    # versions.
-    'ap-northeast-1': 's3-ap-northeast-1.amazonaws.com',
-    'ap-southeast-1': 's3-ap-southeast-1.amazonaws.com',
-    'ap-southeast-2': 's3-ap-southeast-2.amazonaws.com',
-    'eu-west-1': 's3-eu-west-1.amazonaws.com',
-    'sa-east-1': 's3-sa-east-1.amazonaws.com',
-    'us-standard': 's3.amazonaws.com',
-    'us-west-1': 's3-us-west-1.amazonaws.com',
-    'us-west-2': 's3-us-west-2.amazonaws.com',
+    # See http://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
+    'ap-northeast-1': u's3-ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': u's3-ap-southeast-1.amazonaws.com',
+    'ap-southeast-2': u's3-ap-southeast-2.amazonaws.com',
+    'eu-central-1': u's3-eu-central-1.amazonaws.com',
+    'eu-west-1': u's3-eu-west-1.amazonaws.com',
+    'sa-east-1': u's3-sa-east-1.amazonaws.com',
+    'us-east-1': u's3.amazonaws.com',
+    'us-west-1': u's3-us-west-1.amazonaws.com',
+    'us-west-2': u's3-us-west-2.amazonaws.com',
 }
 
 try:
@@ -93,7 +91,13 @@ def _connect_secureish(*args, **kwargs):
 
     kwargs['is_secure'] = True
 
-    return connection.S3Connection(*args, **kwargs)
+    auth_region_name = kwargs.pop('auth_region_name', None)
+    conn = connection.S3Connection(*args, **kwargs)
+
+    if auth_region_name:
+        conn.auth_region_name = auth_region_name
+
+    return conn
 
 
 def _s3connection_opts_from_uri(impl):
@@ -192,6 +196,7 @@ class CallingInfo(object):
                 *args,
                 provider=creds,
                 calling_format=self.calling_format(),
+                auth_region_name=self.region,
                 **kwargs)
 
         # If WALE_S3_ENDPOINT is set, do not attempt to guess
@@ -201,83 +206,50 @@ class CallingInfo(object):
         if impl:
             return connection.S3Connection(**_s3connection_opts_from_uri(impl))
 
-        # Check if subdomain format compatible; no need to go through
-        # any region detection mumbo-jumbo of any kind.
+        # Check if subdomain format compatible: if so, use the
+        # BUCKETNAME.s3.amazonaws.com hostname to communicate with the
+        # bucket.
         if self.calling_format is connection.SubdomainCallingFormat:
-            return _conn_help()
+            return _conn_help(host='s3.amazonaws.com')
 
         # Check if OrdinaryCallingFormat compatible, but also see if
         # the endpoint has already been set, in which case only
         # setting the host= flag is necessary.
         assert self.calling_format is connection.OrdinaryCallingFormat
-        if self.ordinary_endpoint is not None:
-            return _conn_help(host=self.ordinary_endpoint)
-
-        # By this point, this is an OrdinaryCallingFormat bucket that
-        # has never had its region detected in this CallingInfo
-        # instance.  So, detect its region (this can happen without
-        # knowing the right regional endpoint) and store it to speed
-        # future calls.
-        assert self.calling_format is connection.OrdinaryCallingFormat
-        assert self.region is None
-        assert self.ordinary_endpoint is None
-
-        conn = _conn_help()
-
-        bucket = s3.bucket.Bucket(connection=conn,
-                                  name=self.bucket_name)
-
-        try:
-            loc = bucket.get_location()
-        except boto.exception.S3ResponseError, e:
-            if e.status == 403:
-                # A 403 can be caused by IAM keys that do not permit
-                # GetBucketLocation.  To not change behavior for
-                # environments that do not have GetBucketLocation
-                # allowed, fall back to the default endpoint,
-                # preserving behavior for those using us-standard.
-                logger.warning(msg='cannot detect location of bucket',
-                               detail=('The specified bucket name was: ' +
-                                       repr(self.bucket_name)),
-                               hint=('Permit the GetLocation permission for '
-                                     'the provided AWS credentials.  '
-                                     'Or, use a bucket name that follows the '
-                                     'preferred bucket naming guidelines '
-                                     'and has no dots in it.'))
-
-                self.region = 'us-standard'
-                self.ordinary_endpoint = _S3_REGIONS[self.region]
-            else:
-                raise
-        else:
-            # An empty, successful get location returns an empty
-            # string to mean S3-Classic/US-Standard.
-            if loc == '':
-                loc = 'us-standard'
-
-            self.region = loc
-            self.ordinary_endpoint = _S3_REGIONS[loc]
-
-        # Region/endpoint information completed: connect.
         assert self.ordinary_endpoint is not None
         return _conn_help(host=self.ordinary_endpoint)
 
 
-def from_store_name(bucket_name):
+def must_resolve(region):
+    if region in _S3_REGIONS:
+        endpoint = _S3_REGIONS[region]
+        return endpoint
+    else:
+        raise UserException(msg='Could not resolve host for AWS_REGION',
+                            detail='AWS_REGION is set to "{0}".'
+                            .format(region))
+
+
+def from_store_name(bucket_name, region=None):
     """Construct a CallingInfo value from a bucket name.
 
     This is useful to encapsulate the ugliness of setting up S3
     connections, especially with regions and TLS certificates are
     involved.
     """
+    # Late-bind `region` for the sake of tests that inject the
+    # AWS_REGION environment variable.
+    if region is None:
+        region = os.getenv('AWS_REGION')
+
     mostly_ok = _is_mostly_subdomain_compatible(bucket_name)
 
     if not mostly_ok:
         return CallingInfo(
             bucket_name=bucket_name,
-            region='us-standard',
+            region=region,
             calling_format=connection.OrdinaryCallingFormat,
-            ordinary_endpoint=_S3_REGIONS['us-standard'])
+            ordinary_endpoint=must_resolve(region))
     else:
         if '.' in bucket_name:
             # The bucket_name might have been DNS compatible, but once
@@ -286,16 +258,16 @@ def from_store_name(bucket_name):
             return CallingInfo(
                 bucket_name=bucket_name,
                 calling_format=connection.OrdinaryCallingFormat,
-                region=None,
-                ordinary_endpoint=None)
+                region=region,
+                ordinary_endpoint=must_resolve(region))
         else:
             # If the bucket follows naming rules and has no dots in
             # the name, SubdomainCallingFormat can be used, with TLS,
-            # world-wide, and WAL-E can be region-oblivious.
+            # world-wide.
             return CallingInfo(
                 bucket_name=bucket_name,
                 calling_format=connection.SubdomainCallingFormat,
-                region=None,
+                region=region,
                 ordinary_endpoint=None)
 
     assert False

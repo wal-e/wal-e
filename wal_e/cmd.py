@@ -446,6 +446,8 @@ def configure_backup_cxt(args):
             creds = s3_instance_profile(args)
         else:
             creds = s3_explicit_creds(args)
+        from wal_e.blobstore import s3
+        s3.sigv4_check_apply()
 
         from wal_e.operator import s3_operator
 

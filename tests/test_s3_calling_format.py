@@ -2,6 +2,7 @@ import boto
 import inspect
 import os
 import pytest
+import wal_e.exception
 
 from boto.s3 import connection
 from s3_integration_help import (
@@ -55,24 +56,31 @@ def test_subdomain_detect():
         assert _is_mostly_subdomain_compatible(bn) is False
 
 
-def test_us_standard_default_for_bogus():
-    """Test degradation to us-standard for all weird bucket names.
+def test_bogus_region(monkeypatch):
+    # Raises an error when it is necessary to resolve a hostname for a
+    # bucket but no such region is found in the AWS endpoint
+    # dictionary.
+    monkeypatch.setenv('AWS_REGION', 'not-a-valid-region-name')
+    with pytest.raises(wal_e.exception.UserException) as e:
+        calling_format.from_store_name('forces.OrdinaryCallingFormat')
 
-    Such bucket names are not supported outside of us-standard by
-    WAL-E.
-    """
-    for bn in SUBDOMAIN_BOGUS:
-        cinfo = calling_format.from_store_name(bn)
-        assert cinfo.region == 'us-standard'
+    assert e.value.msg == 'Could not resolve host for AWS_REGION'
+    assert e.value.detail == 'AWS_REGION is set to "not-a-valid-region-name".'
+
+    # Doesn't raise an error when it is unnecessary to resolve a
+    # hostname for given bucket name.
+    monkeypatch.setenv('AWS_REGION', 'not-a-valid-region-name')
+    calling_format.from_store_name('subdomain-format-acceptable')
 
 
-def test_cert_validation_sensitivity():
+def test_cert_validation_sensitivity(monkeypatch):
     """Test degradation of dotted bucket names to OrdinaryCallingFormat
 
     Although legal bucket names with SubdomainCallingFormat, these
     kinds of bucket names run afoul certification validation, and so
     they are forced to fall back to OrdinaryCallingFormat.
     """
+    monkeypatch.setenv('AWS_REGION', 'us-east-1')
     for bn in SUBDOMAIN_OK:
         if '.' not in bn:
             cinfo = calling_format.from_store_name(bn)
@@ -83,57 +91,8 @@ def test_cert_validation_sensitivity():
 
             cinfo = calling_format.from_store_name(bn)
             assert (cinfo.calling_format == connection.OrdinaryCallingFormat)
-            assert cinfo.region is None
-            assert cinfo.ordinary_endpoint is None
-
-
-@pytest.mark.skipif("no_real_s3_credentials()")
-def test_real_get_location():
-    """Exercise a case where a get location call is needed.
-
-    In cases where a bucket has offensive characters -- like dots --
-    that would otherwise break TLS, test sniffing the right endpoint
-    so it can be used to address the bucket.
-    """
-    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
-                        os.getenv('AWS_SECRET_ACCESS_KEY'))
-
-    bucket_name = bucket_name_mangle('wal-e-test-us-west-1.get.location',
-                                     delimiter='.')
-
-    cinfo = calling_format.from_store_name(bucket_name)
-
-    with FreshBucket(bucket_name,
-                     host='s3-us-west-1.amazonaws.com',
-                     calling_format=connection.OrdinaryCallingFormat()) as fb:
-        fb.create(location='us-west-1')
-        conn = cinfo.connect(creds)
-
-        assert cinfo.region == 'us-west-1'
-        assert cinfo.calling_format is connection.OrdinaryCallingFormat
-        assert conn.host == 's3-us-west-1.amazonaws.com'
-
-
-@pytest.mark.skipif("no_real_s3_credentials()")
-def test_classic_get_location():
-    """Exercise get location on a s3-classic bucket."""
-    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
-                        os.getenv('AWS_SECRET_ACCESS_KEY'))
-
-    bucket_name = bucket_name_mangle('wal-e-test.classic.get.location',
-                                     delimiter='.')
-
-    cinfo = calling_format.from_store_name(bucket_name)
-
-    with FreshBucket(bucket_name,
-                     host='s3.amazonaws.com',
-                     calling_format=connection.OrdinaryCallingFormat()) as fb:
-        fb.create()
-        conn = cinfo.connect(creds)
-
-        assert cinfo.region == 'us-standard'
-        assert cinfo.calling_format is connection.OrdinaryCallingFormat
-        assert conn.host == 's3.amazonaws.com'
+            assert cinfo.region == 'us-east-1'
+            assert cinfo.ordinary_endpoint == u's3.amazonaws.com'
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
@@ -176,65 +135,18 @@ def test_ipv4_detect():
     assert _is_ipv4_like('-1.1.1.') is False
 
 
-@pytest.mark.skipif("no_real_s3_credentials()")
-def test_get_location_errors(monkeypatch):
-    """Simulate situations where get_location fails
-
-    Exercise both the case where IAM refuses the privilege to get the
-    bucket location and where some other S3ResponseError is raised
-    instead.
-    """
-    bucket_name = 'wal-e.test.403.get.location'
-
-    def just_403(self):
-        raise boto.exception.S3ResponseError(status=403,
-                                             reason=None, body=None)
-
-    def unhandled_404(self):
-        raise boto.exception.S3ResponseError(status=404,
-                                             reason=None, body=None)
-
-    creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
-                        os.getenv('AWS_SECRET_ACCESS_KEY'))
-
-    with FreshBucket(bucket_name,
-                     calling_format=connection.OrdinaryCallingFormat()):
-        cinfo = calling_format.from_store_name(bucket_name)
-
-        # Provoke a 403 when trying to get the bucket location.
-        monkeypatch.setattr(boto.s3.bucket.Bucket, 'get_location', just_403)
-        cinfo.connect(creds)
-
-        assert cinfo.region == 'us-standard'
-        assert cinfo.calling_format is connection.OrdinaryCallingFormat
-
-        cinfo = calling_format.from_store_name(bucket_name)
-
-        # Provoke an unhandled S3ResponseError, in this case 404 not
-        # found.
-        monkeypatch.setattr(boto.s3.bucket.Bucket, 'get_location',
-                            unhandled_404)
-
-        with pytest.raises(boto.exception.S3ResponseError) as e:
-            cinfo.connect(creds)
-
-        assert e.value.status == 404
-
-
-def test_str_repr_call_info():
+def test_str_repr_call_info(monkeypatch):
     """Ensure CallingInfo renders sensibly.
 
     Try a few cases sensitive to the bucket name.
     """
-    if boto.__version__ <= '2.2.0':
-        pytest.skip('Class name output is unstable on older boto versions')
-
+    monkeypatch.setenv('AWS_REGION', 'us-east-1')
     cinfo = calling_format.from_store_name('hello-world')
     assert repr(cinfo) == str(cinfo)
     assert repr(cinfo) == (
         "CallingInfo(hello-world, "
         "<class 'boto.s3.connection.SubdomainCallingFormat'>, "
-        "None, None)"
+        "'us-east-1', None)"
     )
 
     cinfo = calling_format.from_store_name('hello.world')
@@ -242,7 +154,7 @@ def test_str_repr_call_info():
     assert repr(cinfo) == (
         "CallingInfo(hello.world, "
         "<class 'boto.s3.connection.OrdinaryCallingFormat'>, "
-        "None, None)"
+        "'us-east-1', u's3.amazonaws.com')"
     )
 
     cinfo = calling_format.from_store_name('Hello-World')
@@ -250,7 +162,7 @@ def test_str_repr_call_info():
     assert repr(cinfo) == (
         "CallingInfo(Hello-World, "
         "<class 'boto.s3.connection.OrdinaryCallingFormat'>, "
-        "'us-standard', 's3.amazonaws.com')"
+        "'us-east-1', u's3.amazonaws.com')"
     )
 
 
@@ -266,7 +178,7 @@ def test_cipher_suites():
 
     creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
                         os.getenv('AWS_SECRET_ACCESS_KEY'))
-    cinfo = calling_format.from_store_name('irrelevant')
+    cinfo = calling_format.from_store_name('irrelevant', region='us-east-1')
     conn = cinfo.connect(creds)
 
     # Warm up the pool and the connection in it; new_http_connection

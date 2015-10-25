@@ -41,7 +41,7 @@ def prepare_s3_default_test_bucket():
                            os.getenv('AWS_SECRET_ACCESS_KEY'),
                            os.getenv('AWS_SECURITY_TOKEN'))
 
-    cinfo = calling_format.from_store_name(bucket_name)
+    cinfo = calling_format.from_store_name(bucket_name, region='us-west-1')
     conn = cinfo.connect(creds)
 
     def _clean():
@@ -67,7 +67,10 @@ def prepare_s3_default_test_bucket():
 @pytest.fixture(scope='session')
 def default_test_bucket():
     if not no_real_s3_credentials():
-        return prepare_s3_default_test_bucket()
+        os.putenv('AWS_REGION', 'us-east-1')
+        ret = prepare_s3_default_test_bucket()
+        os.unsetenv('AWS_REGION')
+        return ret
 
 
 def boto_supports_certs():
@@ -135,6 +138,7 @@ def _delete_keys(bucket, keys):
 
 
 def apathetic_bucket_delete(bucket_name, keys, *args, **kwargs):
+    kwargs.setdefault('host', 's3.amazonaws.com')
     conn = boto.s3.connection.S3Connection(*args, **kwargs)
     bucket = conn.lookup(bucket_name)
 

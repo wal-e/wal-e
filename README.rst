@@ -53,6 +53,7 @@ AWS S3 and Work-alikes
 * WALE_S3_PREFIX (e.g. ``s3://bucket/path/optionallymorepath``)
 * AWS_ACCESS_KEY_ID
 * AWS_SECRET_ACCESS_KEY
+* AWS_REGION (e.g. ``us-east-1``)
 
 Optional:
 
@@ -100,7 +101,7 @@ This software also has Python dependencies: installing with ``pip``
 will attempt to resolve them:
 
 * gevent>=1.0.2
-* boto>=2.6.0
+* boto>=2.24.0
 * azure>=0.7.0
 * python-swiftclient>=1.8.0
 * python-keystoneclient>=0.4.2

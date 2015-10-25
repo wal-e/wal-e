@@ -30,9 +30,9 @@ def test_simple_federation_token(sts_conn):
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_policy(sts_conn):
+def test_policy(sts_conn, monkeypatch):
     """Sanity checks for the intended ACLs of the policy"""
-
+    monkeypatch.setenv('AWS_REGION', 'us-west-1')
     # Use periods to force OrdinaryCallingFormat when using
     # calling_format.from_store_name.
     bn = bucket_name_mangle('wal-e.sts.list.test')
@@ -96,7 +96,8 @@ def test_policy(sts_conn):
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_uri_put_file(sts_conn):
+def test_uri_put_file(sts_conn, monkeypatch):
+    monkeypatch.setenv('AWS_REGION', 'us-west-1')
     bn = bucket_name_mangle('wal-e.sts.uri.put.file')
     cf = connection.OrdinaryCallingFormat()
     policy_text = make_policy(bn, 'test-prefix', allow_get_location=True)
@@ -120,8 +121,9 @@ def test_uri_put_file(sts_conn):
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")
-def test_backup_list(sts_conn):
+def test_backup_list(sts_conn, monkeypatch):
     """Test BackupList's compatibility with a test policy."""
+    monkeypatch.setenv('AWS_REGION', 'us-west-1')
     bn = bucket_name_mangle('wal-e.sts.backup.list')
     h = 's3-us-west-1.amazonaws.com'
     cf = connection.OrdinaryCallingFormat()
