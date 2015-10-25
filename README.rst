@@ -99,7 +99,7 @@ Dependencies
 This software also has Python dependencies: installing with ``pip``
 will attempt to resolve them:
 
-* gevent>=0.13.1
+* gevent>=1.0.2
 * boto>=2.6.0
 * azure>=0.7.0
 * python-swiftclient>=1.8.0
