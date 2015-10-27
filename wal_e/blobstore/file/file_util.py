@@ -1,5 +1,4 @@
 from urlparse import urlparse
-import traceback
 import gevent
 
 from . import calling_format
@@ -58,7 +57,6 @@ def do_lzop_get(creds, url, path, decrypt, do_retry):
             .format(url=url, path=path))
 
     return True
-
 
 
 def write_and_return_error(key, stream):
