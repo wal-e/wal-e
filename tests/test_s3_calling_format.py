@@ -6,6 +6,7 @@ import pytest
 from boto.s3 import connection
 from s3_integration_help import (
     FreshBucket,
+    bucket_name_mangle,
     no_real_s3_credentials,
 )
 from wal_e.blobstore.s3 import Credentials
@@ -97,7 +98,8 @@ def test_real_get_location():
     creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
                         os.getenv('AWS_SECRET_ACCESS_KEY'))
 
-    bucket_name = 'wal-e-test-us-west-1.get.location'
+    bucket_name = bucket_name_mangle('wal-e-test-us-west-1.get.location',
+                                     delimiter='.')
 
     cinfo = calling_format.from_store_name(bucket_name)
 
@@ -118,7 +120,8 @@ def test_classic_get_location():
     creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
                         os.getenv('AWS_SECRET_ACCESS_KEY'))
 
-    bucket_name = 'wal-e-test.classic.get.location'
+    bucket_name = bucket_name_mangle('wal-e-test.classic.get.location',
+                                     delimiter='.')
 
     cinfo = calling_format.from_store_name(bucket_name)
 
@@ -139,7 +142,7 @@ def test_subdomain_compatible():
     creds = Credentials(os.getenv('AWS_ACCESS_KEY_ID'),
                         os.getenv('AWS_SECRET_ACCESS_KEY'))
 
-    bucket_name = 'wal-e-test-us-west-1-no-dots'
+    bucket_name = bucket_name_mangle('wal-e-test-us-west-1-no-dots')
 
     cinfo = calling_format.from_store_name(bucket_name)
 

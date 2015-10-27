@@ -12,6 +12,7 @@ from boto.s3.connection import (
 )
 from s3_integration_help import (
     boto_supports_certs,
+    bucket_name_mangle,
     FreshBucket,
     no_real_s3_credentials,
 )
@@ -27,8 +28,7 @@ def test_301_redirect():
     """Integration test for bucket naming issues this test."""
     import boto.s3.connection
 
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    bucket_name = 'wal-e-test-301-redirect' + aws_access_key.lower()
+    bucket_name = bucket_name_mangle('wal-e-test-301-redirect')
 
     with pytest.raises(boto.exception.S3ResponseError) as e:
         # Just initiating the bucket manipulation API calls is enough
@@ -46,10 +46,8 @@ def test_get_bucket_vs_certs():
     """Integration test for bucket naming issues."""
     import boto.s3.connection
 
-    aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-
     # Add dots to try to trip up TLS certificate validation.
-    bucket_name = 'wal-e.test.dots.' + aws_access_key.lower()
+    bucket_name = bucket_name_mangle('wal-e.test.dots', delimiter='.')
 
     with pytest.raises(boto.https_connection.InvalidCertificateException):
         with FreshBucket(bucket_name, calling_format=SubdomainCallingFormat()):
