@@ -26,7 +26,7 @@ try:
     # Override the hard-coded region map with boto's mappings if
     # available.
     from boto.s3 import regions
-    _S3_REGIONS.update(dict((r.name, r.endpoint) for r in regions()))
+    _S3_REGIONS.update(dict((r.name, unicode(r.endpoint)) for r in regions()))
 except ImportError:
     pass
 
