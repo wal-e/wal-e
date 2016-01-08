@@ -94,8 +94,9 @@ class BackupList(_BackupList):
 
 class DeleteFromContext(_DeleteFromContext):
 
-    def __init__(self, wabs_conn, layout, dry_run):
-        super(DeleteFromContext, self).__init__(wabs_conn, layout, dry_run)
+    def __init__(self, wabs_conn, layout, dry_run, permanent):
+        super(DeleteFromContext, self).__init__(wabs_conn, layout,
+                                                dry_run, permanent)
 
         if not dry_run:
             self.deleter = Deleter(self.conn, self.layout.store_name())

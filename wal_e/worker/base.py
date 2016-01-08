@@ -189,11 +189,12 @@ class _BackupList(object):
 
 class _DeleteFromContext(object):
 
-    def __init__(self, conn, layout, dry_run):
+    def __init__(self, conn, layout, dry_run, permanent):
         self.conn = conn
         self.dry_run = dry_run
         self.layout = layout
         self.deleter = None  # Must be set by subclass
+        self.permanent = permanent
 
         assert self.dry_run in (True, False)
 

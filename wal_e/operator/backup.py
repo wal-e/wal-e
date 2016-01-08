@@ -403,25 +403,28 @@ class Backup(object):
 
             return ret
 
-    def delete_old_versions(self, dry_run):
+    def delete_old_versions(self, dry_run, permanent):
         assert storage.CURRENT_VERSION not in storage.OBSOLETE_VERSIONS
 
         for obsolete_version in storage.OBSOLETE_VERSIONS:
-            self.delete_all(dry_run, self.layout)
+            self.delete_all(dry_run, permanent, self.layout)
 
-    def delete_all(self, dry_run):
+    def delete_all(self, dry_run, permanent):
         conn = self.new_connection()
-        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout,
+                                                   dry_run, permanent)
         delete_cxt.delete_everything()
 
-    def delete_before(self, dry_run, segment_info):
+    def delete_before(self, dry_run, segment_info, permanent):
         conn = self.new_connection()
-        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout,
+                                                   dry_run, permanent)
         delete_cxt.delete_before(segment_info)
 
-    def delete_with_retention(self, dry_run, num_to_retain):
+    def delete_with_retention(self, dry_run, num_to_retain, permanent):
         conn = self.new_connection()
-        delete_cxt = self.worker.DeleteFromContext(conn, self.layout, dry_run)
+        delete_cxt = self.worker.DeleteFromContext(conn, self.layout,
+                                                   dry_run, permanent)
         delete_cxt.delete_with_retention(num_to_retain)
 
     def _backup_list(self, detail):

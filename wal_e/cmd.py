@@ -334,6 +334,10 @@ def build_parser():
                                help=('Actually delete data.  '
                                      'By default, a dry run is performed.  '
                                      'Overridden by --dry-run.'))
+    delete_parser.add_argument('--permanent', action='store_true',
+                               help=('For use with a versioned S3 bucket. '
+                                     'Delete latest version of each backup '
+                                     'instead of adding a delete marker.'))
     delete_subparsers = delete_parser.add_subparsers(
         title='delete subcommands',
         description=('All operators that may delete data are contained '
@@ -614,16 +618,19 @@ def main():
             # Handle the subcommands and route them to the right
             # implementations.
             if args.delete_subcommand == 'old-versions':
-                backup_cxt.delete_old_versions(is_dry_run_really)
+                backup_cxt.delete_old_versions(is_dry_run_really,
+                                               args.permanent)
             elif args.delete_subcommand == 'everything':
-                backup_cxt.delete_all(is_dry_run_really)
+                backup_cxt.delete_all(is_dry_run_really, args.permanent)
             elif args.delete_subcommand == 'retain':
                 backup_cxt.delete_with_retention(is_dry_run_really,
-                                                 args.NUM_TO_RETAIN)
+                                                 args.NUM_TO_RETAIN,
+                                                 args.permanent)
             elif args.delete_subcommand == 'before':
                 segment_info = extract_segment(args.BEFORE_SEGMENT_EXCLUSIVE)
                 assert segment_info is not None
-                backup_cxt.delete_before(is_dry_run_really, segment_info)
+                backup_cxt.delete_before(is_dry_run_really, segment_info,
+                                         args.permanent)
             else:
                 assert False, 'Should be rejected by argument parsing.'
         else:

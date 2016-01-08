@@ -24,4 +24,4 @@ class Deleter(_Deleter):
                     hint='This should be reported as a bug.')
 
         bucket = page[0].bucket
-        bucket.delete_keys([key.name for key in page])
+        bucket.delete_keys([(key.name, key.version_id) for key in page])
