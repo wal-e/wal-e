@@ -239,8 +239,8 @@ class CallingInfo(object):
                 logger.warning(msg='cannot detect location of bucket',
                                detail=('The specified bucket name was: ' +
                                        repr(self.bucket_name)),
-                               hint=('Permit the GetLocation permission for '
-                                     'the provided AWS credentials.  '
+                               hint=('Permit the GetBucketLocation permission '
+                                     'for the provided AWS credentials.  '
                                      'Or, use a bucket name that follows the '
                                      'preferred bucket naming guidelines '
                                      'and has no dots in it.'))
