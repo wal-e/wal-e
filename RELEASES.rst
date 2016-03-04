@@ -1,6 +1,21 @@
 Releases
 ========
 
+v0.9.0
+------
+
+Release v0.9.0 requires use of (and adds support for) AWS SigV4. As
+such, a new environment variable is **required**, ``AWS_REGION``,
+because it is part of the signature format.  **This is not a backwards
+compatible change**.
+
+Newer S3 features are often gated behind use of SigV4, and the region
+``eu-central-1`` relies on them.  Because of this change,
+``eu-central-1`` is now supported.
+
+Secondly, compatibility has been added with new versions of the Azure
+SDK v1.0.
+
 v0.8.1
 ------
 
