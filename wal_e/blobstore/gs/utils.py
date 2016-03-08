@@ -44,7 +44,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
 def uri_get_file(creds, uri, conn=None):
     blob = _uri_to_blob(creds, uri, conn=conn)
     signed = blob.generate_signed_url(
-        datetime.datetime.utcnow() + timedelta(minutes=10))
+        datetime.utcnow() + timedelta(minutes=10))
     reader = urllib2.urlopen(signed)
     return reader.read()
 
