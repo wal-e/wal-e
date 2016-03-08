@@ -73,6 +73,7 @@ Google Storage
 ''''''''''''''
 
 * WALE_GS_PREFIX (e.g. ``gs://bucket/path/optionallymorepath``)
+* GCLOUD_PROJECT: Name of the project that hosts your bucket.
 * GOOGLE_APPLICATION_CREDENTIALS
 
 Optional:
