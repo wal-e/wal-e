@@ -29,4 +29,4 @@ class Deleter(_Deleter):
         except S3ResponseError as e:
             #some s3 compatible stores like fakes3 do not implement delete_keys
             for key in page:
-                bucket.delete_key[key.name]
+                bucket.delete_key(key.name)
