@@ -42,7 +42,7 @@ def psql_csv_run(sql_command, error_handler=None):
     csv_query = ['SET statement_timeout = 0']
     csv_query.append('COPY ({}) TO STDOUT WITH CSV HEADER'.format(sql_command))
 
-    psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
+    psql_proc = popen_nonblock([PSQL_BIN, '--no-psqlrc', '-d', 'postgres', '--no-password',
                                 '-c', '; '.join(csv_query)],
                                stdout=PIPE)
     stdout = psql_proc.communicate()[0]
