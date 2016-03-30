@@ -6,7 +6,7 @@ from subprocess import PIPE
 from wal_e.piper import popen_nonblock
 from wal_e.exception import UserException
 
-PSQL_BIN = 'psql'
+PSQL_BIN = 'PGOPTIONS="--statement-timeout=0" psql'
 
 
 class UTC(datetime.tzinfo):
@@ -38,8 +38,7 @@ def psql_csv_run(sql_command, error_handler=None):
     situations.  The output is fully buffered into Python.
 
     """
-    # Explicitly disable the query timeout.
-    csv_query = ['SET statement_timeout = 0']
+    csv_query = []
     csv_query.append('COPY ({}) TO STDOUT WITH CSV HEADER'.format(sql_command))
 
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
