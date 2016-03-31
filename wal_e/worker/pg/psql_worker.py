@@ -6,7 +6,7 @@ from subprocess import PIPE
 from wal_e.piper import popen_nonblock
 from wal_e.exception import UserException
 
-PSQL_BIN = 'PGOPTIONS="--statement-timeout=0" psql'
+PSQL_BIN = 'psql'
 
 
 class UTC(datetime.tzinfo):
@@ -43,7 +43,8 @@ def psql_csv_run(sql_command, error_handler=None):
 
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
                                 '--no-psqlrc', '-c', csv_query],
-                               stdout=PIPE)
+                               stdout=PIPE,
+                               env={'PGOPTIONS': '--statement-timeout=0'})
     stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
