@@ -460,15 +460,19 @@ def configure_backup_cxt(args):
                 hint=_config_hint_generate('wabs-account-name', True))
 
         access_key = os.getenv('WABS_ACCESS_KEY')
-        if access_key is None:
+        access_token = os.getenv('WABS_SAS_TOKEN')
+        if not (access_key or access_token):
             raise UserException(
-                msg='WABS access key credential is required but not provided',
-                hint=_config_hint_generate('wabs-access-key', False))
+                msg='WABS access credentials is required but not provided',
+                hint=(
+                    'Define one of the WABS_ACCOUNT_KEY or '
+                    'WABS_SAS_TOKEN environment variables.'
+                ))
 
         from wal_e.blobstore import wabs
         from wal_e.operator.wabs_operator import WABSBackup
 
-        creds = wabs.Credentials(account_name, access_key)
+        creds = wabs.Credentials(account_name, access_key, access_token)
 
         return WABSBackup(store, creds, gpg_key_id)
     elif store.is_swift:
