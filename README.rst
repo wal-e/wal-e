@@ -64,7 +64,8 @@ Azure Blob Store
 
 * WALE_WABS_PREFIX (e.g. ``wabs://container/path/optionallymorepath``)
 * WABS_ACCOUNT_NAME
-* WABS_ACCESS_KEY
+* WABS_ACCESS_KEY or
+* WABS_SAS_TOKEN
 
 Swift
 '''''

@@ -94,7 +94,9 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     if content_encoding is not None:
         kwargs['x_ms_blob_content_encoding'] = content_encoding
 
-    conn = BlobService(creds.account_name, creds.account_key, protocol='https')
+    conn = BlobService(
+        creds.account_name, creds.account_key,
+        sas_token=creds.access_token, protocol='https')
     conn.put_blob(url_tup.netloc, url_tup.path, '', **kwargs)
 
     # WABS requires large files to be uploaded in 4MB chunks
@@ -129,7 +131,7 @@ def uri_get_file(creds, uri, conn=None):
 
     if conn is None:
         conn = BlobService(creds.account_name, creds.account_key,
-                           protocol='https')
+                           sas_token=creds.access_token, protocol='https')
 
     # Determin the size of the target blob
     props = conn.get_blob_properties(url_tup.netloc, url_tup.path)
@@ -184,7 +186,9 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
     assert url.endswith('.lzo'), 'Expect an lzop-compressed file'
     assert url.startswith('wabs://')
 
-    conn = BlobService(creds.account_name, creds.account_key, protocol='https')
+    conn = BlobService(
+        creds.account_name, creds.account_key,
+        sas_token=creds.access_token, protocol='https')
 
     def log_wal_fetch_failures_on_error(exc_tup, exc_processor_cxt):
         def standard_detail_message(prefix=''):

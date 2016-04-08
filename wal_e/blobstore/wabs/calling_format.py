@@ -33,6 +33,7 @@ class CallingInfo(object):
         """
         return BlobService(account_name=creds.account_name,
                            account_key=creds.account_key,
+                           sas_token=creds.access_token,
                            protocol='https')
 
 
