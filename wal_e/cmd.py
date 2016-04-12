@@ -465,7 +465,7 @@ def configure_backup_cxt(args):
             raise UserException(
                 msg='WABS access credentials is required but not provided',
                 hint=(
-                    'Define one of the WABS_ACCOUNT_KEY or '
+                    'Define one of the WABS_ACCESS_KEY or '
                     'WABS_SAS_TOKEN environment variables.'
                 ))
 
