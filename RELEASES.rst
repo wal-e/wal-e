@@ -1,6 +1,19 @@
 Releases
 ========
 
+v0.9.1
+------
+
+Release v0.9.1 adds support for Azure SAS Tokens (by Kenny Johansson)
+and fixes several bugs.  It is backwards and forwards compatible with
+v0.9.0.
+
+The bugs fixed are:
+
+* Customized .psqlrc files no longer break WAL-E (Feike Steenbergen)
+* ``statement_timeout`` suppression should work now (Anatolii Mihailenco)
+* Files unlinked during backup no longer cause a crash (Léo Cavaillé)
+
 v0.9.0
 ------
 
