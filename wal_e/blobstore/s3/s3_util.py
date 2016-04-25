@@ -125,7 +125,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                         # Do not retry if the key not present, this
                         # can happen under normal situations.
                         pl.abort()
-                        logger.warning(
+                        logger.info(
                             msg=('could no longer locate object while '
                                  'performing wal restore'),
                             detail=('The absolute URI that could not be '
