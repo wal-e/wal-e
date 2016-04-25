@@ -1,5 +1,6 @@
 import csv
 import datetime
+import os
 
 from subprocess import PIPE
 
@@ -41,10 +42,13 @@ def psql_csv_run(sql_command, error_handler=None):
     csv_query = ('COPY ({query}) TO STDOUT WITH CSV HEADER;'
                  .format(query=sql_command))
 
+    new_env = os.environ.copy()
+    new_env.setdefault('PGOPTIONS', '')
+    new_env["PGOPTIONS"] += ' --statement-timeout=0'
     psql_proc = popen_nonblock([PSQL_BIN, '-d', 'postgres', '--no-password',
                                 '--no-psqlrc', '-c', csv_query],
                                stdout=PIPE,
-                               env={'PGOPTIONS': '--statement-timeout=0'})
+                               env=new_env)
     stdout = psql_proc.communicate()[0]
 
     if psql_proc.returncode != 0:
