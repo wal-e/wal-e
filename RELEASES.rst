@@ -1,6 +1,13 @@
 Releases
 ========
 
+v0.9.2
+------
+
+Release v0.9.2 fixes environment variable clobbering caused by the
+updated statement_timeout suppression patch that can break use of
+wrapper scripts ``psql``.  By Kenneth Shelton.
+
 v0.9.1
 ------
 
