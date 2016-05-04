@@ -1,6 +1,41 @@
 Releases
 ========
 
+v0.9.2
+------
+
+Release v0.9.2 fixes environment variable clobbering caused by the
+updated statement_timeout suppression patch that can break use of
+wrapper scripts ``psql``.  By Kenneth Shelton.
+
+v0.9.1
+------
+
+Release v0.9.1 adds support for Azure SAS Tokens (by Kenny Johansson)
+and fixes several bugs.  It is backwards and forwards compatible with
+v0.9.0.
+
+The bugs fixed are:
+
+* Customized .psqlrc files no longer break WAL-E (Feike Steenbergen)
+* ``statement_timeout`` suppression should work now (Anatolii Mihailenco)
+* Files unlinked during backup no longer cause a crash (Léo Cavaillé)
+
+v0.9.0
+------
+
+Release v0.9.0 requires use of (and adds support for) AWS SigV4. As
+such, a new environment variable is **required**, ``AWS_REGION``,
+because it is part of the signature format.  **This is not a backwards
+compatible change**.
+
+Newer S3 features are often gated behind use of SigV4, and the region
+``eu-central-1`` relies on them.  Because of this change,
+``eu-central-1`` is now supported.
+
+Secondly, compatibility has been added with new versions of the Azure
+SDK v1.0.
+
 v0.8.1
 ------
 

@@ -385,6 +385,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     logger.debug(
                         msg='tar member additions skipping an unlinked file',
                         detail='Skipping {0}.'.format(et_info.submitted_path))
+                    continue
                 else:
                     raise
 
