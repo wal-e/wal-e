@@ -95,9 +95,8 @@ class BackupList(_BackupList):
 
 class DeleteFromContext(_DeleteFromContext):
 
-    def __init__(self, s3_conn, layout, dry_run, permanent):
-        super(DeleteFromContext, self).__init__(s3_conn, layout,
-                                                dry_run, permanent)
+    def __init__(self, s3_conn, layout, dry_run):
+        super(DeleteFromContext, self).__init__(s3_conn, layout, dry_run)
 
         if not dry_run:
             self.deleter = Deleter()
@@ -108,13 +107,9 @@ class DeleteFromContext(_DeleteFromContext):
         return key.bucket.name
 
     def _backup_list(self, prefix):
-        bucket = get_bucket(self.conn, self.layout.store_name())
-        if self.permanent:
-            from boto.s3.deletemarker import DeleteMarker
+        from boto.s3.deletemarker import DeleteMarker
 
-            object_versions = bucket.list_versions(prefix=prefix)
-            backup_list = (key for key in object_versions
-                if key.is_latest and type(key) is not DeleteMarker)
-        else:
-            backup_list = bucket.list(prefix=prefix)
-        return backup_list
+        bucket = get_bucket(self.conn, self.layout.store_name())
+        object_versions = bucket.list_versions(prefix=prefix)
+        return (key for key in object_versions
+            if key.is_latest and type(key) is not DeleteMarker)
