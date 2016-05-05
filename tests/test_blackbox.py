@@ -4,16 +4,18 @@ import pytest
 from blackbox import config
 from blackbox import noop_pg_backup_statements
 from blackbox import small_push_dir
+from gs_integration_help import default_test_gs_bucket
 from os import path
 from s3_integration_help import default_test_bucket
 from stage_pgxlog import pg_xlog
 
 # Quiet pyflakes about pytest fixtures.
 assert config
-assert noop_pg_backup_statements
-assert small_push_dir
 assert default_test_bucket
+assert default_test_gs_bucket
+assert noop_pg_backup_statements
 assert pg_xlog
+assert small_push_dir
 
 
 def test_wal_push_fetch(pg_xlog, tmpdir, config):
