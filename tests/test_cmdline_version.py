@@ -1,9 +1,8 @@
 import errno
 import pytest
+import subprocess
 
 from os import path
-
-from wal_e import subprocess
 
 
 def test_version_print():

@@ -83,12 +83,12 @@ import argparse
 import logging
 import os
 import re
+import subprocess
 import textwrap
 import traceback
 
 from wal_e import log_help
 
-from wal_e import subprocess
 from wal_e.exception import UserCritical
 from wal_e.exception import UserException
 from wal_e import storage

@@ -1,11 +1,11 @@
 import errno
 import os
+import subprocess
 
 import pytest
 
 from fast_wait import fast_wait
 from wal_e import piper
-from wal_e import subprocess
 
 assert fast_wait
 
