@@ -16,7 +16,7 @@ class S3BackupInfo(BackupInfo):
             path=self.layout.basebackup_sentinel(self))
 
         data = json.loads(s3.uri_get_file(None, uri, conn=conn))
-        for k, v in data.items():
+        for k, v in list(data.items()):
             setattr(self, k, v)
 
         self._details_loaded = True

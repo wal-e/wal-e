@@ -88,7 +88,7 @@ def prepare_multi_upload_segments():
     # Additional segments are non-explicit, which means they will have
     # their metadata manipulated by wal-e rather than relying on the
     # Postgres archiver.
-    for i in xrange(1, 5):
+    for i in range(1, 5):
         yield FakeWalSegment(str(i) * 8 * 3, explicit=False)
 
 

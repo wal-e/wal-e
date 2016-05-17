@@ -22,10 +22,10 @@ def test_format_structured_info():
     zero = {}, 'time=2012-01-01T00.1234-00 pid=1234'
 
     one = ({'hello': 'world'},
-           u'time=2012-01-01T00.1234-00 pid=1234 hello=world')
+           'time=2012-01-01T00.1234-00 pid=1234 hello=world')
 
     many = ({'hello': 'world', 'goodbye': 'world'},
-            u'time=2012-01-01T00.1234-00 pid=1234 goodbye=world hello=world')
+            'time=2012-01-01T00.1234-00 pid=1234 goodbye=world hello=world')
 
     for d, expect in [zero, one, many]:
         result = log_help.WalELogger._fmt_structured(d)
@@ -113,7 +113,7 @@ def test_malformed_destinations(monkeypatch):
 
 def test_get_syslog_facility_case_insensitive(monkeypatch):
     """WALE_SYSLOG_FACILITY is case insensitive"""
-    for low_name in ['local' + unicode(n) for n in xrange(8)] + ['user']:
+    for low_name in ['local' + str(n) for n in range(8)] + ['user']:
         monkeypatch.setenv('WALE_SYSLOG_FACILITY', low_name)
         out, valid_facility = log_help.get_syslog_facility()
         assert valid_facility is True

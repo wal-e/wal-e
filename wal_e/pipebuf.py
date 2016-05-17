@@ -130,7 +130,7 @@ class NonBlockBufferedReader(object):
         try:
             chunk = os.read(self._fd, sz)
             self._bd.add(chunk)
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
                 assert chunk is None
                 gevent.socket.wait_read(self._fd)
@@ -234,7 +234,7 @@ class NonBlockBufferedWriter(object):
                 n = os.write(self._fd, cursor)
                 flushed = True
                 cursor = buffer(cursor, n)
-            except EnvironmentError, e:
+            except EnvironmentError as e:
                 if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
                     gevent.socket.wait_write(self._fd)
                 else:

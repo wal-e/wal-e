@@ -92,7 +92,7 @@ def test_cert_validation_sensitivity(monkeypatch):
             cinfo = calling_format.from_store_name(bn)
             assert (cinfo.calling_format == connection.OrdinaryCallingFormat)
             assert cinfo.region == 'us-east-1'
-            assert cinfo.ordinary_endpoint == u's3.amazonaws.com'
+            assert cinfo.ordinary_endpoint == 's3.amazonaws.com'
 
 
 @pytest.mark.skipif("no_real_s3_credentials()")

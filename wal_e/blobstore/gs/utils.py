@@ -1,12 +1,12 @@
 from datetime import datetime
 from datetime import timedelta
 from gcloud import storage
-from urlparse import urlparse
+from urllib.parse import urlparse
 import gevent
 import shutil
 import socket
 import traceback
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 from . import calling_format
 from wal_e import files
@@ -45,7 +45,7 @@ def uri_get_file(creds, uri, conn=None):
     blob = _uri_to_blob(creds, uri, conn=conn)
     signed = blob.generate_signed_url(
         datetime.utcnow() + timedelta(minutes=10))
-    reader = urllib2.urlopen(signed)
+    reader = urllib.request.urlopen(signed)
     return reader.read()
 
 
@@ -104,7 +104,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                     exc = g.get()
                     if exc is not None:
                         raise exc
-                except urllib2.HTTPError as e:
+                except urllib.error.HTTPError as e:
                     if e.code == 404:
                         # Do not retry if the blob not present, this
                         # can happen under normal situations.
@@ -137,10 +137,10 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
 
 def write_and_return_error(signed, stream):
     try:
-        reader = urllib2.urlopen(signed)
+        reader = urllib.request.urlopen(signed)
         shutil.copyfileobj(reader, stream)
         stream.flush()
-    except Exception, e:
+    except Exception as e:
         return e
     finally:
         stream.close()

@@ -24,14 +24,14 @@ gevent_monkey()
 # Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
 if sys.version_info >= (2, 7):
     def getresponse_monkey():
-        import httplib
-        original = httplib.HTTPConnection.getresponse
+        import http.client
+        original = http.client.HTTPConnection.getresponse
 
         def monkey(*args, **kwargs):
             kwargs['buffering'] = True
             return original(*args, **kwargs)
 
-        httplib.HTTPConnection.getresponse = monkey
+        http.client.HTTPConnection.getresponse = monkey
 
     getresponse_monkey()
 
@@ -562,7 +562,7 @@ def main():
     if subcommand == 'version':
         import pkgutil
 
-        print pkgutil.get_data('wal_e', 'VERSION').strip()
+        print(pkgutil.get_data('wal_e', 'VERSION').strip())
         sys.exit(0)
 
     # Print a start-up message right away.

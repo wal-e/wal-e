@@ -105,7 +105,7 @@ class Dirs(object):
             place = path.realpath(place)
 
             try:
-                os.makedirs(place, 0700)
+                os.makedirs(place, 0o700)
                 ok = True
             except EnvironmentError as e:
                 if e.errno == errno.EEXIST:

@@ -32,7 +32,7 @@ class AwsTestConfig(object):
             self.monkeypatch.delenv(name, raising=False)
 
         # Set other credentials.
-        for name, value in self.env_vars.iteritems():
+        for name, value in self.env_vars.items():
             if value is None:
                 self.monkeypatch.delenv(name, raising=False)
             else:
@@ -139,7 +139,7 @@ class GsTestConfig(object):
             self.monkeypatch.delenv(name, raising=False)
 
         # Set other credentials.
-        for name, value in self.env_vars.iteritems():
+        for name, value in self.env_vars.items():
             if value is None:
                 self.monkeypatch.delenv(name, raising=False)
             else:

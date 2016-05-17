@@ -29,7 +29,7 @@ except ImportError:
 
 from . import calling_format
 from hashlib import md5
-from urlparse import urlparse
+from urllib.parse import urlparse
 from wal_e import log_help
 from wal_e import files
 from wal_e.pipeline import get_download_pipeline

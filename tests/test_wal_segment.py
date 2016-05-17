@@ -55,7 +55,7 @@ def test_simple_search(pg_xlog):
     assert segs.next().path == 'pg_xlog/' + name
 
     with pytest.raises(StopIteration):
-        segs.next()
+        next(segs)
 
 
 def test_multi_search(pg_xlog):
@@ -64,7 +64,7 @@ def test_multi_search(pg_xlog):
     Also throw in some random junk to make sure they are filtered out
     from processing correctly.
     """
-    for i in xrange(3):
+    for i in range(3):
         ready = str(i) * 8 * 3
         pg_xlog.touch(ready, '.ready')
 

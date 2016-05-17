@@ -2,7 +2,7 @@ import pytest
 
 from boto import exception
 from boto.s3 import connection
-from cStringIO import StringIO
+from io import StringIO
 from wal_e.blobstore.s3 import Credentials
 from wal_e.blobstore.s3 import calling_format
 from wal_e.blobstore.s3 import uri_put_file

@@ -34,7 +34,7 @@ def test_404_termination(tmpdir):
                      calling_format=OrdinaryCallingFormat()) as fb:
         fb.create()
 
-        target = unicode(tmpdir.join('target'))
+        target = str(tmpdir.join('target'))
         ret = do_lzop_get(creds, 's3://' + bucket_name + '/not-exist.lzo',
                           target, False)
         assert ret is False
@@ -56,7 +56,7 @@ def test_sigv4_only_region(tmpdir, monkeypatch):
     except boto.exception.S3CreateError:
         pass
 
-    source = unicode(tmpdir.join('source'))
+    source = str(tmpdir.join('source'))
     contents = 'abcdefghijklmnopqrstuvwxyz\n' * 100
     with open(source, 'wb') as f:
         f.write(contents)

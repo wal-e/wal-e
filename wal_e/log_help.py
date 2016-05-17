@@ -55,7 +55,7 @@ def configure(*args, **kwargs):
     def terrible_log_output(s):
         import sys
 
-        print >>sys.stderr, s
+        print(s, file=sys.stderr)
 
     places = [
         # Linux
@@ -152,8 +152,8 @@ class WalELogger(object):
             "time=%Y-%m-%dT%H:%M:%S.%f-00")
         pidEntry = "pid=" + str(os.getpid())
 
-        rest = sorted('='.join([unicode(k), unicode(v)])
-                      for (k, v) in d.items())
+        rest = sorted('='.join([str(k), str(v)])
+                      for (k, v) in list(d.items()))
 
         return ' '.join([timeEntry, pidEntry] + rest)
 

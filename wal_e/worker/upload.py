@@ -131,7 +131,7 @@ class PartitionUploader(object):
                     # This type of error is unrecognized as a retry-able
                     # condition, so propagate it, original stacktrace and
                     # all.
-                    raise typ, value, tb
+                    raise typ(value).with_traceback(tb)
 
             @retry(retry_with_count(log_volume_failures_on_error))
             def put_file_helper():

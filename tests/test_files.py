@@ -6,7 +6,7 @@ from wal_e import files
 
 
 def test_no_error(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
     with files.DeleteOnError(p) as doe:
         doe.f.write('hello')
 
@@ -15,10 +15,10 @@ def test_no_error(tmpdir):
 
 
 def test_clear_on_error(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
-    boom = StandardError('Boom')
-    with pytest.raises(StandardError) as e:
+    boom = Exception('Boom')
+    with pytest.raises(Exception) as e:
         with files.DeleteOnError(p) as doe:
             doe.f.write('hello')
             raise boom
@@ -31,7 +31,7 @@ def test_clear_on_error(tmpdir):
 
 
 def test_no_error_if_already_deleted(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
     with files.DeleteOnError(p) as doe:
         doe.f.write('hello')
@@ -39,7 +39,7 @@ def test_no_error_if_already_deleted(tmpdir):
 
 
 def test_explicit_deletion_without_exception(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
     with files.DeleteOnError(p) as doe:
         doe.f.write('hello')

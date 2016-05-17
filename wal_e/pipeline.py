@@ -117,7 +117,7 @@ class Pipeline(object):
             if exc_type:
                 # Re-raise inner exception rather than complaints during
                 # pipeline shutdown.
-                raise exc_type, exc_value, traceback
+                raise exc_type(exc_value).with_traceback(traceback)
             else:
                 raise
 
@@ -209,7 +209,7 @@ class PipeViewerRateLimitFilter(PipelineCommand):
     def __init__(self, rate_limit, stdin=PIPE, stdout=PIPE):
         PipelineCommand.__init__(
             self,
-            [PV_BIN, '--rate-limit=' + unicode(rate_limit)], stdin, stdout)
+            [PV_BIN, '--rate-limit=' + str(rate_limit)], stdin, stdout)
 
 
 class CatFilter(PipelineCommand):

@@ -83,7 +83,7 @@ class PgBackupStatements(object):
     def _dict_transform(csv_reader):
         rows = list(csv_reader)
         assert len(rows) == 2, 'Expect header row and data row'
-        return dict(zip(*rows))
+        return dict(list(zip(*rows)))
 
     @classmethod
     def run_start_backup(cls):

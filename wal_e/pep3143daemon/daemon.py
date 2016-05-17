@@ -15,7 +15,7 @@ PY3 = sys.version_info[0] == 3
 if PY3:
     string_types = str,
 else:
-    string_types = basestring,
+    string_types = str,
 
 
 class DaemonError(Exception):
@@ -188,7 +188,7 @@ class DaemonContext(object):
         :return: dict
         """
         result = {}
-        for signum, handler in self.signal_map.items():
+        for signum, handler in list(self.signal_map.items()):
             result[signum] = self._get_signal_handler(handler)
         return result
 
@@ -268,7 +268,7 @@ class DaemonContext(object):
             except OSError as err:
                 raise DaemonError('Second fork failed: {0}'.format(err))
 
-        for (signal_number, handler) in self._signal_handler_map.items():
+        for (signal_number, handler) in list(self._signal_handler_map.items()):
             signal.signal(signal_number, handler)
 
         close_filenos(self._files_preserve)
@@ -344,7 +344,7 @@ def default_signal_map():
         'SIGTTOU': None,
         'SIGTERM': 'terminate'}
     signal_map = {}
-    for name, target in name_map.items():
+    for name, target in list(name_map.items()):
         if hasattr(signal, name):
             signal_map[getattr(signal, name)] = target
     return signal_map
