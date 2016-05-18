@@ -9,7 +9,6 @@ import copy
 import errno
 import gevent
 import gevent.socket
-import signal
 import subprocess
 
 from subprocess import PIPE

@@ -15,8 +15,8 @@ except ImportError:
     use_setuptools()
     from setuptools import setup, find_packages
 
-if sys.version_info < (2, 6):
-    raise RuntimeError('Python versions < 2.6 are not supported.')
+if sys.version_info < (3, 4):
+    raise RuntimeError('Python versions < 3.4 are not supported.')
 
 
 # Utility function to read the contents of short files.

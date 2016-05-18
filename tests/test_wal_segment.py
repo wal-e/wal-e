@@ -52,7 +52,7 @@ def test_simple_search(pg_xlog):
     pg_xlog.touch(name, '.ready')
 
     segs = worker.WalSegment.from_ready_archive_status('pg_xlog')
-    assert segs.next().path == 'pg_xlog/' + name
+    assert next(segs).path == 'pg_xlog/' + name
 
     with pytest.raises(StopIteration):
         next(segs)

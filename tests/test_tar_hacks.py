@@ -144,7 +144,7 @@ def test_creation_upper_dir(tmpdir, monkeypatch):
 
     dest_dir = tmpdir.join('dest')
     dest_dir.ensure(dir=True)
-    with open(tar_path) as f:
+    with open(tar_path, 'rb') as f:
         tar_partition.TarPartition.tarfile_extract(f, str(dest_dir))
 
     # Make sure the test exercised cat_extraction.

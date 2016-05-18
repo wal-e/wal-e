@@ -1,14 +1,17 @@
-from datetime import datetime
-from datetime import timedelta
-from gcloud import storage
-from urllib.parse import urlparse
+
 import gevent
 import shutil
 import socket
 import traceback
-import urllib.request, urllib.error, urllib.parse
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from . import calling_format
+from datetime import datetime
+from datetime import timedelta
+from gcloud import storage
+from urllib.parse import urlparse
 from wal_e import files
 from wal_e import log_help
 from wal_e.pipeline import get_download_pipeline

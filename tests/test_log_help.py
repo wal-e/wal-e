@@ -18,7 +18,7 @@ def test_nonexisting_socket(tmpdir, monkeypatch):
     log_help.configure(syslog_address=tmpdir.join('bogus'))
 
 
-def test_format_structured_info():
+def test_format_structured_info(monkeypatch):
     zero = {}, 'time=2012-01-01T00.1234-00 pid=1234'
 
     one = ({'hello': 'world'},
@@ -32,7 +32,7 @@ def test_format_structured_info():
         assert sanitize_log(result) == expect
 
 
-def test_fmt_logline_simple():
+def test_fmt_logline_simple(monkeypatch):
     out = log_help.WalELogger.fmt_logline(
         'The message', 'The detail', 'The hint', {'structured-data': 'yes'})
     out = sanitize_log(out)
@@ -53,11 +53,10 @@ HINT: The hint
 STRUCTURED: time=2012-01-01T00.1234-00 pid=1234"""
 
 
-def test_get_log_destinations_empty():
+def test_get_log_destinations_empty(monkeypatch):
     """WALE_LOG_DESTINATION is not set"""
     assert os.getenv('WALE_LOG_DESTINATION') is None
     out = log_help.get_log_destinations()
-
     assert out == ['stderr', 'syslog']
 
 
@@ -69,11 +68,10 @@ def test_get_log_destinations_notempty(monkeypatch):
     assert out == ['syslog']
 
 
-def test_get_syslog_facility_empty():
+def test_get_syslog_facility_empty(monkeypatch):
     """WALE_SYSLOG_FACILITY is not set"""
     assert os.getenv('WALE_SYSLOG_FACILITY') is None
     out, valid_facility = log_help.get_syslog_facility()
-
     assert valid_facility is True
     assert out == handlers.SysLogHandler.LOG_USER
 

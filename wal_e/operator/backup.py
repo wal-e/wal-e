@@ -150,7 +150,7 @@ class Backup(object):
         for part_name in partition_iter:
             p.spawn(
                 self._exception_gather_guard(
-                    fetcher_cycle.next().fetch_partition),
+                    next(fetcher_cycle).fetch_partition),
                 part_name)
 
         p.join(raise_error=True)

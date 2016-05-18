@@ -87,7 +87,7 @@ class PartitionUploader(object):
                     detail='Building volume {name}.'.format(name=tpart.name))
 
         with tempfile.NamedTemporaryFile(
-                mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
+                mode='r+b', buffering=pipebuf.PIPE_BUF_BYTES) as tf:
             with pipeline.get_upload_pipeline(PIPE, tf,
                                               rate_limit=self.rate_limit,
                                               gpg_key=self.gpg_key) as pl:

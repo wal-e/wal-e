@@ -39,7 +39,7 @@ def test_atomic_download(pd, seg, tmpdir):
     assert pd.is_running(seg)
 
     with pd.download(seg) as ad:
-        s = 'hello'
+        s = b'hello'
         ad.tf.write(s)
         ad.tf.flush()
         assert pd.running_size(seg) == len(s)

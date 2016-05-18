@@ -18,66 +18,50 @@ def gevent_monkey(*args, **kwargs):
 # sadly it cannot be used (easily) in WAL-E.
 gevent_monkey()
 
-# Instate a cipher suite that bans a series of weak and slow ciphers.
-# Both RC4 (weak) 3DES (slow) have been seen in use.
-#
-# Only Python 2.7+ possesses the 'ciphers' keyword to wrap_socket.
-if sys.version_info >= (2, 7):
-    def getresponse_monkey():
-        import http.client
-        original = http.client.HTTPConnection.getresponse
 
-        def monkey(*args, **kwargs):
-            kwargs['buffering'] = True
-            return original(*args, **kwargs)
+def ssl_monkey():
+    import ssl
 
-        http.client.HTTPConnection.getresponse = monkey
+    original = ssl.wrap_socket
 
-    getresponse_monkey()
+    def wrap_socket_monkey(*args, **kwargs):
+        # Set up an OpenSSL cipher string.
+        #
+        # Rationale behind each part:
+        #
+        # * HIGH: only use the most secure class of ciphers and
+        #   key lengths, generally being 128 bits and larger.
+        #
+        # * !aNULL: exclude cipher suites that contain anonymous
+        #   key exchange, making man in the middle attacks much
+        #   more tractable.
+        #
+        # * !SSLv2: exclude any SSLv2 cipher suite, as this
+        #   category has security weaknesses.  There is only one
+        #   OpenSSL cipher suite that is in the "HIGH" category
+        #   but uses SSLv2 protocols: DES_192_EDE3_CBC_WITH_MD5
+        #   (see s2_lib.c)
+        #
+        #   Technically redundant given "!3DES", but the intent in
+        #   listing it here is more apparent.
+        #
+        # * !RC4: exclude because it's a weak block cipher.
+        #
+        # * !3DES: exclude because it's very CPU intensive and
+        #   most peers support another reputable block cipher.
+        #
+        # * !MD5: although it doesn't seem use of known flaws in
+        #   MD5 is able to compromise an SSL session, the wide
+        #   deployment of SHA-family functions means the
+        #   compatibility benefits of allowing it are slim to
+        #   none, so disable it until someone produces material
+        #   complaint.
+        kwargs['ciphers'] = 'HIGH:!aNULL:!SSLv2:!RC4:!3DES:!MD5'
+        return original(*args, **kwargs)
 
-    def ssl_monkey():
-        import ssl
+    ssl.wrap_socket = wrap_socket_monkey
 
-        original = ssl.wrap_socket
-
-        def wrap_socket_monkey(*args, **kwargs):
-            # Set up an OpenSSL cipher string.
-            #
-            # Rationale behind each part:
-            #
-            # * HIGH: only use the most secure class of ciphers and
-            #   key lengths, generally being 128 bits and larger.
-            #
-            # * !aNULL: exclude cipher suites that contain anonymous
-            #   key exchange, making man in the middle attacks much
-            #   more tractable.
-            #
-            # * !SSLv2: exclude any SSLv2 cipher suite, as this
-            #   category has security weaknesses.  There is only one
-            #   OpenSSL cipher suite that is in the "HIGH" category
-            #   but uses SSLv2 protocols: DES_192_EDE3_CBC_WITH_MD5
-            #   (see s2_lib.c)
-            #
-            #   Technically redundant given "!3DES", but the intent in
-            #   listing it here is more apparent.
-            #
-            # * !RC4: exclude because it's a weak block cipher.
-            #
-            # * !3DES: exclude because it's very CPU intensive and
-            #   most peers support another reputable block cipher.
-            #
-            # * !MD5: although it doesn't seem use of known flaws in
-            #   MD5 is able to compromise an SSL session, the wide
-            #   deployment of SHA-family functions means the
-            #   compatibility benefits of allowing it are slim to
-            #   none, so disable it until someone produces material
-            #   complaint.
-            kwargs['ciphers'] = 'HIGH:!aNULL:!SSLv2:!RC4:!3DES:!MD5'
-            return original(*args, **kwargs)
-
-        ssl.wrap_socket = wrap_socket_monkey
-
-    ssl_monkey()
+ssl_monkey()
 
 import argparse
 import logging
@@ -562,7 +546,7 @@ def main():
     if subcommand == 'version':
         import pkgutil
 
-        print(pkgutil.get_data('wal_e', 'VERSION').strip())
+        print(pkgutil.get_data('wal_e', 'VERSION').decode('ascii').strip())
         sys.exit(0)
 
     # Print a start-up message right away.
