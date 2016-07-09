@@ -58,6 +58,9 @@ AWS S3 and Work-alikes
 Optional:
 
 * WALE_S3_ENDPOINT: See `Manually specifying the S3 Endpoint`_
+* AWS_SECURITY_TOKEN: When using AWS STS
+* Pass ``--aws-instance-profile`` to gather credentials from the
+  Instance Profile.  See `Using AWS IAM Instance Profiles`.
 
 Azure Blob Store
 ''''''''''''''''
