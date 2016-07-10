@@ -50,7 +50,7 @@ def prepare_s3_default_test_bucket():
 
     try:
         conn.create_bucket(bucket_name, location=Location.USWest)
-    except boto.exception.S3CreateError, e:
+    except boto.exception.S3CreateError as e:
         if e.status == 409:
             # Conflict: bucket already present.  Re-use it, but
             # clean it out first.
@@ -126,7 +126,7 @@ def _delete_keys(bucket, keys):
             try:
                 k = boto.s3.connection.Key(bucket, name)
                 bucket.delete_key(k)
-            except boto.exception.S3ResponseError, e:
+            except boto.exception.S3ResponseError as e:
                 if e.status == 404:
                     # Key is already not present.  Continue the
                     # deletion iteration.
@@ -148,7 +148,7 @@ def apathetic_bucket_delete(bucket_name, keys, *args, **kwargs):
 
     try:
         conn.delete_bucket(bucket_name)
-    except boto.exception.S3ResponseError, e:
+    except boto.exception.S3ResponseError as e:
         if e.status == 404:
             # If the bucket is already non-existent, then the bucket
             # need not be destroyed from a prior test run.
@@ -169,7 +169,7 @@ def insistent_bucket_delete(conn, bucket_name, keys):
     while True:
         try:
             conn.delete_bucket(bucket_name)
-        except boto.exception.S3ResponseError, e:
+        except boto.exception.S3ResponseError as e:
             if e.status == 404:
                 # Create not yet visible, but it just happened above:
                 # keep trying.  Potential consistency.
@@ -184,7 +184,7 @@ def insistent_bucket_create(conn, bucket_name, *args, **kwargs):
     while True:
         try:
             bucket = conn.create_bucket(bucket_name, *args, **kwargs)
-        except boto.exception.S3CreateError, e:
+        except boto.exception.S3CreateError as e:
             if e.status == 409:
                 # Conflict; bucket already created -- probably means
                 # the prior delete did not process just yet.

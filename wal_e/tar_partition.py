@@ -235,7 +235,7 @@ class TarPartition(list):
                                       et_info.tarinfo.size) as f:
                     tar.addfile(et_info.tarinfo, f)
 
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             if (e.errno == errno.ENOENT and
                 e.filename == et_info.submitted_path):
                 # log a NOTICE/INFO that the file was unlinked.
@@ -376,7 +376,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                         file_path, arcname=file_path[len(root):]),
                     submitted_path=file_path)
 
-            except EnvironmentError, e:
+            except EnvironmentError as e:
                 if (e.errno == errno.ENOENT and
                     e.filename == file_path):
                     # log a NOTICE/INFO that the file was unlinked.

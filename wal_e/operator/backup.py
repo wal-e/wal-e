@@ -520,7 +520,7 @@ class Backup(object):
         def wrapper(*args, **kwargs):
             try:
                 return fn(*args, **kwargs)
-            except UserException, e:
+            except UserException as e:
                 self.exceptions.append(e)
 
         return wrapper

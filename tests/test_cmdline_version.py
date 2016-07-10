@@ -16,7 +16,7 @@ def test_version_print():
     # Try loading it via command line invocation
     try:
         proc = subprocess.Popen(['wal-e', 'version'], stdout=subprocess.PIPE)
-    except EnvironmentError, e:
+    except EnvironmentError as e:
         if e.errno == errno.ENOENT:
             pytest.skip('wal-e must be in $PATH to test version output')
     result = proc.communicate()[0]

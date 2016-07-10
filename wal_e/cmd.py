@@ -688,11 +688,11 @@ def main():
 
             raise backup_cxt.exceptions[-1]
 
-    except UserException, e:
+    except UserException as e:
         logger.log(level=e.severity,
                    msg=e.msg, detail=e.detail, hint=e.hint)
         sys.exit(1)
-    except Exception, e:
+    except Exception as e:
         logger.critical(
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))

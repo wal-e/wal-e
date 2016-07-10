@@ -266,7 +266,7 @@ def write_and_return_error(url, conn, stream):
         data = uri_get_file(None, url, conn=conn)
         stream.write(data)
         stream.flush()
-    except Exception, e:
+    except Exception as e:
         return e
     finally:
         stream.close()

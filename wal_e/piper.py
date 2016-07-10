@@ -81,7 +81,7 @@ class PopenShim(object):
         while True:
             try:
                 proc = subprocess.Popen(*args, **kwargs)
-            except OSError, e:
+            except OSError as e:
                 if e.errno == errno.ENOMEM:
                     should_retry = (self.max_tries is not None and
                                     tries >= self.max_tries)

@@ -60,7 +60,7 @@ class _Deleter(object):
                 finally:
                     for i in xrange(len(page)):
                         self._q.task_done()
-        except KeyboardInterrupt, e:
+        except KeyboardInterrupt as e:
             # Absorb-and-forward the exception instead of using
             # gevent's link_exception operator, because in gevent <
             # 1.0 there is no way to turn off the alarming stack

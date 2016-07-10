@@ -120,7 +120,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                     exc = g.get()
                     if exc is not None:
                         raise exc
-                except boto.exception.S3ResponseError, e:
+                except boto.exception.S3ResponseError as e:
                     if e.status == 404:
                         # Do not retry if the key not present, this
                         # can happen under normal situations.
@@ -199,7 +199,7 @@ def write_and_return_error(key, stream):
     try:
         key.get_contents_to_file(stream)
         stream.flush()
-    except Exception, e:
+    except Exception as e:
         return e
     finally:
         stream.close()
