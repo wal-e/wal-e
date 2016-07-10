@@ -27,7 +27,7 @@ class PgControlDataParser(object):
             parts = line.split('=')
             if len(parts) != 2:
                 continue
-            key, val = map(lambda x: x.strip(), parts)
+            key, val = [x.strip() for x in parts]
             if key == 'BINDIR':
                 self._controldata_bin = os.path.join(val, CONTROLDATA_BIN)
             elif key == 'VERSION':
