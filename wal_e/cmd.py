@@ -130,7 +130,7 @@ def external_program_check(
         raise EnvironmentError('INTERNAL: Had problems running psql '
                                'from external_program_check')
 
-    with open(os.devnull, 'w') as nullf:
+    with open(os.devnull, 'wb') as nullf:
         for program in to_check:
             try:
                 if program is PSQL_BIN:
