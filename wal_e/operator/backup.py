@@ -472,7 +472,7 @@ class Backup(object):
 
         # Reject tiny per-process rate limits.  They should be
         # rejected more nicely elsewhere.
-        assert per_process_limit > 0 or per_process_limit is None
+        assert per_process_limit is None or per_process_limit > 0
 
         total_size = 0
 
