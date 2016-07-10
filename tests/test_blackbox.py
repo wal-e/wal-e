@@ -27,7 +27,7 @@ def test_wal_push_fetch(pg_xlog, tmpdir, config):
 
     # Recall file and check for equality.
     download_file = tmpdir.join('TEST-DOWNLOADED')
-    config.main('wal-fetch', seg_name, unicode(download_file))
+    config.main('wal-fetch', '-p0', seg_name, unicode(download_file))
     assert download_file.read() == contents
 
     config.main('wal-prefetch', path.dirname(unicode(download_file)), seg_name)
@@ -93,7 +93,7 @@ def test_wal_fetch_non_existent(tmpdir, config):
     download_file = tmpdir.join('TEST-DOWNLOADED')
 
     with pytest.raises(SystemExit) as e:
-        config.main('wal-fetch', 'irrelevant', unicode(download_file))
+        config.main('wal-fetch', '-p0', 'irrelevant', unicode(download_file))
 
     assert e.value.code == 1
 
