@@ -84,6 +84,11 @@ Optional Variables:
   ``internalURL`` on object stores like Rackspace Cloud Files in order
   to use the internal network.
 
+File System
+''''''''''''''''
+
+* WALE_FILE_PREFIX (e.g. ``file://localhost/backups/pg``)
+
 .. IMPORTANT::
    Ensure that all writing servers have different _PREFIXes set.
    Reuse of a value between two, writing databases will likely cause
