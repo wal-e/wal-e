@@ -639,16 +639,13 @@ the development environment.  All additional dependencies of WAL-E are
 managed by tox_.  In addition, the coding conventions are checked by
 the tox_ configuration included with WAL-E.
 
-To run the tests, one need only run::
+To run the tests, run::
 
   $ tox -e py27
 
-There are a variety of other environments tested by ``tox`` handling
-old and new library versions, but ``-e py27`` is normally the
-environment one should iterate with.
-
 To run a somewhat more lengthy suite of integration tests that
-communicate with AWS S3, one might run tox_ like this::
+communicate with a real blob store account, one might run tox_ like
+this::
 
   $ WALE_S3_INTEGRATION_TESTS=TRUE      \
     AWS_ACCESS_KEY_ID=[AKIA...]         \
@@ -656,6 +653,9 @@ communicate with AWS S3, one might run tox_ like this::
     WALE_WABS_INTEGRATION_TESTS=TRUE    \
     WABS_ACCOUNT_NAME=[...]             \
     WABS_ACCESS_KEY=[...]               \
+    WALE_GS_INTEGRATION_TESTS=TRUE      \
+    GCLOUD_PROJECT=[gs-proj-name]       \
+    GOOGLE_APPLICATION_CREDENTIALS=[~/my-credentials.json] \
     tox -e py27 -- -n 8
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
@@ -668,29 +668,9 @@ tests complete a small fraction of the time it would take otherwise.
 It is a design requirement of new tests that parallel execution not be
 sacrificed.
 
-The above invocation tests WAL-E with every test environment
-defined in ``tox.ini``.  When iterating, testing all of those is
-typically not a desirable use of time, so one can restrict the
-integration test to one virtual environment, in a combination of
-features seen in all the previous examples::
-
-  $ WALE_S3_INTEGRATION_TESTS=TRUE      \
-    AWS_ACCESS_KEY_ID=[AKIA...]         \
-    AWS_SECRET_ACCESS_KEY=[...]         \
-    WALE_WABS_INTEGRATION_TESTS=TRUE    \
-    WABS_ACCOUNT_NAME=[...]             \
-    WABS_ACCESS_KEY=[...]               \
-    tox -e py27 -- -n 8
-
 Coverage testing can be used by combining any of these using
 pytest-cov_, e.g.: ``tox -- --cov wal_e`` and
 ``tox -- --cov wal_e --cov-report html; see htmlcov/index.html``.
-
-Finally, the test framework used is pytest_.  If possible, do not
-submit Python unittest_ style tests: those tend to be more verbose and
-anemic in power; however, any automated testing is better than a lack
-thereof, so if you are familiar with unittest_, do not let the
-preference for pytest_ idiom be an impediment to submitting code.
 
 .. _tox: https://pypi.python.org/pypi/tox
 .. _pytest: https://pypi.python.org/pypi/pytest
