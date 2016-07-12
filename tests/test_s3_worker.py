@@ -55,7 +55,7 @@ def test_get_bucket_vs_certs():
 def test_empty_latest_listing():
     """Test listing a 'backup-list LATEST' on an empty prefix."""
 
-    bucket_name = 'wal-e-test-empty-listing'
+    bucket_name = bucket_name_mangle('wal-e-test-empty-listing')
     layout = storage.StorageLayout('s3://{0}/test-prefix'
                                    .format(bucket_name))
 
