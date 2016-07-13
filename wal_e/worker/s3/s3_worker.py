@@ -107,5 +107,9 @@ class DeleteFromContext(_DeleteFromContext):
         return key.bucket.name
 
     def _backup_list(self, prefix):
+        from boto.s3.deletemarker import DeleteMarker
+
         bucket = get_bucket(self.conn, self.layout.store_name())
-        return bucket.list(prefix=prefix)
+        object_versions = bucket.list_versions(prefix=prefix)
+        return (key for key in object_versions
+            if key.is_latest and type(key) is not DeleteMarker)

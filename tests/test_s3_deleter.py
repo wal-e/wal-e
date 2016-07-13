@@ -109,7 +109,7 @@ def test_processes_one_deletion(b, collect):
     d.delete(k)
     d.close()
 
-    assert collect.deleted_keys == [key_name]
+    assert collect.deleted_keys == [(key_name, None)]
 
 
 def test_processes_many_deletions(b, collect):
@@ -129,7 +129,8 @@ def test_processes_many_deletions(b, collect):
     # Sort the deleted key names to obtain another stable order and
     # then ensure that everything was passed for deletion
     # successfully.
-    assert sorted(collect.deleted_keys) == target
+    assert sorted(collect.deleted_keys) == [(target_key, None)
+                                            for target_key in target]
 
 
 def test_retry_on_normal_error(b, collect):
@@ -155,7 +156,7 @@ def test_retry_on_normal_error(b, collect):
     d.close()
 
     # The one enqueued job should have been processed.n
-    assert collect.deleted_keys == [key_name]
+    assert collect.deleted_keys == [(key_name, None)]
 
 
 def test_no_retry_on_keyboadinterrupt(b, collect):
@@ -183,7 +184,7 @@ def test_no_retry_on_keyboadinterrupt(b, collect):
 
     # Only one key should have been aborted, since the purpose is to
     # *not* retry when processing KeyboardInterrupt.
-    assert collect.aborted_keys == [key_name]
+    assert collect.aborted_keys == [(key_name, None)]
 
     # Turn off fault injection and flush/synchronize with close().
     collect.inject(None)
