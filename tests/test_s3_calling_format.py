@@ -199,9 +199,14 @@ def test_cipher_suites():
 
     # Test for the expected cipher suite.
     #
-    # This can change or vary on different platforms somewhat
-    # harmlessly, but do the simple thing and insist on an exact match
-    # for now.
-    assert (chosen_cipher_suite == ['AES256', 'SHA']
-            or chosen_cipher_suite == ['AES128', 'SHA']
-            or chosen_cipher_suite == ['ECDHE', 'RSA', 'AES128', 'SHA'])
+    # This can change or vary on different platforms and over time as
+    # new suites are phased in harmlessly, but do the simple thing and
+    # insist on an exact match for now.
+    acceptable = [
+        ['AES256', 'SHA'],
+        ['AES128', 'SHA'],
+        ['ECDHE', 'RSA', 'AES128', 'SHA'],
+        ['ECDHE', 'RSA', 'AES128', 'GCM', 'SHA256']
+    ]
+
+    assert chosen_cipher_suite in acceptable
