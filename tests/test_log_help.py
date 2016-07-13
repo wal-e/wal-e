@@ -55,15 +55,15 @@ STRUCTURED: time=2012-01-01T00.1234-00 pid=1234"""
 
 def test_get_log_destinations_empty():
     """WALE_LOG_DESTINATION is not set"""
-    os.environ.clear()
+    assert os.getenv('WALE_LOG_DESTINATION') is None
     out = log_help.get_log_destinations()
 
     assert out == ['stderr', 'syslog']
 
 
-def test_get_log_destinations_notempty():
+def test_get_log_destinations_notempty(monkeypatch):
     """WALE_LOG_DESTINATION is set"""
-    os.environ['WALE_LOG_DESTINATION'] = 'syslog'
+    monkeypatch.setenv('WALE_LOG_DESTINATION', 'syslog')
     out = log_help.get_log_destinations()
 
     assert out == ['syslog']
@@ -71,53 +71,53 @@ def test_get_log_destinations_notempty():
 
 def test_get_syslog_facility_empty():
     """WALE_SYSLOG_FACILITY is not set"""
-    os.environ.clear()
+    assert os.getenv('WALE_SYSLOG_FACILITY') is None
     out, valid_facility = log_help.get_syslog_facility()
 
     assert valid_facility is True
     assert out == handlers.SysLogHandler.LOG_USER
 
 
-def test_get_syslog_facility_notempty():
+def test_get_syslog_facility_notempty(monkeypatch):
     """WALE_SYSLOG_FACILITY is set"""
-    os.environ['WALE_SYSLOG_FACILITY'] = 'local0'
+    monkeypatch.setenv('WALE_SYSLOG_FACILITY', 'local0')
     out, valid_facility = log_help.get_syslog_facility()
 
     assert valid_facility is True
     assert out == handlers.SysLogHandler.LOG_LOCAL0
 
-    os.environ['WALE_SYSLOG_FACILITY'] = 'user'
+    monkeypatch.setenv('WALE_SYSLOG_FACILITY', 'user')
     out, valid_facility = log_help.get_syslog_facility()
 
     assert valid_facility is True
     assert out == handlers.SysLogHandler.LOG_USER
 
 
-def test_malformed_destinations():
+def test_malformed_destinations(monkeypatch):
     """WALE_SYSLOG_FACILITY contains bogus values"""
-    os.environ['WALE_SYSLOG_FACILITY'] = 'wat'
+    monkeypatch.setenv('WALE_SYSLOG_FACILITY', 'wat')
     out, valid_facility = log_help.get_syslog_facility()
     assert not valid_facility
     assert out == handlers.SysLogHandler.LOG_USER
 
-    os.environ['WALE_SYSLOG_FACILITY'] = 'local0,wat'
+    monkeypatch.setenv('WALE_SYSLOG_FACILITY', 'local0,wat')
     out, valid_facility = log_help.get_syslog_facility()
     assert not valid_facility
     assert out == handlers.SysLogHandler.LOG_USER
 
-    os.environ['WALE_SYSLOG_FACILITY'] = ','
+    monkeypatch.setenv('WALE_SYSLOG_FACILITY', ',')
     out, valid_facility = log_help.get_syslog_facility()
     assert not valid_facility
     assert out == handlers.SysLogHandler.LOG_USER
 
 
-def test_get_syslog_facility_case_insensitive():
+def test_get_syslog_facility_case_insensitive(monkeypatch):
     """WALE_SYSLOG_FACILITY is case insensitive"""
     for low_name in ['local' + unicode(n) for n in xrange(8)] + ['user']:
-        os.environ['WALE_SYSLOG_FACILITY'] = low_name
+        monkeypatch.setenv('WALE_SYSLOG_FACILITY', low_name)
         out, valid_facility = log_help.get_syslog_facility()
         assert valid_facility is True
 
-        os.environ['WALE_SYSLOG_FACILITY'] = low_name.upper()
+        monkeypatch.setenv('WALE_SYSLOG_FACILITY', low_name.upper())
         out, valid_facility = log_help.get_syslog_facility()
         assert valid_facility is True
