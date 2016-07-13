@@ -78,13 +78,16 @@ def default_test_gs_bucket():
 
 def apathetic_bucket_delete(bucket_name, blobs, *args, **kwargs):
     conn = storage.Client()
-    bucket = storage.Bucket(bucket_name, conn)
+    bucket = storage.Bucket(conn, name=bucket_name)
 
     if bucket:
         # Delete key names passed by the test code.
         bucket.delete_blobs(blobs)
 
-    bucket.delete()
+    try:
+        bucket.delete()
+    except exceptions.NotFound:
+        pass
 
     return conn
 
@@ -98,7 +101,7 @@ def insistent_bucket_delete(conn, bucket_name, blobs):
 
     while True:
         try:
-            conn.delete_bucket(bucket_name)
+            bucket.delete()
         except exceptions.NotFound:
             continue
 
