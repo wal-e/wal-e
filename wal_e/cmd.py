@@ -290,7 +290,7 @@ def build_parser():
         parents=[wal_fetchpush_parent])
 
     wal_push_parser.add_argument(
-        '--pool-size', '-p', type=int, default=8,
+        '--pool-size', '-p', type=int, default=32,
         help='Set the maximum number of concurrent transfers')
 
     # backup-fetch operator section
