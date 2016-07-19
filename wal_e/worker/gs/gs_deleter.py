@@ -3,6 +3,11 @@ from wal_e import retries
 from wal_e.worker.base import _Deleter
 
 
+def _on_error(blob):
+    # This function is called whenever NotFound is returned from GCS.
+    pass
+
+
 class Deleter(_Deleter):
 
     @retries.retry()
@@ -24,4 +29,4 @@ class Deleter(_Deleter):
                     hint='This should be reported as a bug.')
 
         bucket = page[0].bucket
-        bucket.delete_blobs(page)
+        bucket.delete_blobs(page, on_error=_on_error)

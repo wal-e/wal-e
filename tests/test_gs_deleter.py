@@ -32,8 +32,11 @@ class BucketDeleteBlobsCollector(object):
         self.exc = exc
         self._exc_protect.release()
 
-    def __call__(self, blobs):
+    def __call__(self, blobs, on_error=None):
         self._exc_protect.acquire()
+
+        # Make sure the on_call function is correctly passed.
+        assert on_error is gs_deleter._on_error
 
         try:
             if self.exc:
