@@ -74,7 +74,6 @@ Google Storage
 ''''''''''''''
 
 * WALE_GS_PREFIX (e.g. ``gs://bucket/path/optionallymorepath``)
-* GCLOUD_PROJECT: Name of the project that hosts your bucket.
 * GOOGLE_APPLICATION_CREDENTIALS
 
 Swift
@@ -654,7 +653,6 @@ this::
     WABS_ACCOUNT_NAME=[...]             \
     WABS_ACCESS_KEY=[...]               \
     WALE_GS_INTEGRATION_TESTS=TRUE      \
-    GCLOUD_PROJECT=[gs-proj-name]       \
     GOOGLE_APPLICATION_CREDENTIALS=[~/my-credentials.json] \
     tox -e py27 -- -n 8
 
