@@ -33,7 +33,7 @@ class TarPartitionLister(object):
             self.backup_info)
 
         blob_list = self.wabs_conn.list_blobs(self.layout.store_name(),
-                                              prefix='/' + prefix)
+                                              prefix=prefix)
         for blob in blob_list.blobs:
             url = 'wabs://{container}/{name}'.format(
                 container=self.layout.store_name(), name=blob.name)
@@ -88,7 +88,7 @@ class BackupList(_BackupList):
 
     def _backup_list(self, prefix):
         blob_list = self.conn.list_blobs(self.layout.store_name(),
-                                         prefix='/' + prefix)
+                                         prefix=prefix)
         return blob_list.blobs
 
 
@@ -107,5 +107,5 @@ class DeleteFromContext(_DeleteFromContext):
 
     def _backup_list(self, prefix):
         blob_list = self.conn.list_blobs(self.layout.store_name(),
-                                         prefix='/' + prefix)
+                                         prefix=prefix)
         return blob_list.blobs
