@@ -43,11 +43,13 @@ logger = log_help.WalELogger(__name__)
 _Key = collections.namedtuple('_Key', ['size'])
 WABS_CHUNK_SIZE = 4 * 1024 * 1024
 
+
 def strip_slash(path):
     """Blob names are assumed to be relative paths, so names of the form
     /path/to/file create a top-level directory with no name.  Let's not do
     that."""
     return path[1:] if path[0] == '/' else path
+
 
 def uri_put_file(creds, uri, fp, content_encoding=None):
     assert fp.tell() == 0
