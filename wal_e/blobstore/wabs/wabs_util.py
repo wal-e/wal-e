@@ -44,6 +44,13 @@ _Key = collections.namedtuple('_Key', ['size'])
 WABS_CHUNK_SIZE = 4 * 1024 * 1024
 
 
+def strip_slash(path):
+    """Blob names are assumed to be relative paths, so names of the form
+    /path/to/file create a top-level directory with no name.  Let's not do
+    that."""
+    return path[1:] if path[0] == '/' else path
+
+
 def uri_put_file(creds, uri, fp, content_encoding=None):
     assert fp.tell() == 0
     assert uri.startswith('wabs://')
@@ -86,7 +93,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     @retry(retry_with_count(log_upload_failures_on_error))
     def upload_chunk(chunk, block_id):
         check_sum = base64.encodestring(md5(chunk).digest()).strip('\n')
-        conn.put_block(url_tup.netloc, url_tup.path, chunk,
+        conn.put_block(url_tup.netloc, strip_slash(url_tup.path), chunk,
                        block_id, content_md5=check_sum)
 
     url_tup = urlparse(uri)
@@ -97,7 +104,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     conn = BlobService(
         creds.account_name, creds.account_key,
         sas_token=creds.access_token, protocol='https')
-    conn.put_blob(url_tup.netloc, url_tup.path, '', **kwargs)
+    conn.put_blob(url_tup.netloc, strip_slash(url_tup.path), '', **kwargs)
 
     # WABS requires large files to be uploaded in 4MB chunks
     block_ids = []
@@ -117,7 +124,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
             p.join()
             break
 
-    conn.put_block_list(url_tup.netloc, url_tup.path, block_ids)
+    conn.put_block_list(url_tup.netloc, strip_slash(url_tup.path), block_ids)
 
     # To maintain consistency with the S3 version of this function we must
     # return an object with a certain set of attributes.  Currently, that set
@@ -134,7 +141,7 @@ def uri_get_file(creds, uri, conn=None):
                            sas_token=creds.access_token, protocol='https')
 
     # Determin the size of the target blob
-    props = conn.get_blob_properties(url_tup.netloc, url_tup.path)
+    props = conn.get_blob_properties(url_tup.netloc, strip_slash(url_tup.path))
     blob_size = int(props['content-length'])
 
     ret_size = 0
@@ -150,7 +157,7 @@ def uri_get_file(creds, uri, conn=None):
             # whole file over again.
             try:
                 part = conn.get_blob(url_tup.netloc,
-                                     url_tup.path,
+                                     strip_slash(url_tup.path),
                                      x_ms_range=ms_range)
             except EnvironmentError as e:
                 if e.errno in (errno.EBUSY, errno.ECONNRESET):
