@@ -44,7 +44,7 @@ setup(
     author="The WAL-E Contributors",
     author_email="wal-e@googlegroups.com",
     maintainer="Daniel Farina",
-    maintainer_email="daniel@heroku.com",
+    maintainer_email="daniel@fdr.io",
     description="Continuous Archiving for Postgres",
     long_description=read('README.rst'),
     classifiers=['Topic :: Database',
