@@ -47,9 +47,13 @@ setup(
     maintainer_email="daniel@fdr.io",
     description="Continuous Archiving for Postgres",
     long_description=read('README.rst'),
-    classifiers=['Topic :: Database',
-                 'Topic :: System :: Archiving',
-                 'Topic :: System :: Recovery Tools'],
+    classifiers=[
+        'Topic :: Database',
+        'Topic :: System :: Archiving',
+        'Topic :: System :: Recovery Tools',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5'
+    ],
     platforms=['any'],
     license="BSD",
     keywords=("postgres postgresql database backup archive archiving s3 aws "
