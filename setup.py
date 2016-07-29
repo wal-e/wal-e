@@ -26,19 +26,19 @@ def read(fname):
 
 VERSION = read(os.path.join('wal_e', 'VERSION')).strip()
 
-install_requires = [
-    l for l in read('requirements.txt').split('\n')
-    if l and not l.startswith('#')]
-
-if sys.version_info < (2, 7):
-    install_requires.append('argparse>=0.8')
-
 setup(
     name="wal-e",
     version=VERSION,
     packages=find_packages(),
 
-    install_requires=install_requires,
+    install_requires=['gevent>=1.0.2'],
+    extras_require={
+        'aws': ['boto>=2.24.0'],
+        'azure': ['azure>=0.7.0'],
+        'google': ['gcloud>=0.8.0'],
+        'swift': ['python-swiftclient>=1.8.0',
+                  'python-keystoneclient>=0.4.2']
+    },
 
     # metadata for upload to PyPI
     author="The WAL-E Contributors",
