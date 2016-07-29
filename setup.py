@@ -53,7 +53,7 @@ setup(
     platforms=['any'],
     license="BSD",
     keywords=("postgres postgresql database backup archive archiving s3 aws "
-              "openstack swift wabs azure wal shipping"),
+              "openstack swift wabs azure google gce gcs wal shipping"),
     url="https://github.com/wal-e/wal-e",
 
     # Include the VERSION file
