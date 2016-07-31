@@ -30,6 +30,9 @@ Finally, there are some detailed adjustments:
 * Top-level backups in Azure no longer create a nameless "directory"
   (Andrew Marks).
 
+* WAL-E start-up log message has been suppressed in some noisy cases:
+  ``wal-fetch``, ``wal-push``, ``wal-prefetch``.
+
 v0.9.2
 ------
 
