@@ -528,8 +528,11 @@ def render_subcommand(args):
     """Render a subcommand for human-centric viewing"""
     if args.subcommand == 'delete':
         return 'delete ' + args.delete_subcommand
-    else:
-        return args.subcommand
+
+    if args.subcommand in ('wal-prefetch', 'wal-push', 'wal-fetch'):
+        return None
+
+    return args.subcommand
 
 
 def main():
@@ -553,9 +556,10 @@ def main():
     #
     # Otherwise, it is hard to tell when and how WAL-E started in logs
     # because often emits status output too late.
-    logger.info(msg='starting WAL-E',
-                detail=('The subcommand is "{0}".'
-                        .format(render_subcommand(args))))
+    rendered = render_subcommand(args)
+    if rendered is not None:
+        logger.info(msg='starting WAL-E',
+                    detail='The subcommand is "{0}".'.format(rendered))
 
     try:
         backup_cxt = configure_backup_cxt(args)
