@@ -31,13 +31,13 @@ setup(
     version=VERSION,
     packages=find_packages(),
 
-    install_requires=['gevent>=1.0.2'],
+    install_requires=['gevent>=1.1.1'],
     extras_require={
-        'aws': ['boto>=2.24.0'],
-        'azure': ['azure>=0.7.0'],
-        'google': ['gcloud>=0.8.0'],
-        'swift': ['python-swiftclient>=1.8.0',
-                  'python-keystoneclient>=0.4.2']
+        'aws': ['boto>=2.40.0'],
+        'azure': ['azure>=1.0.3'],
+        'google': ['gcloud>=0.17.0'],
+        'swift': ['python-swiftclient>=3.0.0',
+                  'python-keystoneclient>=3.0.0']
     },
 
     # metadata for upload to PyPI
