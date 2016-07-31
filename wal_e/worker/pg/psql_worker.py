@@ -49,7 +49,7 @@ def psql_csv_run(sql_command, error_handler=None):
                                 '--no-psqlrc', '-c', csv_query],
                                stdout=PIPE,
                                env=new_env)
-    stdout = psql_proc.communicate()[0]
+    stdout = psql_proc.communicate()[0].decode('utf-8')
 
     if psql_proc.returncode != 0:
         if error_handler is not None:
