@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from cStringIO import StringIO
+from io import StringIO
 from wal_e import log_help
 from wal_e import storage
 from wal_e import tar_partition
@@ -25,7 +25,7 @@ from wal_e.worker import (WalSegment,
 
 
 # File mode on directories created during restore process
-DEFAULT_DIR_MODE = 0700
+DEFAULT_DIR_MODE = 0o700
 # Provides guidence in object names as to the version of the file
 # structure.
 FILE_STRUCTURE_VERSION = storage.CURRENT_VERSION
@@ -130,7 +130,7 @@ class Backup(object):
             self._verify_restore_paths(backup_info.spec)
 
         connections = []
-        for i in xrange(pool_size):
+        for i in range(pool_size):
             connections.append(self.new_connection())
 
         partition_iter = self.worker.TarPartitionLister(
@@ -138,7 +138,7 @@ class Backup(object):
 
         assert len(connections) == pool_size
         fetchers = []
-        for i in xrange(pool_size):
+        for i in range(pool_size):
             fetchers.append(self.worker.BackupFetcher(
                 connections[i], self.layout, backup_info,
                 backup_info.spec['base_prefix'],
@@ -150,7 +150,7 @@ class Backup(object):
         for part_name in partition_iter:
             p.spawn(
                 self._exception_gather_guard(
-                    fetcher_cycle.next().fetch_partition),
+                    next(fetcher_cycle).fetch_partition),
                 part_name)
 
         p.join(raise_error=True)
@@ -272,7 +272,7 @@ class Backup(object):
         seg_stream = WalSegment.from_ready_archive_status(xlog_dir)
         while started < concurrency:
             try:
-                other_segment = seg_stream.next()
+                other_segment = next(seg_stream)
             except StopIteration:
                 break
 
@@ -285,7 +285,7 @@ class Backup(object):
             group.join()
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
-                print e
+                print(e)
                 raise UserException(
                     msg='could not find file for wal-push',
                     detail=('The operating system reported: {0} {1}'

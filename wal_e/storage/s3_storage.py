@@ -15,8 +15,9 @@ class S3BackupInfo(BackupInfo):
             bucket=self.layout.store_name(),
             path=self.layout.basebackup_sentinel(self))
 
-        data = json.loads(s3.uri_get_file(None, uri, conn=conn))
-        for k, v in data.items():
+        data = json.loads(s3.uri_get_file(None, uri, conn=conn)
+                          .decode('utf-8'))
+        for k, v in list(data.items()):
             setattr(self, k, v)
 
         self._details_loaded = True

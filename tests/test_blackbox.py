@@ -27,10 +27,10 @@ def test_wal_push_fetch(pg_xlog, tmpdir, config):
 
     # Recall file and check for equality.
     download_file = tmpdir.join('TEST-DOWNLOADED')
-    config.main('wal-fetch', '-p0', seg_name, unicode(download_file))
+    config.main('wal-fetch', '-p0', seg_name, str(download_file))
     assert download_file.read() == contents
 
-    config.main('wal-prefetch', path.dirname(unicode(download_file)), seg_name)
+    config.main('wal-prefetch', path.dirname(str(download_file)), seg_name)
     assert tmpdir.join('.wal-e', 'prefetch', seg_name).check(file=1)
 
 
@@ -54,7 +54,7 @@ def test_wal_push_parallel(pg_xlog, config, monkeypatch):
     def seg_name(*parts):
         return ''.join(str(p).zfill(8) for p in parts)
 
-    segments = [seg_name(1, 1, x) for x in xrange(1, 4)]
+    segments = [seg_name(1, 1, x) for x in range(1, 4)]
 
     for s in segments:
         pg_xlog.touch(s, '.ready')
@@ -93,7 +93,7 @@ def test_wal_fetch_non_existent(tmpdir, config):
     download_file = tmpdir.join('TEST-DOWNLOADED')
 
     with pytest.raises(SystemExit) as e:
-        config.main('wal-fetch', '-p0', 'irrelevant', unicode(download_file))
+        config.main('wal-fetch', '-p0', 'irrelevant', str(download_file))
 
     assert e.value.code == 1
 
@@ -109,7 +109,7 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
     monkeypatch.setattr(wal_e.tar_partition, '_fsync_files',
                         lambda filenames: fsynced_files.extend(filenames))
 
-    config.main('backup-push', unicode(small_push_dir))
+    config.main('backup-push', str(small_push_dir))
 
     fetch_dir = tmpdir.join('fetch-to').ensure(dir=True)
 
@@ -121,7 +121,7 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
     deadline = start + datetime.timedelta(seconds=15)
     while True:
         try:
-            config.main('backup-fetch', unicode(fetch_dir), 'LATEST')
+            config.main('backup-fetch', str(fetch_dir), 'LATEST')
         except exception.S3ResponseError:
             if datetime.datetime.now() > deadline:
                 raise
@@ -135,11 +135,11 @@ def test_backup_push_fetch(tmpdir, small_push_dir, monkeypatch, config,
 
     for filename in fetch_dir.listdir():
         if filename.check(link=0):
-            assert unicode(filename) in fsynced_files
+            assert str(filename) in fsynced_files
         elif filename.check(link=1):
-            assert unicode(filename) not in fsynced_files
+            assert str(filename) not in fsynced_files
 
 
 def test_delete_everything(config, small_push_dir, noop_pg_backup_statements):
-    config.main('backup-push', unicode(small_push_dir))
+    config.main('backup-push', str(small_push_dir))
     config.main('delete', '--confirm', 'everything')

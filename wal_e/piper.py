@@ -9,38 +9,14 @@ import copy
 import errno
 import gevent
 import gevent.socket
-import signal
+import subprocess
 
+from subprocess import PIPE
 from wal_e import pipebuf
-from wal_e import subprocess
-from wal_e.subprocess import PIPE
 
 # This is not used in this module, but is imported by dependent
 # modules, so do this to quiet pyflakes.
 assert PIPE
-
-
-def subprocess_setup(f=None):
-    """
-    SIGPIPE reset for subprocess workaround
-
-    Python installs a SIGPIPE handler by default. This is usually not
-    what non-Python subprocesses expect.
-
-    Calls an optional "f" first in case other code wants a preexec_fn,
-    then restores SIGPIPE to what most Unix processes expect.
-
-    http://bugs.python.org/issue1652
-
-    """
-
-    def wrapper(*args, **kwargs):
-        if f is not None:
-            f(*args, **kwargs)
-
-        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-
-    return wrapper
 
 
 class PopenShim(object):
@@ -49,33 +25,24 @@ class PopenShim(object):
         self.max_tries = max_tries
 
     def __call__(self, *args, **kwargs):
+        """Call Popen, but be persistent in the face of ENOMEM.
+
+        The utility of this is that on systems with overcommit off,
+        the momentary spike in committed virtual memory from fork()
+        can be large, but is cleared soon thereafter because
+        'subprocess' uses an 'exec' system call.  Without retrying,
+        the the backup process would lose all its progress
+        immediately with no recourse, which is undesirable.
+
+        Because the ENOMEM error happens on fork() before any
+        meaningful work can be done, one thinks this retry would be
+        safe, and without side effects.  Because fork is being
+        called through 'subprocess' and not directly here, this
+        program has to rely on the semantics of the exceptions
+        raised from 'subprocess' to avoid retries in unrelated
+        scenarios, which could be dangerous.
+
         """
-        Same as subprocess.Popen, but restores SIGPIPE
-
-        This bug is documented (See subprocess_setup) but did not make
-        it to standard library.  Could also be resolved by using the
-        python-subprocess32 backport and using it appropriately (See
-        'restore_signals' keyword argument to Popen)
-        """
-
-        kwargs['preexec_fn'] = subprocess_setup(kwargs.get('preexec_fn'))
-
-        # Call Popen, but be persistent in the face of ENOMEM.
-        #
-        # The utility of this is that on systems with overcommit off,
-        # the momentary spike in committed virtual memory from fork()
-        # can be large, but is cleared soon thereafter because
-        # 'subprocess' uses an 'exec' system call.  Without retrying,
-        # the the backup process would lose all its progress
-        # immediately with no recourse, which is undesirable.
-        #
-        # Because the ENOMEM error happens on fork() before any
-        # meaningful work can be done, one thinks this retry would be
-        # safe, and without side effects.  Because fork is being
-        # called through 'subprocess' and not directly here, this
-        # program has to rely on the semantics of the exceptions
-        # raised from 'subprocess' to avoid retries in unrelated
-        # scenarios, which could be dangerous.
         tries = 0
 
         while True:

@@ -28,9 +28,9 @@ def do_lzop_put(creds, url, local_path, gpg_key):
     blobstore = get_blobstore(storage.StorageLayout(url))
 
     with tempfile.NamedTemporaryFile(
-            mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
+            mode='r+b', buffering=pipebuf.PIPE_BUF_BYTES) as tf:
         with pipeline.get_upload_pipeline(
-                open(local_path, 'r'), tf, gpg_key=gpg_key):
+                open(local_path, 'rb'), tf, gpg_key=gpg_key):
             pass
 
         tf.flush()

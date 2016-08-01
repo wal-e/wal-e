@@ -56,7 +56,7 @@ def test_simple_concurrency():
     """Try a pool that cannot execute all submitted jobs at once."""
     pool = make_pool(1, 1)
 
-    for i in xrange(3):
+    for i in range(3):
         pool.put(FakeTarPartition(1))
 
     pool.join()
@@ -118,7 +118,7 @@ def test_put_after_join():
 def test_pool_concurrent_success():
     pool = make_pool(4, 4)
 
-    for i in xrange(30):
+    for i in range(30):
         pool.put(FakeTarPartition(1))
 
     pool.join()
@@ -127,7 +127,7 @@ def test_pool_concurrent_success():
 def test_pool_concurrent_failure():
     pool = make_pool(4, 4)
 
-    parts = [FakeTarPartition(1) for i in xrange(30)]
+    parts = [FakeTarPartition(1) for i in range(30)]
 
     exc = Explosion('boom')
     parts[27]._explosive = exc

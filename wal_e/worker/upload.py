@@ -3,7 +3,10 @@ import socket
 import tempfile
 import time
 
-import boto.exception
+try:
+    import boto.exception
+except ImportError:
+    boto = None
 
 from wal_e import log_help
 from wal_e import pipebuf
@@ -87,7 +90,7 @@ class PartitionUploader(object):
                     detail='Building volume {name}.'.format(name=tpart.name))
 
         with tempfile.NamedTemporaryFile(
-                mode='r+b', bufsize=pipebuf.PIPE_BUF_BYTES) as tf:
+                mode='r+b', buffering=pipebuf.PIPE_BUF_BYTES) as tf:
             with pipeline.get_upload_pipeline(PIPE, tf,
                                               rate_limit=self.rate_limit,
                                               gpg_key=self.gpg_key) as pl:
@@ -121,17 +124,15 @@ class PartitionUploader(object):
                         detail=standard_detail_message(
                             "The socket error's message is '{0}'."
                             .format(socketmsg)))
-                elif (issubclass(typ, boto.exception.S3ResponseError) and
-                      value.error_code == 'RequestTimeTooSkewed'):
+                elif is_s3_response_error(typ, value):
                     logger.info(
                         msg='Retrying send because of a Request Skew time',
                         detail=standard_detail_message())
-
                 else:
                     # This type of error is unrecognized as a retry-able
                     # condition, so propagate it, original stacktrace and
                     # all.
-                    raise typ, value, tb
+                    raise typ(value).with_traceback(tb)
 
             @retry(retry_with_count(log_volume_failures_on_error))
             def put_file_helper():
@@ -153,3 +154,16 @@ class PartitionUploader(object):
                         .format(url=url, kib_per_second=kib_per_second)))
 
         return tpart
+
+
+def is_s3_response_error(typ, value):
+    if boto is None:
+        return False
+
+    if not issubclass(typ, boto.exception.S3ResponseError):
+        return False
+
+    if not value.error_code == 'RequestTimeTooSkewed':
+        return False
+
+    return True

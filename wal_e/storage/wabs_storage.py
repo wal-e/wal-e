@@ -15,6 +15,6 @@ class WABSBackupInfo(BackupInfo):
         from wal_e.blobstore import wabs
         data = wabs.uri_get_file(None, uri, conn=conn)
         data = json.loads(data)
-        for (k, v) in data.items():
+        for (k, v) in list(data.items()):
             setattr(self, k, v)
         self._details_loaded = True

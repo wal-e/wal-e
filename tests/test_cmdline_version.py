@@ -1,16 +1,15 @@
 import errno
 import pytest
+import subprocess
 
 from os import path
-
-from wal_e import subprocess
 
 
 def test_version_print():
     # Load up the contents of the VERSION file out-of-band
     from wal_e import cmd
     place = path.join(path.dirname(cmd.__file__), 'VERSION')
-    with open(place) as f:
+    with open(place, 'rb') as f:
         expected = f.read()
 
     # Try loading it via command line invocation

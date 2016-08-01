@@ -29,7 +29,7 @@ def debug(sig, frame):
 
     message = "SIGUSR1 recieved: .\nTraceback:\n"
     message += ''.join(traceback.format_stack(frame))
-    print message
+    print(message)
 
 
 def listen():
@@ -68,7 +68,7 @@ def main():
     churn_at_rate_limit(ONE_MB_IN_BYTES * 1000, bench_seconds)
     cpu_finish = time.clock()
 
-    print 'cpu use:', 100 * ((cpu_finish - cpu_start) / float(bench_seconds))
+    print('cpu use:', 100 * ((cpu_finish - cpu_start) / float(bench_seconds)))
 
 
 if __name__ == '__main__':

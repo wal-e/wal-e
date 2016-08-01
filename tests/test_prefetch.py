@@ -8,7 +8,7 @@ from wal_e import worker
 
 @pytest.fixture
 def pd(tmpdir):
-    d = prefetch.Dirs(unicode(tmpdir))
+    d = prefetch.Dirs(str(tmpdir))
     return d
 
 
@@ -39,7 +39,7 @@ def test_atomic_download(pd, seg, tmpdir):
     assert pd.is_running(seg)
 
     with pd.download(seg) as ad:
-        s = 'hello'
+        s = b'hello'
         ad.tf.write(s)
         ad.tf.flush()
         assert pd.running_size(seg) == len(s)
@@ -48,7 +48,7 @@ def test_atomic_download(pd, seg, tmpdir):
     assert not pd.is_running(seg)
 
     promote_target = tmpdir.join('another-spot')
-    pd.promote(seg, unicode(promote_target))
+    pd.promote(seg, str(promote_target))
 
     pd.clear()
     assert not pd.contains(seg)
@@ -72,7 +72,7 @@ def test_cleanup_running(pd, seg):
     pd.create(seg)
     assert pd.is_running(seg)
 
-    nxt = seg.future_segment_stream().next()
+    nxt = next(seg.future_segment_stream())
     pd.clear_except([nxt])
     assert not pd.is_running(seg)
 
@@ -87,7 +87,7 @@ def test_cleanup_promoted(pd, seg):
     assert not pd.is_running(seg)
     assert pd.contains(seg)
 
-    nxt = seg.future_segment_stream().next()
+    nxt = next(seg.future_segment_stream())
     pd.clear_except([nxt])
     assert not pd.contains(seg)
 

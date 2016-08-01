@@ -1,6 +1,38 @@
 Releases
 ========
 
+v1.0.0
+------
+
+Release v1.0.0 contains the conversion WAL-E from a Python 2.7 to a
+Python 3.4 and Python 3.5 project.  It also adds support for Google
+Cloud Storage (Matt Wright, Daniel Farina, Samuel Kohonen).
+
+In addition, all WAL-E storage backends have been made optional. Thus,
+running ``pip install wal-e`` does not install any backends by
+default.  One must instead write a command akin to ``pip install
+wal-e[aws]``.  The valid options are:
+
+* aws
+* azure
+* google
+* swift
+
+Finally, there are some detailed adjustments:
+
+* Default parallelism for ``wal-push``/``wal-fetch`` has been
+  increased to 32.
+
+* 404 messages have been demoted to "INFO" rather than "WARNING"
+  because they can happen routinely and continuously, particularly
+  with ``standby_mode=on`` (earsdown).
+
+* Top-level backups in Azure no longer create a nameless "directory"
+  (Andrew Marks).
+
+* WAL-E start-up log message has been suppressed in some noisy cases:
+  ``wal-fetch``, ``wal-push``, ``wal-prefetch``.
+
 v0.9.2
 ------
 

@@ -11,7 +11,7 @@ import collections
 
 import wal_e.exception
 
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 
 CURRENT_VERSION = '005'

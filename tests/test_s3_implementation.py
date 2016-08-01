@@ -65,5 +65,5 @@ def test_reject_query():
 
 def test_reject_fragment():
     with pytest.raises(exception.UserException):
-        print calling_format._s3connection_opts_from_uri(
-            'https+path://localhost#hello')
+        print(calling_format._s3connection_opts_from_uri(
+            'https+path://localhost#hello'))

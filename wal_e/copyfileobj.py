@@ -3,7 +3,7 @@ import shutil
 from wal_e import pipebuf
 
 
-def copyfileobj(src, dst, length=None):
+def copyfileobj(src, dst, length=None, exception=OSError):
     """Copy length bytes from fileobj src to fileobj dst.
        If length is None, copy the entire content.
     """
@@ -16,15 +16,15 @@ def copyfileobj(src, dst, length=None):
         return
 
     blocks, remainder = divmod(length, BUFSIZE)
-    for b in xrange(blocks):
+    for b in range(blocks):
         buf = src.read(BUFSIZE)
         if len(buf) < BUFSIZE:
-            raise IOError("end of file reached")
+            raise exception("unexpected end of data")
         dst.write(buf)
 
     if remainder != 0:
         buf = src.read(remainder)
         if len(buf) < remainder:
-            raise IOError("end of file reached")
+            raise exception("unexpected end of data")
         dst.write(buf)
     return

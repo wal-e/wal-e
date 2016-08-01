@@ -87,7 +87,7 @@ class ByteDeque(object):
         out = bytearray(n)
         remaining = n
         while remaining > 0:
-            part = self._dq.popleft()
+            part = memoryview(self._dq.popleft())
             delta = remaining - len(part)
             offset = n - remaining
 
@@ -99,8 +99,8 @@ class ByteDeque(object):
                 remaining = delta
             elif delta < 0:
                 cleave = len(part) + delta
-                out[offset:] = buffer(part, 0, cleave)
-                self._dq.appendleft(buffer(part, cleave))
+                out[offset:] = part[:cleave]
+                self._dq.appendleft(part[cleave:])
                 remaining = 0
             else:
                 assert False
@@ -130,14 +130,14 @@ class NonBlockBufferedReader(object):
         try:
             chunk = os.read(self._fd, sz)
             self._bd.add(chunk)
-        except EnvironmentError, e:
+        except EnvironmentError as e:
             if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
                 assert chunk is None
                 gevent.socket.wait_read(self._fd)
             else:
                 raise
 
-        self.got_eof = (chunk == '')
+        self.got_eof = (chunk == b'')
 
     def read(self, size=None):
         # Handle case of "read all".
@@ -226,15 +226,15 @@ class NonBlockBufferedWriter(object):
 
     def _partial_flush(self, max_retain):
         byts = self._bd.get_all()
-        cursor = buffer(byts)
+        cursor = memoryview(byts)
 
         flushed = False
         while len(cursor) > max_retain:
             try:
                 n = os.write(self._fd, cursor)
                 flushed = True
-                cursor = buffer(cursor, n)
-            except EnvironmentError, e:
+                cursor = memoryview(cursor)[n:]
+            except EnvironmentError as e:
                 if e.errno in [errno.EAGAIN, errno.EWOULDBLOCK]:
                     gevent.socket.wait_write(self._fd)
                 else:

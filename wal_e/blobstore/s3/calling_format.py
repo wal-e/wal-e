@@ -1,7 +1,7 @@
 import boto
 import os
 import re
-import urlparse
+import urllib.parse
 
 from boto.s3 import connection
 from wal_e import log_help
@@ -11,22 +11,22 @@ logger = log_help.WalELogger(__name__)
 
 _S3_REGIONS = {
     # See http://docs.aws.amazon.com/general/latest/gr/rande.html#s3_region
-    'ap-northeast-1': u's3-ap-northeast-1.amazonaws.com',
-    'ap-southeast-1': u's3-ap-southeast-1.amazonaws.com',
-    'ap-southeast-2': u's3-ap-southeast-2.amazonaws.com',
-    'eu-central-1': u's3-eu-central-1.amazonaws.com',
-    'eu-west-1': u's3-eu-west-1.amazonaws.com',
-    'sa-east-1': u's3-sa-east-1.amazonaws.com',
-    'us-east-1': u's3.amazonaws.com',
-    'us-west-1': u's3-us-west-1.amazonaws.com',
-    'us-west-2': u's3-us-west-2.amazonaws.com',
+    'ap-northeast-1': 's3-ap-northeast-1.amazonaws.com',
+    'ap-southeast-1': 's3-ap-southeast-1.amazonaws.com',
+    'ap-southeast-2': 's3-ap-southeast-2.amazonaws.com',
+    'eu-central-1': 's3-eu-central-1.amazonaws.com',
+    'eu-west-1': 's3-eu-west-1.amazonaws.com',
+    'sa-east-1': 's3-sa-east-1.amazonaws.com',
+    'us-east-1': 's3.amazonaws.com',
+    'us-west-1': 's3-us-west-1.amazonaws.com',
+    'us-west-2': 's3-us-west-2.amazonaws.com',
 }
 
 try:
     # Override the hard-coded region map with boto's mappings if
     # available.
     from boto.s3 import regions
-    _S3_REGIONS.update(dict((r.name, unicode(r.endpoint)) for r in regions()))
+    _S3_REGIONS.update(dict((r.name, str(r.endpoint)) for r in regions()))
 except ImportError:
     pass
 
@@ -108,7 +108,7 @@ def _s3connection_opts_from_uri(impl):
     # A concrete example:
     #
     #     https+virtualhost://user:pass@localhost:1235
-    o = urlparse.urlparse(impl, allow_fragments=False)
+    o = urllib.parse.urlparse(impl, allow_fragments=False)
 
     if o.scheme is not None:
         proto_match = re.match(

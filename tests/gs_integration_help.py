@@ -20,10 +20,10 @@ def bucket_name_mangle(bn, delimiter='-'):
 def compute_mangle_suffix():
     with open(os.getenv('GOOGLE_APPLICATION_CREDENTIALS')) as f:
         cj = json.load(f)
-        dm = hmac.new('wal-e-tests')
-        dm.update(cj['client_id'])
+        dm = hmac.new(b'wal-e-tests')
+        dm.update(cj['client_id'].encode('utf-8'))
         dg = dm.digest()
-        return base64.b32encode(dg[:10]).lower()
+        return base64.b32encode(dg[:10]).decode('utf-8').lower()
 
 
 def no_real_gs_credentials():

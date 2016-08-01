@@ -49,7 +49,7 @@ def psql_csv_run(sql_command, error_handler=None):
                                 '--no-psqlrc', '-c', csv_query],
                                stdout=PIPE,
                                env=new_env)
-    stdout = psql_proc.communicate()[0]
+    stdout = psql_proc.communicate()[0].decode('utf-8')
 
     if psql_proc.returncode != 0:
         if error_handler is not None:
@@ -83,7 +83,7 @@ class PgBackupStatements(object):
     def _dict_transform(csv_reader):
         rows = list(csv_reader)
         assert len(rows) == 2, 'Expect header row and data row'
-        return dict(zip(*rows))
+        return dict(list(zip(*rows)))
 
     @classmethod
     def run_start_backup(cls):

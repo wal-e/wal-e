@@ -6,21 +6,21 @@ from wal_e import files
 
 
 def test_no_error(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
     with files.DeleteOnError(p) as doe:
-        doe.f.write('hello')
+        doe.f.write(b'hello')
 
-    with open(p) as f:
-        assert f.read() == 'hello'
+    with open(p, 'rb') as f:
+        assert f.read() == b'hello'
 
 
 def test_clear_on_error(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
-    boom = StandardError('Boom')
-    with pytest.raises(StandardError) as e:
+    boom = Exception('Boom')
+    with pytest.raises(Exception) as e:
         with files.DeleteOnError(p) as doe:
-            doe.f.write('hello')
+            doe.f.write(b'hello')
             raise boom
     assert e.value == boom
 
@@ -31,18 +31,18 @@ def test_clear_on_error(tmpdir):
 
 
 def test_no_error_if_already_deleted(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
     with files.DeleteOnError(p) as doe:
-        doe.f.write('hello')
+        doe.f.write(b'hello')
         os.unlink(p)
 
 
 def test_explicit_deletion_without_exception(tmpdir):
-    p = unicode(tmpdir.join('somefile'))
+    p = str(tmpdir.join('somefile'))
 
     with files.DeleteOnError(p) as doe:
-        doe.f.write('hello')
+        doe.f.write(b'hello')
         doe.remove_regardless = True
 
     with pytest.raises(IOError) as e:

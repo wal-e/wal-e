@@ -58,7 +58,7 @@ class _Deleter(object):
                 try:
                     self._delete_batch(page)
                 finally:
-                    for i in xrange(len(page)):
+                    for i in range(len(page)):
                         self._q.task_done()
         except KeyboardInterrupt as e:
             # Absorb-and-forward the exception instead of using
@@ -82,14 +82,14 @@ class _Deleter(object):
         page = []
 
         try:
-            for i in xrange(self.PAGINATION_MAX):
+            for i in range(self.PAGINATION_MAX):
                 page.append(self._q.get_nowait())
         except queue.Empty:
             pass
         except:
             # In event everything goes sideways while dequeuing,
             # carefully un-lock the queue.
-            for i in xrange(len(page)):
+            for i in range(len(page)):
                 self._q.task_done()
             raise
 

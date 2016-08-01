@@ -30,13 +30,13 @@ def test_fsync_tar_members(monkeypatch, tmpdir):
     # Set of filenames that fsyncs have been called on.
     synced_filenames = set()
     # Filter on prefix of this path.
-    tmproot = unicode(tmpdir)
+    tmproot = str(tmpdir)
 
     real_open = os.open
     real_close = os.close
     real_fsync = os.fsync
 
-    def fake_open(filename, flags, mode=0777):
+    def fake_open(filename, flags, mode=0o777):
         fd = real_open(filename, flags, mode)
         if filename.startswith(tmproot):
             open_descriptors[fd] = filename
@@ -58,7 +58,7 @@ def test_fsync_tar_members(monkeypatch, tmpdir):
     monkeypatch.setattr(os, 'close', fake_close)
     monkeypatch.setattr(os, 'fsync', fake_fsync)
 
-    filenames = [unicode(filename) for filename in [foo, bar, baz]]
+    filenames = [str(filename) for filename in [foo, bar, baz]]
     tar_partition._fsync_files(filenames)
 
     for filename in filenames:
@@ -67,8 +67,8 @@ def test_fsync_tar_members(monkeypatch, tmpdir):
     # Not every OS allows you to open directories, if not, don't try
     # to open it to fsync.
     if hasattr(os, 'O_DIRECTORY'):
-        assert unicode(dira) in synced_filenames
-        assert unicode(dirb) in synced_filenames
+        assert str(dira) in synced_filenames
+        assert str(dirb) in synced_filenames
 
 
 def test_dynamically_emptied_directories(tmpdir):
@@ -119,11 +119,11 @@ def test_creation_upper_dir(tmpdir, monkeypatch):
     some_file = adir.join('afile')
     some_file.write('1234567890')
 
-    tar_path = unicode(tmpdir.join('foo.tar'))
+    tar_path = str(tmpdir.join('foo.tar'))
 
     # Add the file to a test tar, *but not the directory*.
     tar = tarfile.open(name=tar_path, mode='w')
-    tar.add(unicode(some_file))
+    tar.add(str(some_file))
     tar.close()
 
     # Replace cat_extract with a version that does the same, but
@@ -144,8 +144,8 @@ def test_creation_upper_dir(tmpdir, monkeypatch):
 
     dest_dir = tmpdir.join('dest')
     dest_dir.ensure(dir=True)
-    with open(tar_path) as f:
-        tar_partition.TarPartition.tarfile_extract(f, unicode(dest_dir))
+    with open(tar_path, 'rb') as f:
+        tar_partition.TarPartition.tarfile_extract(f, str(dest_dir))
 
     # Make sure the test exercised cat_extraction.
     assert check.called

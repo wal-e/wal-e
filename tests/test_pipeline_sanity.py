@@ -5,7 +5,7 @@ from wal_e import pipebuf
 
 
 def create_bogus_payload(dirname):
-    payload = 'abcd' * 1048576
+    payload = b'abcd' * 1048576
     payload_file = dirname.join('payload')
     payload_file.write(payload)
     return payload, payload_file
@@ -27,23 +27,23 @@ def test_upload_download_pipeline(tmpdir, rate_limit):
 
     # Upload section
     test_upload = tmpdir.join('upload')
-    with open(unicode(test_upload), 'w') as upload:
-        with open(unicode(payload_file)) as inp:
+    with open(str(test_upload), 'wb') as upload:
+        with open(str(payload_file), 'rb') as inp:
             with pipeline.get_upload_pipeline(
                     inp, upload, rate_limit=rate_limit):
                 pass
 
-    with open(unicode(test_upload)) as completed:
+    with open(str(test_upload), 'rb') as completed:
         round_trip = completed.read()
 
     # Download section
     test_download = tmpdir.join('download')
-    with open(unicode(test_upload)) as upload:
-        with open(unicode(test_download), 'w') as download:
+    with open(str(test_upload), 'rb') as upload:
+        with open(str(test_download), 'wb') as download:
             with pipeline.get_download_pipeline(upload, download):
                 pass
 
-    with open(unicode(test_download)) as completed:
+    with open(str(test_download), 'rb') as completed:
         round_trip = completed.read()
 
     assert round_trip == payload

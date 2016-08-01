@@ -1,4 +1,4 @@
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from wal_e.blobstore import wabs
 from wal_e.operator.backup import Backup

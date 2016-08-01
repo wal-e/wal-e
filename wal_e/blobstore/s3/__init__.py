@@ -1,3 +1,12 @@
+try:
+    import boto
+    assert boto
+except ImportError:
+    from wal_e.exception import UserException
+    raise UserException(
+        msg='AWS support requires module "boto"',
+        hint='Try running "pip install boto".')
+
 from wal_e.blobstore.s3.s3_credentials import Credentials
 from wal_e.blobstore.s3.s3_credentials import InstanceProfileCredentials
 from wal_e.blobstore.s3.s3_util import do_lzop_get
