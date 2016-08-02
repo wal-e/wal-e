@@ -60,13 +60,13 @@ class BackupFetcher(object):
     @retry()
     def fetch_partition(self, partition_name):
         part_abs_name = self.layout.basebackup_tar_partition(
-            self.backup_info, partition_name)
+            self.backup_info, partition_name).lstrip('/')
 
         logger.info(
             msg='beginning partition download',
             detail=('The partition being downloaded is {0}.'
                     .format(partition_name)),
-            hint='The absolute S3 key is {0}.'.format(part_abs_name))
+            hint='The absolute WABS blob is {0}.'.format(part_abs_name))
 
         url = 'wabs://{ctr}/{path}'.format(ctr=self.layout.store_name(),
                                            path=part_abs_name)
