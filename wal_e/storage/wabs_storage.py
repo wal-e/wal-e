@@ -13,7 +13,7 @@ class WABSBackupInfo(BackupInfo):
             bucket=self.layout.store_name(),
             path=self.layout.basebackup_sentinel(self))
         from wal_e.blobstore import wabs
-        data = wabs.uri_get_file(None, uri, conn=conn)
+        data = wabs.uri_get_file(None, uri, conn=conn).decode('utf-8')
         data = json.loads(data)
         for (k, v) in list(data.items()):
             setattr(self, k, v)
