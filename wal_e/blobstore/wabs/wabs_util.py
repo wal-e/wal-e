@@ -104,7 +104,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     conn = BlobService(
         creds.account_name, creds.account_key,
         sas_token=creds.access_token, protocol='https')
-    conn.put_blob(url_tup.netloc, strip_slash(url_tup.path), '', **kwargs)
+    conn.put_blob(url_tup.netloc, strip_slash(url_tup.path), b'', **kwargs)
 
     # WABS requires large files to be uploaded in 4MB chunks
     block_ids = []
