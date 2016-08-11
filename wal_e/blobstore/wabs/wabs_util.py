@@ -138,7 +138,7 @@ def uri_get_file(creds, uri, conn=None):
     blob_size = int(props['content-length'])
 
     ret_size = 0
-    data = ''
+    data = b''
     # WABS requires large files to be downloaded in 4MB chunks
     while ret_size < blob_size:
         ms_range = 'bytes={0}-{1}'.format(ret_size,
