@@ -92,7 +92,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     # failing the whole file and restarting.
     @retry(retry_with_count(log_upload_failures_on_error))
     def upload_chunk(chunk, block_id):
-        check_sum = base64.encodestring(md5(chunk).digest()).strip('\n')
+        check_sum = base64.b64encode(md5(chunk).digest()).decode('utf-8')
         conn.put_block(url_tup.netloc, strip_slash(url_tup.path), chunk,
                        block_id, content_md5=check_sum)
 
@@ -115,7 +115,8 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
         data = fp.read(WABS_CHUNK_SIZE)
         if data:
             length += len(data)
-            block_id = base64.b64encode(str(index))
+            block_id = base64.b64encode(
+                str(index).encode('utf-8')).decode('utf-8')
             p.wait_available()
             p.spawn(upload_chunk, data, block_id)
             block_ids.append(block_id)
