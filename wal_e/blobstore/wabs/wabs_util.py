@@ -2,6 +2,7 @@ import base64
 import collections
 import errno
 import gevent
+import io
 import os
 import socket
 import sys
@@ -139,7 +140,7 @@ def uri_get_file(creds, uri, conn=None):
     blob_size = int(props['content-length'])
 
     ret_size = 0
-    data = b''
+    data = io.BytesIO()
     # WABS requires large files to be downloaded in 4MB chunks
     while ret_size < blob_size:
         ms_range = 'bytes={0}-{1}'.format(ret_size,
@@ -167,13 +168,13 @@ def uri_get_file(creds, uri, conn=None):
                 break
         length = len(part)
         ret_size += length
-        data += part
+        data.write(part)
         if length > 0 and length < WABS_CHUNK_SIZE:
             break
         elif length == 0:
             break
 
-    return data
+    return data.getvalue()
 
 
 def do_lzop_get(creds, url, path, decrypt, do_retry=True):
