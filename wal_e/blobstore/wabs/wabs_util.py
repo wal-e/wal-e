@@ -92,7 +92,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     # failing the whole file and restarting.
     @retry(retry_with_count(log_upload_failures_on_error))
     def upload_chunk(chunk, block_id):
-        check_sum = base64.encodestring(md5(chunk).digest()).strip('\n')
+        check_sum = base64.b64encode(md5(chunk).digest()).decode('utf-8')
         conn.put_block(url_tup.netloc, strip_slash(url_tup.path), chunk,
                        block_id, content_md5=check_sum)
 
@@ -104,7 +104,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     conn = BlobService(
         creds.account_name, creds.account_key,
         sas_token=creds.access_token, protocol='https')
-    conn.put_blob(url_tup.netloc, strip_slash(url_tup.path), '', **kwargs)
+    conn.put_blob(url_tup.netloc, strip_slash(url_tup.path), b'', **kwargs)
 
     # WABS requires large files to be uploaded in 4MB chunks
     block_ids = []
@@ -115,7 +115,8 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
         data = fp.read(WABS_CHUNK_SIZE)
         if data:
             length += len(data)
-            block_id = base64.b64encode(str(index))
+            block_id = base64.b64encode(
+                str(index).encode('utf-8')).decode('utf-8')
             p.wait_available()
             p.spawn(upload_chunk, data, block_id)
             block_ids.append(block_id)
@@ -145,7 +146,7 @@ def uri_get_file(creds, uri, conn=None):
     blob_size = int(props['content-length'])
 
     ret_size = 0
-    data = ''
+    data = b''
     # WABS requires large files to be downloaded in 4MB chunks
     while ret_size < blob_size:
         ms_range = 'bytes={0}-{1}'.format(ret_size,
