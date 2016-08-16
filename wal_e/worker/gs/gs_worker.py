@@ -1,5 +1,5 @@
 """
-WAL-E AWS S3 workers
+WAL-E Google Cloud Storage workers
 
 These are functions that are amenable to be called from other modules,
 with the intention that they are used in gevent greenlets.
@@ -45,7 +45,7 @@ class TarPartitionLister(object):
             match = re.match(storage.VOLUME_REGEXP, key_last_part)
             if match is None:
                 logger.warning(
-                    msg='unexpected key found in tar volume directory',
+                    msg='unexpected object found in tar volume directory',
                     detail=('The unexpected key is stored at "{0}".'
                             .format(url)),
                     hint=generic_weird_key_hint_message)
@@ -71,7 +71,7 @@ class BackupFetcher(object):
             msg='beginning partition download',
             detail='The partition being downloaded is {0}.'
             .format(partition_name),
-            hint='The absolute S3 key is {0}.'.format(part_abs_name))
+            hint='The absolute GCS object is {0}.'.format(part_abs_name))
 
         blob = self.bucket.get_blob('/' + part_abs_name)
         signed = blob.generate_signed_url(datetime.datetime.utcnow() +

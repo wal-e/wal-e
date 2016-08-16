@@ -1,4 +1,3 @@
-
 import gevent
 import shutil
 import socket
@@ -54,7 +53,7 @@ def uri_get_file(creds, uri, conn=None):
 
 def do_lzop_get(creds, url, path, decrypt, do_retry=True):
     """
-    Get and decompress a S3 URL
+    Get and decompress a GCS URL
 
     This streams the content directly to lzop; the compressed version
     is never stored on disk.
