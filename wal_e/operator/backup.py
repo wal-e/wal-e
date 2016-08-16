@@ -581,7 +581,9 @@ def start_prefetches(seg, pd, how_many):
             continue
         elif os.fork() == 0:
             pd.create(fs)
-            with daemon.DaemonContext():
+            # gpg sends garbage to stdout if it has to reopen stderr
+            # so we just direct stderr to /dev/null instead
+            with daemon.DaemonContext(stderr=open(os.devnull, 'w')):
                 os.execvp(
                     sys.argv[0],
                     sys.argv[:split] + ['wal-prefetch'] + [pd.base, fs.name])
