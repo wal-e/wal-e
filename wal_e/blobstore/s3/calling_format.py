@@ -95,7 +95,7 @@ def _connect_secureish(*args, **kwargs):
     conn = connection.S3Connection(*args, **kwargs)
 
     if auth_region_name:
-        conn.auth_region_name = auth_region_name
+        conn._set_auth_region_name(auth_region_name)
 
     return conn
 
