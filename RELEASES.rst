@@ -20,8 +20,7 @@ wal-e[aws]``.  The valid options are:
 
 Finally, there are some detailed adjustments:
 
-* Default parallelism for ``wal-push``/``wal-fetch`` has been
-  increased to 32.
+* Default parallelism for ``wal-push`` has been increased to 32.
 
 * 404 messages have been demoted to "INFO" rather than "WARNING"
   because they can happen routinely and continuously, particularly
