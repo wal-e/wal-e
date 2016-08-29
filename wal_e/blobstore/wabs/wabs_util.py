@@ -45,7 +45,7 @@ _Key = collections.namedtuple('_Key', ['size'])
 WABS_CHUNK_SIZE = 4 * 1024 * 1024
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None):
+def uri_put_file(creds, uri, fp, content_type=None):
     assert fp.tell() == 0
     assert uri.startswith('wabs://')
 
@@ -92,8 +92,8 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
 
     url_tup = urlparse(uri)
     kwargs = dict(x_ms_blob_type='BlockBlob')
-    if content_encoding is not None:
-        kwargs['x_ms_blob_content_encoding'] = content_encoding
+    if content_type is not None:
+        kwargs['x_ms_blob_content_type'] = content_type
 
     conn = BlobService(
         creds.account_name, creds.account_key,

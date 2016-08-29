@@ -240,7 +240,7 @@ class Backup(object):
 
             uri_put_file(self.creds,
                          uploaded_to + '_backup_stop_sentinel.json',
-                         sentinel_content, content_encoding='application/json')
+                         sentinel_content, content_type='application/json')
         else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
@@ -484,7 +484,7 @@ class Backup(object):
                     .format(extended_version_url=extended_version_url)))
         uri_put_file(self.creds,
                      extended_version_url, StringIO(version),
-                     content_encoding='text/plain')
+                     content_type='text/plain')
 
         logger.info(msg='postgres version metadata upload complete')
 

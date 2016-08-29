@@ -24,7 +24,7 @@ class SwiftKey(object):
         self.last_modified = last_modified
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None):
+def uri_put_file(creds, uri, fp, content_type=None):
     assert fp.tell() == 0
     assert uri.startswith('swift://')
 
@@ -34,7 +34,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None):
     conn = calling_format.connect(creds)
 
     conn.put_object(
-        container_name, url_tup.path, fp, content_type=content_encoding
+        container_name, url_tup.path, fp, content_type=content_type
     )
     # Swiftclient doesn't return us the total file size, we see how much of the
     # file swiftclient read in order to determine the file size.
