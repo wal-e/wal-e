@@ -30,7 +30,7 @@ def _uri_to_blob(creds, uri, conn=None):
     return storage.Blob(url_tup.path, b)
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
+def uri_put_file(creds, uri, fp, content_type=None, conn=None):
     assert fp.tell() == 0
     blob = _uri_to_blob(creds, uri, conn=conn)
 
@@ -39,7 +39,7 @@ def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
 
     fp.seek(0, 0)
     blob.upload_from_file(fp, num_retries=0, size=size,
-                          content_type=content_encoding)
+                          content_type=content_type)
     return blob
 
 

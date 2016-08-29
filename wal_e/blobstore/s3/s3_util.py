@@ -38,7 +38,7 @@ def _uri_to_key(creds, uri, conn=None):
     return boto.s3.key.Key(bucket=bucket, name=url_tup.path)
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
+def uri_put_file(creds, uri, fp, content_type=None, conn=None):
     # Per Boto 2.2.2, which will only read from the current file
     # position to the end.  This manifests as successfully uploaded
     # *empty* keys in S3 instead of the intended data because of how
@@ -51,8 +51,8 @@ def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
 
     k = _uri_to_key(creds, uri, conn=conn)
 
-    if content_encoding is not None:
-        k.content_type = content_encoding
+    if content_type is not None:
+        k.content_type = content_type
 
     k.set_contents_from_file(fp, encrypt_key=True)
     return k

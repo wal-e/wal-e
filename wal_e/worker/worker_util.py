@@ -7,10 +7,10 @@ from wal_e.blobstore import get_blobstore
 from wal_e import pipeline
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None):
+def uri_put_file(creds, uri, fp, content_type=None):
     blobstore = get_blobstore(storage.StorageLayout(uri))
     return blobstore.uri_put_file(creds, uri, fp,
-                                  content_encoding=content_encoding)
+                                  content_type=content_type)
 
 
 def do_lzop_put(creds, url, local_path, gpg_key):
