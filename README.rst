@@ -102,7 +102,7 @@ Optional Variables:
 Dependencies
 ------------
 
-* python (>= 2.7)
+* python (>= 3.4)
 * lzop
 * psql (>= 8.4)
 * pv
