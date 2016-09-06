@@ -32,6 +32,9 @@ Finally, there are some detailed adjustments:
 * WAL-E start-up log message has been suppressed in some noisy cases:
   ``wal-fetch``, ``wal-push``, ``wal-prefetch``.
 
+* WABS's `Content-Type` header is being set correctly.  Previously
+  this header was confused with `Content-Encoding` (David Dever).
+
 v0.9.2
 ------
 
