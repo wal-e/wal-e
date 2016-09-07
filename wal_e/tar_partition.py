@@ -139,7 +139,7 @@ ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
 
 # 1.5 GiB is 1610612736 bytes, and Postgres allocates 1 GiB files as a
 # nominal maximum.  This must be greater than that.
-PARTITION_MAX_SZ = 1610612736
+PARTITION_MAX_SZ = int(os.environ.get('WALE_PARTITION_MAX_SZ', '1610612736'))
 
 # Maximum number of members in a TarPartition segment.
 #
