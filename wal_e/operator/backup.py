@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from io import StringIO
+from io import StringIO, BytesIO
 from wal_e import log_help
 from wal_e import storage
 from wal_e import tar_partition
@@ -483,7 +483,7 @@ class Backup(object):
             detail=('Uploading to {extended_version_url}.'
                     .format(extended_version_url=extended_version_url)))
         uri_put_file(self.creds,
-                     extended_version_url, StringIO(version),
+                     extended_version_url, BytesIO(version.encode('utf-8')),
                      content_type='text/plain')
 
         logger.info(msg='postgres version metadata upload complete')
