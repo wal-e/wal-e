@@ -86,6 +86,8 @@ def uri_put_file(creds, uri, fp, content_type=None):
     # failing the whole file and restarting.
     @retry(retry_with_count(log_upload_failures_on_error))
     def upload_chunk(chunk, block_id):
+        if isinstance(chunk, str):
+            chunk = chunk.encode('utf-8')
         check_sum = base64.b64encode(md5(chunk).digest()).decode('utf-8')
         conn.put_block(url_tup.netloc, url_tup.path.lstrip('/'), chunk,
                        block_id, content_md5=check_sum)
