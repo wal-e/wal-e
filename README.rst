@@ -640,7 +640,7 @@ the tox_ configuration included with WAL-E.
 
 To run the tests, run::
 
-  $ tox -e py27
+  $ tox -e py35
 
 To run a somewhat more lengthy suite of integration tests that
 communicate with a real blob store account, one might run tox_ like
@@ -654,7 +654,7 @@ this::
     WABS_ACCESS_KEY=[...]               \
     WALE_GS_INTEGRATION_TESTS=TRUE      \
     GOOGLE_APPLICATION_CREDENTIALS=[~/my-credentials.json] \
-    tox -e py27 -- -n 8
+    tox -e py35 -- -n 8
 
 Looking carefully at the above, notice the ``-n 8`` added the tox_
 invocation.  This ``-n 8`` is after a ``--`` that indicates to tox_
