@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from io import StringIO
+from io import BytesIO
 from wal_e import log_help
 from wal_e import storage
 from wal_e import tar_partition
@@ -221,26 +221,24 @@ class Backup(object):
             # directory that indicates that the base backup upload has
             # definitely run its course and also communicates what WAL
             # segments are needed to get to consistency.
-            sentinel_content = StringIO()
-            json.dump(
+            sentinel_content = json.dumps(
                 {'wal_segment_backup_stop':
                     stop_backup_info['file_name'],
                  'wal_segment_offset_backup_stop':
                     stop_backup_info['file_offset'],
                  'expanded_size_bytes': expanded_size_bytes,
-                 'spec': spec},
-                sentinel_content)
+                 'spec': spec})
 
             # XXX: should use the storage operators.
             #
             # XXX: distinguish sentinels by *PREFIX* not suffix,
             # which makes searching harder. (For the next version
             # bump).
-            sentinel_content.seek(0)
 
             uri_put_file(self.creds,
-                         uploaded_to + '_backup_stop_sentinel.json',
-                         sentinel_content, content_type='application/json')
+                             uploaded_to + '_backup_stop_sentinel.json',
+                             BytesIO(sentinel_content.encode("utf8")),
+                             content_type='application/json')
         else:
             # NB: Other exceptions should be raised before this that
             # have more informative results, it is intended that this
@@ -483,7 +481,7 @@ class Backup(object):
             detail=('Uploading to {extended_version_url}.'
                     .format(extended_version_url=extended_version_url)))
         uri_put_file(self.creds,
-                     extended_version_url, StringIO(version),
+                     extended_version_url, BytesIO(version.encode("utf8")),
                      content_type='text/plain')
 
         logger.info(msg='postgres version metadata upload complete')
