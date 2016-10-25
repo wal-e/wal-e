@@ -1,6 +1,17 @@
 Releases
 ========
 
+v1.0.1
+------
+
+Release v1.0.1 fixes defects in WABS and Swift storage.  Both were
+encoding errors that resulted from Python 3 conversion.
+
+Thanks goes to: Ayush Goyal, for the fix for WABS. Joe Healy, for the
+fix for Swift. Derrick Petzold fixed an old reference to Python 2 in
+the README.
+
+
 v1.0.0
 ------
 
