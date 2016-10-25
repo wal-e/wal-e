@@ -177,7 +177,8 @@ def build_parser():
     aws_group.add_argument('--aws-instance-profile', action='store_true',
                            help='Use the IAM Instance Profile associated '
                            'with this instance to authenticate with the S3 '
-                           'API.')
+                           'API. Can also be defined by setting the '
+                           'environment variable AWS_INSTANCE_PROFILE=1.')
 
     gs_group = parser.add_mutually_exclusive_group()
     gs_group.add_argument('--gs-access-key-id',
@@ -403,10 +404,9 @@ def s3_explicit_creds(args):
     return s3.Credentials(access_key, secret_key, security_token)
 
 
-def s3_instance_profile(args):
+def s3_instance_profile():
     from wal_e.blobstore import s3
 
-    assert args.aws_instance_profile
     return s3.InstanceProfileCredentials()
 
 
@@ -460,8 +460,10 @@ def configure_backup_cxt(args):
     # backend data stores, yielding value adhering to the
     # 'operator.Backup' protocol.
     if store.is_s3:
-        if args.aws_instance_profile:
-            creds = s3_instance_profile(args)
+        use_instance_profile = args.aws_instance_profile or \
+            os.getenv('AWS_INSTANCE_PROFILE', '').lower() in ('true', '1')
+        if use_instance_profile:
+            creds = s3_instance_profile()
         else:
             creds = s3_explicit_creds(args)
         from wal_e.blobstore import s3
