@@ -7,6 +7,7 @@ from boto import sts
 from boto.s3.connection import Location
 from wal_e.blobstore import s3
 from wal_e.blobstore.s3 import calling_format
+from wal_e.cmd import parse_boolean_envvar
 
 
 def bucket_name_mangle(bn, delimiter='-'):
@@ -18,7 +19,8 @@ def no_real_s3_credentials():
 
     Phrased in the negative to make it read better with 'skipif'.
     """
-    if os.getenv('WALE_S3_INTEGRATION_TESTS') != 'TRUE':
+    if parse_boolean_envvar(os.getenv(
+            'WALE_S3_INTEGRATION_TESTS')) is not True:
         return True
 
     for e_var in ('AWS_ACCESS_KEY_ID',

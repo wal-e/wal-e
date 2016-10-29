@@ -162,6 +162,16 @@ def extract_segment(text_with_extractable_segment):
         return SegmentNumber(log=groupdict['log'], seg=groupdict['seg'])
 
 
+def parse_boolean_envvar(val):
+    """Parse a boolean environment variable."""
+    if not val or val.lower() in {'false', '0'}:
+        return False
+    elif val.lower() in {'true', '1'}:
+        return True
+    else:
+        raise ValueError('Invalid boolean environment variable: %s' % val)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -461,7 +471,7 @@ def configure_backup_cxt(args):
     # 'operator.Backup' protocol.
     if store.is_s3:
         use_instance_profile = args.aws_instance_profile or \
-            os.getenv('AWS_INSTANCE_PROFILE', '').lower() in ('true', '1')
+            parse_boolean_envvar(os.getenv('AWS_INSTANCE_PROFILE'))
         if use_instance_profile:
             creds = s3_instance_profile()
         else:

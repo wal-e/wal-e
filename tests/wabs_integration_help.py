@@ -9,13 +9,16 @@ except ImportError:
 
 import os
 
+from wal_e.cmd import parse_boolean_envvar
+
 
 def no_real_wabs_credentials():
     """Helps skip integration tests without live credentials.
 
     Phrased in the negative to make it read better with 'skipif'.
     """
-    if os.getenv('WALE_WABS_INTEGRATION_TESTS') != 'TRUE':
+    if parse_boolean_envvar(os.getenv(
+            'WALE_WABS_INTEGRATION_TESTS')) is not True:
         return True
 
     for e_var in ('WABS_ACCOUNT_NAME', 'WABS_ACCESS_KEY'):

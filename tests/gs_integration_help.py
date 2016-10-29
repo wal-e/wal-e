@@ -6,6 +6,8 @@ import json
 import os
 import pytest
 
+from wal_e.cmd import parse_boolean_envvar
+
 
 MANGLE_SUFFIX = None
 
@@ -31,7 +33,8 @@ def no_real_gs_credentials():
 
     Phrased in the negative to make it read better with 'skipif'.
     """
-    if os.getenv('WALE_GS_INTEGRATION_TESTS') != 'TRUE':
+    if parse_boolean_envvar(
+            os.getenv('WALE_GS_INTEGRATION_TESTS')) is not True:
         return True
 
     if os.getenv('GOOGLE_APPLICATION_CREDENTIALS') is None:
