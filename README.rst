@@ -110,12 +110,12 @@ Dependencies
 This software also has Python dependencies: installing with ``pip``
 will attempt to resolve them:
 
-* gevent>=1.0.2
-* boto>=2.24.0
-* azure>=0.7.0
-* gcloud>=0.8.0
-* python-swiftclient>=1.8.0
-* python-keystoneclient>=0.4.2
+* gevent>=1.1.1
+* boto>=2.40.0
+* azure>=1.0.3
+* gcloud>=0.17.0
+* python-swiftclient>=3.0.0
+* python-keystoneclient>=3.0.0
 * argparse, if not on Python 2.7
 
 It is possible to use WAL-E without the dependencies of back-end
