@@ -134,6 +134,7 @@ class TarBadPathError(Exception):
 
         Exception.__init__(self, *args, **kwargs)
 
+
 ExtendedTarInfo = collections.namedtuple('ExtendedTarInfo',
                                          'submitted_path tarinfo')
 

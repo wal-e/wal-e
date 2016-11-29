@@ -24,6 +24,7 @@ def read(fname):
     with open(os.path.join(os.path.dirname(__file__), fname)) as f:
         return f.read()
 
+
 VERSION = read(os.path.join('wal_e', 'VERSION')).strip()
 
 setup(

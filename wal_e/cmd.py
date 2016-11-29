@@ -14,6 +14,7 @@ def gevent_monkey(*args, **kwargs):
     gevent.monkey.patch_ssl()
     gevent.monkey.patch_time()
 
+
 # Monkey-patch procedures early.  If it doesn't work with gevent,
 # sadly it cannot be used (easily) in WAL-E.
 gevent_monkey()
@@ -60,6 +61,7 @@ def ssl_monkey():
         return original(*args, **kwargs)
 
     ssl.wrap_socket = wrap_socket_monkey
+
 
 ssl_monkey()
 
