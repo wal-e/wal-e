@@ -116,7 +116,6 @@ will attempt to resolve them:
 * gcloud>=0.17.0
 * python-swiftclient>=3.0.0
 * python-keystoneclient>=3.0.0
-* argparse, if not on Python 2.7
 
 It is possible to use WAL-E without the dependencies of back-end
 storage one does not use installed: the imports for those are only
