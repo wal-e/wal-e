@@ -22,7 +22,7 @@ class PgControlDataParser(object):
         self.data_directory = data_directory
         pg_config_proc = popen_sp([CONFIG_BIN],
                              stdout=PIPE)
-        output = pg_config_proc.communicate()[0]
+        output = pg_config_proc.communicate()[0].decode('utf-8')
         for line in output.split('\n'):
             parts = line.split('=')
             if len(parts) != 2:
@@ -36,7 +36,7 @@ class PgControlDataParser(object):
     def _read_controldata(self):
         controldata_proc = popen_sp(
             [self._controldata_bin, self.data_directory], stdout=PIPE)
-        stdout = controldata_proc.communicate()[0]
+        stdout = controldata_proc.communicate()[0].decode('utf-8')
         controldata = {}
         for line in stdout.split('\n'):
             split_values = line.split(':')
