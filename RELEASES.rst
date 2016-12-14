@@ -1,6 +1,17 @@
 Releases
 ========
 
+v1.0.2
+------
+
+Release v1.0.2 fixes a defect in WABS storage, the offline backup
+feature, and documentation.
+
+Thanks goes to: Ayush Goyal, for fixing an infinite-retry in WABS
+deletion.  Jamal Boukaffal for a crash fix to offline backups. Norbert
+Tretkowski for documentation fixes.
+
+
 v1.0.1
 ------
 
