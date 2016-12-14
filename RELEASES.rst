@@ -1,6 +1,12 @@
 Releases
 ========
 
+v1.0.3
+------
+
+Release v1.0.3 adds support for Keystone v3 (Joel E. Svensson).
+
+
 v1.0.2
 ------
 
