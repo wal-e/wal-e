@@ -12,7 +12,7 @@ except ImportError:
     from azure.storage import BlobService
 
 from fast_wait import fast_wait
-from gevent import coros
+from gevent import lock
 
 from wal_e import exception
 from wal_e.worker.wabs import wabs_deleter
@@ -36,7 +36,7 @@ class ContainerDeleteKeysCollector(object):
 
         # Protect exc, since some paths test it and then use it, which
         # can run afoul race conditions.
-        self._exc_protect = coros.RLock()
+        self._exc_protect = lock.RLock()
 
     def inject(self, exc):
         self._exc_protect.acquire()

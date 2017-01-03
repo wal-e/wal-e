@@ -1,7 +1,7 @@
 import gevent
 import pytest
 
-from gevent import coros
+from gevent import lock
 
 from fast_wait import fast_wait
 from gcloud import storage
@@ -25,7 +25,7 @@ class BucketDeleteBlobsCollector(object):
 
         # Protect exc, since some paths test it and then use it, which
         # can run afoul race conditions.
-        self._exc_protect = coros.RLock()
+        self._exc_protect = lock.RLock()
 
     def inject(self, exc):
         self._exc_protect.acquire()

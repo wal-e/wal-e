@@ -1,7 +1,7 @@
 import gevent
 import pytest
 
-from gevent import coros
+from gevent import lock
 
 from boto.s3 import bucket
 from boto.s3 import key
@@ -26,7 +26,7 @@ class BucketDeleteKeysCollector(object):
 
         # Protect exc, since some paths test it and then use it, which
         # can run afoul race conditions.
-        self._exc_protect = coros.RLock()
+        self._exc_protect = lock.RLock()
 
     def inject(self, exc):
         self._exc_protect.acquire()
