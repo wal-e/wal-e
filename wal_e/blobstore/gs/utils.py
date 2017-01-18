@@ -9,7 +9,7 @@ import urllib.request
 from . import calling_format
 from datetime import datetime
 from datetime import timedelta
-from gcloud import storage
+from google.cloud import storage
 from urllib.parse import urlparse
 from wal_e import files
 from wal_e import log_help

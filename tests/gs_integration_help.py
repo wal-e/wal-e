@@ -1,5 +1,5 @@
-from gcloud import exceptions
-from gcloud import storage
+from google.cloud import exceptions
+from google.cloud import storage
 import base64
 import hmac
 import json

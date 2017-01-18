@@ -1,11 +1,11 @@
 try:
-    import gcloud
-    assert gcloud
+    import google.cloud
+    assert google.cloud
 except ImportError:
     from wal_e.exception import UserException
     raise UserException(
-        msg='Google support requires the module "gcloud" ',
-        hint='Try running "pip install gcloud')
+        msg='Google support requires the module "google-cloud-storage" ',
+        hint='Try running "pip install google-cloud-storage')
 
 from wal_e.blobstore.gs.credentials import Credentials
 from wal_e.blobstore.gs.utils import (

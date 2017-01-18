@@ -113,7 +113,7 @@ will attempt to resolve them:
 * gevent>=1.1.1
 * boto>=2.40.0
 * azure>=1.0.3
-* gcloud>=0.17.0
+* google-cloud-storage>=0.22.0
 * python-swiftclient>=3.0.0
 * python-keystoneclient>=3.0.0
 

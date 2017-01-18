@@ -1,4 +1,4 @@
 class Credentials(object):
-    # Rely on default gcloud client credential resolution instead of
-    # reifying credentials in WAL-E.
+    # Rely on default google cloud client credential resolution
+    # instead of reifying credentials in WAL-E.
     pass

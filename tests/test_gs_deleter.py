@@ -4,7 +4,7 @@ import pytest
 from gevent import lock
 
 from fast_wait import fast_wait
-from gcloud import storage
+from google.cloud import storage
 from wal_e import exception
 from wal_e.worker.gs import gs_deleter
 
@@ -58,7 +58,7 @@ def collect(monkeypatch):
     """Instead of performing bulk delete, collect blob names deleted.
 
     This is to test invariants, as to ensure deleted blobs are passed
-    to gcloud properly.
+    to google cloud properly.
     """
 
     collect = BucketDeleteBlobsCollector()
