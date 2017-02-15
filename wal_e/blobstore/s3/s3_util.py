@@ -135,6 +135,19 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
                                   'during restoration.'))
                         decomp_out.remove_regardless = True
                         return False
+                    elif e.value.error_code == 'ExpiredToken':
+                        # Do not retry if STS token has expired.  It can never
+                        # succeed in the future anyway.
+                        pl.abort()
+                        logger.info(
+                            msg=('could no longer authenticate while '
+                                 'performing wal restore'),
+                            detail=('The absolute URI that could not be '
+                                    'accessed is {url}.'.format(url=url)),
+                            hint=('This can be normal when using STS '
+                                  'credentials.'))
+                        decomp_out.remove_regardless = True
+                        return False
                     else:
                         raise
 
