@@ -1,9 +1,13 @@
 language: python
+dist: trusty
+python:
+  - "3.4"
+  - "3.5"
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -qq libevent-dev lzop pv gnupg
   - sudo rm /usr/share/google/boto/boto_plugins/*
-install: pip install -q tox
+install: pip install tox-travis
 script: tox
 notifications:
   email: false
