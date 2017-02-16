@@ -1,6 +1,29 @@
 Releases
 ========
 
+v1.1.0
+------
+
+Release v1.1.0 is compatible with older versions, and has one
+noteworthy detailed behavioral change:
+
+WAL-E now ignores backing up the directories ``pg_log``,
+``pg_replslot``, and ``pg_wal``, all of which could cause spurious
+problems in backup or restore.
+
+Other changes include:
+
+* It also switches to a more modern driver for Google Storage. (Samuel
+  Kohonen)
+
+* Python 3.6 is now a tested (Dr. Nic Williams)
+
+* A counter-productive infinite retry with expired STS tokens has been
+  fixed (Timothée Peignier)
+
+* The README has been expanded (tvarsis, Daniel Farina)
+
+
 v1.0.3
 ------
 
