@@ -77,11 +77,13 @@ Optional:
 
 Azure Blob Store
 ''''''''''''''''
+Example below is based on the following blob storage in Azure in the resource group ``resgroup`` : https://store1.blob.core.windows.net/container1/nextpath
 
-* WALE_WABS_PREFIX (e.g. ``wabs://container/path/optionallymorepath``)
-* WABS_ACCOUNT_NAME
-* WABS_ACCESS_KEY or
-* WABS_SAS_TOKEN
+* WALE_WABS_PREFIX (e.g. ``wabs://container1/nextpath``)
+* WABS_ACCOUNT_NAME (e.g. ``store1``)
+* WABS_ACCESS_KEY (Use key1 from running ``azure storage account keys list store1 --resource-group resgroup`` You will need to have the Azure CLI installed for this to work.)
+* WABS_SAS_TOKEN (You only need this if you have not provided an WABS_ACCESS_KEY)
+
 
 Google Storage
 ''''''''''''''
@@ -211,9 +213,9 @@ continuous archiving, one needs to edit ``postgresql.conf`` and
 restart the server.  The important settings to enable continuous
 archiving are related here::
 
-  wal_level = archive # hot_standby in 9.0 is also acceptable
+  wal_level = archive # hot_standby and logical in 9.x is also acceptable
   archive_mode = on
-  archive_command = 'envdir /etc/wal-e.d/env wal-e wal-push %p'
+  archive_command = 'envdir /etc/wal-e.d/env /usr/local/bin/wal-e wal-push %p'
   archive_timeout = 60
 
 Every segment archived will be noted in the PostgreSQL log.
@@ -227,11 +229,20 @@ A base backup (via ``backup-push``) can be uploaded at any time, but
 this must be done at least once in order to perform a restoration.  It
 must be done again if any WAL segment was not correctly uploaded:
 point in time recovery will not be able to continue if there are any
-gaps in the WAL segments.
+gaps in the WAL segments. Once ``backup-push`` has been successfully run,
+Wal-e will automatically continue to push and archive WAL segments.
 
 .. _envdir: http://cr.yp.to/daemontools/envdir.html
 .. _daemontools: http://cr.yp.to/daemontools.html
 
+
+RESTORING
+----------------
+
+Before fetching a backup to restore, make sure you stop the database:
+
+   sudo /etc/init.d/postgresql stop
+   
 Pulling a base backup from S3::
 
     $ sudo -u postgres bash -c                          \
@@ -240,8 +251,8 @@ Pulling a base backup from S3::
     backup-fetch /var/lib/my/database LATEST"
 
 This command makes use of the "LATEST" pseudo-name for a backup, which
-queries S3 to find the latest complete backup.  Otherwise, a real name
-can be used::
+queries S3 to find the latest complete backup, including all the latest 
+WAL files. Otherwise, a real name can be used::
 
     $ sudo -u postgres bash -c                          \
     "envdir /etc/wal-e.d/pull-env wal-e                 \
@@ -257,11 +268,24 @@ directory.
 It is also likely one will need to provide a ``recovery.conf`` file,
 as documented in the PostgreSQL manual, to recover the base backup, as
 WAL files will need to be downloaded to make the hot-backup taken with
-backup-push.  The WAL-E's ``wal-fetch`` subcommand is designed to be
+backup-push. The ``recovery.conf`` file is usually located in /var/lib/postgresql/9.x/main
+Once the restoration of a database is complete, this file will be automatically renamed to 
+``recovery.done``. So each time a database should be recovered, this file probably needs to 
+be renamed back to ``recovery.conf``. The WAL-E's ``wal-fetch`` subcommand is designed to be
 useful for this very purpose, as it may be used in a ``recovery.conf``
 file like this::
 
-    restore_command = 'envdir /etc/wal-e.d/env wal-e wal-fetch "%f" "%p"'
+    restore_command = 'envdir /etc/wal-e.d/env /usr/local/bin/wal-e wal-fetch %f %p'
+
+Point in time recovery
+'''''''''''
+First, you must use the LATEST argument, as described above, when using ``backup-fetch``. It will not work if 
+you specify a specific base backup. Secondly, you need to add this line to your ``recovery.conf``, where the 
+timestamp is the time you wish to restore to.
+
+   recovery_target_time = '2017-02-01 19:58:55'
+   
+   
 
 .. WARNING::
    If the archived database contains user defined tablespaces please review
