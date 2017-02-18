@@ -6,6 +6,7 @@ import traceback
 
 import gevent
 
+from wal_e import exception
 from wal_e import log_help
 
 logger = log_help.WalELogger(__name__)
@@ -20,6 +21,22 @@ def generic_exception_processor(exc_tup, **kwargs):
               'handle this exception.  Please report this output and, '
               'if possible, the situation under which it arises.'))
     del exc_tup
+
+
+def critical_stop_exception_processor(exc_tup, **kwargs):
+    typ, value, tb = exc_tup
+    if issubclass(typ, exception.UserCritical):
+        logger.error(
+            msg='not retrying on critical exception',
+            detail=('Exception information dump: \n{0}'
+                    .format(''.join(traceback.format_exception(*exc_tup)))),
+            hint=('A better error message should be written to '
+                  'handle this exception.  Please report this output and, '
+                  'if possible, the situation under which it arises.'))
+        del exc_tup
+        raise typ(value).with_traceback(tb)
+    else:
+        generic_exception_processor(exc_tup, **kwargs)
 
 
 def retry(exception_processor=generic_exception_processor, max_retries=100):
