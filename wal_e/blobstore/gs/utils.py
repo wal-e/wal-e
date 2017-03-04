@@ -27,7 +27,7 @@ def _uri_to_blob(creds, uri, conn=None):
     if conn is None:
         conn = calling_format.connect(creds)
     b = storage.Bucket(conn, name=bucket_name)
-    return storage.Blob(url_tup.path, b)
+    return storage.Blob(url_tup.path.lstrip('/'), b)
 
 
 def uri_put_file(creds, uri, fp, content_type=None, conn=None):

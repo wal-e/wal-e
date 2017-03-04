@@ -38,7 +38,7 @@ class TarPartitionLister(object):
             self.backup_info)
 
         bucket = get_bucket(self.gs_conn, self.layout.store_name())
-        for key in bucket.list_blobs(prefix='/' + prefix):
+        for key in bucket.list_blobs(prefix=prefix):
             url = 'gs://{bucket}/{name}'.format(bucket=key.bucket.name,
                                                 name=key.name)
             key_last_part = key.name.rsplit('/', 1)[-1]
@@ -73,7 +73,7 @@ class BackupFetcher(object):
             .format(partition_name),
             hint='The absolute GCS object is {0}.'.format(part_abs_name))
 
-        blob = self.bucket.get_blob('/' + part_abs_name)
+        blob = self.bucket.get_blob(part_abs_name)
         signed = blob.generate_signed_url(datetime.datetime.utcnow() +
                                           datetime.timedelta(minutes=10))
         with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
@@ -93,7 +93,7 @@ class BackupList(_BackupList):
 
     def _backup_list(self, prefix):
         bucket = get_bucket(self.conn, self.layout.store_name())
-        return bucket.list_blobs(prefix='/' + prefix)
+        return bucket.list_blobs(prefix=prefix)
 
 
 class DeleteFromContext(_DeleteFromContext):
@@ -111,4 +111,4 @@ class DeleteFromContext(_DeleteFromContext):
 
     def _backup_list(self, prefix):
         bucket = get_bucket(self.conn, self.layout.store_name())
-        return bucket.list_blobs(prefix='/' + prefix)
+        return bucket.list_blobs(prefix=prefix)
