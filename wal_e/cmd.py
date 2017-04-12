@@ -450,25 +450,31 @@ def gs_creds(args):
 
 def configure_backup_cxt(args):
     # Try to find some WAL-E prefix to store data in.
-    prefix = (args.s3_prefix or args.wabs_prefix or args.gs_prefix
-              or os.getenv('WALE_S3_PREFIX')
-              or os.getenv('WALE_WABS_PREFIX')
+    prefix = (args.file_prefix
+              or args.gs_prefix
+              or args.s3_prefix
+              or args.wabs_prefix
+              or os.getenv('WALE_FILE_PREFIX')
               or os.getenv('WALE_GS_PREFIX')
+              or os.getenv('WALE_S3_PREFIX')
               or os.getenv('WALE_SWIFT_PREFIX')
-              or os.getenv('WALE_FILE_PREFIX'))
+              or os.getenv('WALE_WABS_PREFIX'))
 
     if prefix is None:
         raise UserException(
             msg='no storage prefix defined',
             hint=(
                 'Either set one of the'
-                ' --wabs-prefix, --s3-prefix, --gs-prefix or --file-prefix options'
+                ' --file-prefix,'
+                ' --gs-prefix,'
+                ' --s3-prefix or'
+                ' --wabs-prefix options'
                 ' or define one of the'
-                ' WALE_WABS_PREFIX,'
+                ' WALE_FILE_PREFIX,'
+                ' WALE_GS_PREFIX,'
                 ' WALE_S3_PREFIX,'
-                ' WALE_SWIFT_PREFIX,'
-                ' WALE_GS_PREFIX or'
-                ' WALE_FILE_PREFIX'
+                ' WALE_SWIFT_PREFIX or'
+                ' WALE_WABS_PREFIX,'
                 ' environment variables.'
             )
         )
@@ -721,6 +727,7 @@ def main():
             msg='An unprocessed exception has avoided all error handling',
             detail=''.join(traceback.format_exception(*sys.exc_info())))
         sys.exit(2)
+
 
 if __name__ == "__main__":
     main()

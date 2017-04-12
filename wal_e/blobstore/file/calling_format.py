@@ -38,14 +38,14 @@ class FileKey(object):
             self.size = stat.st_size
 
     def get_contents_as_string(self):
-        fp = open(self.path, 'r')
+        fp = open(self.path, 'rb')
         contents = fp.read()
         fp.close()
         return contents
 
     def set_contents_from_file(self, fp):
         ensure_dir_exists(self.path)
-        f = open(self.path, 'w')
+        f = open(self.path, 'wb')
         while True:
             piece = fp.read(1024)
             if not piece:

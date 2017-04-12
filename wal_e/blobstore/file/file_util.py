@@ -1,4 +1,4 @@
-from urlparse import urlparse
+from urllib.parse import urlparse
 import gevent
 
 from . import calling_format
@@ -19,7 +19,7 @@ def _uri_to_key(creds, uri, conn=None):
     return conn.get_bucket(bucket_name).get_key(url_tup.path)
 
 
-def uri_put_file(creds, uri, fp, content_encoding=None, conn=None):
+def uri_put_file(creds, uri, fp, content_type=None, conn=None):
     assert fp.tell() == 0
 
     k = _uri_to_key(creds, uri, conn=conn)
@@ -63,7 +63,7 @@ def write_and_return_error(key, stream):
     try:
         key.get_contents_to_file(stream)
         stream.flush()
-    except Exception, e:
+    except Exception as e:
         return e
     finally:
         stream.close()

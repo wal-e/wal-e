@@ -21,8 +21,8 @@ def create_files(files):
         dir_path = os.path.dirname(f)
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
-        fp = open(f, "w")
-        fp.write(f)
+        fp = open(f, "wb")
+        fp.write(f.encode("utf-8"))
         fp.close()
 
 
@@ -40,11 +40,11 @@ def test_uri_put_file_writes_key_file(tmpdir):
     base = str(tmpdir.mkdir("base"))
     file_list = [base + "/src.txt"]
     create_files(file_list)
-    f = open(base + "/src.txt", "r")
+    f = open(base + "/src.txt", "rb")
     uri_put_file("", "file://localhost/" + base + "/dst.txt", f)
 
-    with open(base + "/dst.txt", "r") as dstFile:
-        assert dstFile.read() == file_list[0]
+    with open(base + "/dst.txt", "rb") as dstFile:
+        assert dstFile.read() == file_list[0].encode('utf-8')
 
 
 def test_uri_put_file_creates_key_dir(tmpdir):
@@ -52,11 +52,11 @@ def test_uri_put_file_creates_key_dir(tmpdir):
     base = str(tmpdir.mkdir("base"))
     file_list = [base + "/src.txt"]
     create_files(file_list)
-    f = open(file_list[0], "r")
+    f = open(file_list[0], "rb")
     uri_put_file("", "file://localhost/" + base + "/subdir/dst.txt", f)
 
-    with open(base + "/subdir//dst.txt", "r") as dstFile:
-        assert dstFile.read() == file_list[0]
+    with open(base + "/subdir//dst.txt", "rb") as dstFile:
+        assert dstFile.read() == file_list[0].encode('utf-8')
 
 
 def test_uri_get_file(tmpdir):
@@ -65,7 +65,7 @@ def test_uri_get_file(tmpdir):
     file_list = [base + "/src.txt"]
     create_files(file_list)
     file_contents = uri_get_file("", "file://localhost/" + base + "/src.txt")
-    assert file_contents == file_list[0]
+    assert file_contents == file_list[0].encode('utf-8')
 
 
 def test_bucket_list(tmpdir):
@@ -110,8 +110,8 @@ def test_do_lzop_get(tmpdir):
     do_lzop_get("", "file://localhost/" + base + "/src.txt.lzo",
                 base + "/dst.txt", False, do_retry=True)
 
-    with open(base + "/dst.txt", "r") as dstFile:
-        assert dstFile.read() == file_list[0]
+    with open(base + "/dst.txt", "rb") as dstFile:
+        assert dstFile.read() == file_list[0].encode('utf-8')
 
 
 def test_do_lzop_get_missing_key(tmpdir):
@@ -134,14 +134,14 @@ def test_write_and_return_error(tmpdir):
     backup = FileBackup(store, "", "")
     conn = backup.cinfo.connect("")
     bucket = conn.get_bucket("")
-    f = open(base + "/dst.txt", "w")
+    f = open(base + "/dst.txt", "wb")
     key = bucket.get_key(base + "/src.txt")
 
     result = write_and_return_error(key, f)
     assert result is None
 
-    with open(base + "/dst.txt", "r") as dstFile:
-        assert dstFile.read() == file_list[0]
+    with open(base + "/dst.txt", "rb") as dstFile:
+        assert dstFile.read() == file_list[0].encode('utf-8')
 
 
 def test_write_and_return_error_with_error(tmpdir):
@@ -154,7 +154,7 @@ def test_write_and_return_error_with_error(tmpdir):
     backup = FileBackup(store, "", "")
     conn = backup.cinfo.connect("")
     bucket = conn.get_bucket("")
-    f = open(base + "/dst.txt", "w")
+    f = open(base + "/dst.txt", "wb")
     key = bucket.get_key(base + "/missing.txt")
 
     with pytest.raises(IOError) as e:
