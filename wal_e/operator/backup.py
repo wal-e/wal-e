@@ -352,6 +352,17 @@ class Backup(object):
         ret = do_lzop_get(self.creds, url, wal_destination,
                           self.gpg_key_id is not None)
 
+        if not ret:
+            # If the download failed, AtomicDownload.__exit__()
+            # must be informed so that it does not link an empty
+            # archive file into place.
+            #
+            # We thus raise SystemExit. This is acceptable for
+            # prefetch since prefetch execution is daemonized.
+            # I.e., PostgreSQL has no knowledge of prefetch
+            # exit codes.
+            raise SystemExit('Failed to prefetch %s' % wal_name)
+
         logger.info(
             msg='complete wal restore',
             structured={'action': 'wal-fetch',
