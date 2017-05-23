@@ -34,7 +34,8 @@ def uri_put_file(creds, uri, fp, content_type=None):
     conn = calling_format.connect(creds)
 
     conn.put_object(
-        container_name, url_tup.path, fp, content_type=content_type
+        container_name, url_tup.path.replace('//', '/'), fp, 
+        content_type=content_type
     )
     # Swiftclient doesn't return us the total file size, we see how much of the
     # file swiftclient read in order to determine the file size.
