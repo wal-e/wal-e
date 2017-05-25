@@ -110,6 +110,9 @@ class Pipeline(object):
             if exc_type is not None or self._abort:
                 for command in self.commands:
                     command.wait()
+                    if command.stdout is not None:
+                        self.stdout.close()
+
             else:
                 for command in self.commands:
                     command.finish()
