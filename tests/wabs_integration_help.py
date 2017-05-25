@@ -1,14 +1,6 @@
-try:
-    # New module location sometime after Azure SDK v1.0.
-    #
-    # See
-    # https://github.com/Azure/azure-sdk-for-python/blob/master/ChangeLog.txt
-    from azure.storage.blob import BlobService
-except ImportError:
-    from azure.storage import BlobService
-
 import os
 
+from wal_e.blobstore.wabs import BlobService
 from wal_e.cmd import parse_boolean_envvar
 
 

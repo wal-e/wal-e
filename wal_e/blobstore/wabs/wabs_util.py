@@ -19,16 +19,8 @@ except ImportError:
     from azure import WindowsAzureMissingResourceError \
         as AzureMissingResourceHttpError
 
-try:
-    # New module location sometime after Azure SDK v1.0.
-    #
-    # See
-    # https://github.com/Azure/azure-sdk-for-python/blob/master/ChangeLog.txt
-    from azure.storage.blob import BlobService
-except ImportError:
-    from azure.storage import BlobService
-
 from . import calling_format
+from .shim import BlobService
 from hashlib import md5
 from urllib.parse import urlparse
 from wal_e import log_help
