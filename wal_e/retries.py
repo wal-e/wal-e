@@ -1,5 +1,7 @@
 import functools
+import os
 import sys
+import random
 import traceback
 
 import gevent
@@ -20,7 +22,7 @@ def generic_exception_processor(exc_tup, **kwargs):
     del exc_tup
 
 
-def retry(exception_processor=generic_exception_processor):
+def retry(exception_processor=generic_exception_processor, max_retries=100):
     """
     Generic retry decorator
 
@@ -48,11 +50,17 @@ def retry(exception_processor=generic_exception_processor):
                                 exceptions.
     :type exception_processor: function
 
+    :param max_retries: An integer representing the maximum
+                        number of retry attempts.
+    :type max_retries: integer
+
     """
+    max_retries = int(os.getenv('WALE_RETRIES', max_retries))
 
     def yield_new_function_from(f):
         def shim(*args, **kwargs):
             exc_processor_cxt = None
+            retries = 0
 
             while True:
                 # Avoid livelocks while spinning on retry by yielding.
@@ -64,6 +72,10 @@ def retry(exception_processor=generic_exception_processor):
                     raise
                 except:
                     exception_info_tuple = None
+                    retries += 1
+
+                    if max_retries >= 1 and retries >= max_retries:
+                        raise
 
                     try:
                         exception_info_tuple = sys.exc_info()
@@ -74,6 +86,11 @@ def retry(exception_processor=generic_exception_processor):
                         # Although cycles are harmless long-term, help the
                         # garbage collector.
                         del exception_info_tuple
+
+                    # Exponential backoff with jitter capped at 2 minutes.
+                    duration = min(120, (2 ** retries)) / 2
+                    gevent.sleep(duration + random.randint(0, duration))
+
         return functools.wraps(f)(shim)
     return yield_new_function_from
 
@@ -93,6 +110,7 @@ def retry_with_count(side_effect_func):
                                  logging.
 
         :type side_effect_func: function
+
         """
         def increment_context(exc_processor_cxt):
             return ((exc_processor_cxt is None and 1) or
