@@ -12,8 +12,10 @@ assert fast_wait
 
 def invoke_program():
     with open(os.devnull, 'w') as devnull:
-        piper.popen_sp(['python', '--version'],
+        proc = piper.popen_sp(['python', '--version'],
                        stdout=devnull, stderr=devnull)
+        if proc:
+            proc.wait()
 
 
 def test_normal():
@@ -27,7 +29,7 @@ class OomTimes(object):
 
     def __call__(self, *args, **kwargs):
         if self.n == 0:
-            self.real(*args, **kwargs)
+            return self.real(*args, **kwargs)
         else:
             self.n -= 1
             e = OSError('faked oom')
@@ -58,8 +60,10 @@ def test_advanced_shim(oomtimes, monkeypatch):
     def invoke(max_tries):
         with open(os.devnull, 'w') as devnull:
             popen = piper.PopenShim(sleep_time=0, max_tries=max_tries)
-            popen(['python', '--version'],
-                  stdout=devnull, stderr=devnull)
+            proc = popen(['python', '--version'],
+                    stdout=devnull, stderr=devnull)
+            if proc:
+                proc.wait()
 
     if oomtimes.n >= 1:
         with pytest.raises(OSError) as e:
