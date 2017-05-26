@@ -1,4 +1,5 @@
 import os
+import shutil
 from datetime import datetime
 
 
@@ -38,30 +39,19 @@ class FileKey(object):
             self.size = stat.st_size
 
     def get_contents_as_string(self):
-        fp = open(self.path, 'rb')
-        contents = fp.read()
-        fp.close()
+        with open(self.path, 'rb') as fp:
+            contents = fp.read()
         return contents
 
     def set_contents_from_file(self, fp):
         ensure_dir_exists(self.path)
-        f = open(self.path, 'wb')
-        while True:
-            piece = fp.read(1024)
-            if not piece:
-                break
-            f.write(piece)
-        f.close()
+        with open(self.path, 'wb') as f:
+            shutil.copyfileobj(fp, f)
         setattr(self, 'size', os.path.getsize(self.path))
 
     def get_contents_to_file(self, fp):
-        f = open(self.path, 'rb')
-        while True:
-            piece = f.read(1024)
-            if not piece:
-                break
-            fp.write(piece)
-        f.close()
+        with open(self.path, 'rb') as f:
+            shutil.copyfileobj(f, fp)
 
 
 class Bucket(object):
