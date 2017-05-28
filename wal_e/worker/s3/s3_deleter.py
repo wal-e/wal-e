@@ -1,7 +1,7 @@
 from wal_e import exception
 from wal_e import retries
 from wal_e.worker.base import _Deleter
-
+from boto.exception import S3ResponseError
 
 class Deleter(_Deleter):
 
@@ -24,4 +24,9 @@ class Deleter(_Deleter):
                     hint='This should be reported as a bug.')
 
         bucket = page[0].bucket
-        bucket.delete_keys([key.name for key in page])
+        try:
+            bucket.delete_keys([key.name for key in page])
+        except S3ResponseError as e:
+            #some s3 compatible stores like fakes3 do not implement delete_keys
+            for key in page:
+                bucket.delete_key(key.name)
