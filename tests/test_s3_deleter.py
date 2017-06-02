@@ -51,6 +51,18 @@ class BucketDeleteKeysCollector(object):
         self.deleted_keys.extend(keys)
 
 
+class BucketDeleteKeyCollector(object):
+    """A callable to stand-in for bucket.delete_key
+
+    Used to test that given keys are serially deleted.
+    """
+    def __init__(self):
+        self.deleted_keys = []
+
+    def __call__(self, key):
+        self.deleted_keys.append(key.name)
+
+
 @pytest.fixture
 def collect(monkeypatch):
     """Instead of performing bulk delete, collect key names deleted.
@@ -66,11 +78,27 @@ def collect(monkeypatch):
 
 
 @pytest.fixture
+def collect_gce(monkeypatch):
+    """Instead of performing bulk delete, collect key names deleted.
+
+    This is to test invariants, as to ensure deleted keys are passed
+    to boto properly.
+    """
+
+    collect = BucketDeleteKeyCollector()
+    monkeypatch.setattr(bucket.Bucket, 'delete_key', collect)
+    monkeypatch.setenv('WALE_S3_ENDPOINT',
+                       'http+path://storage.googleapis.com')
+
+    return collect
+
+
+@pytest.fixture
 def b():
     return bucket.Bucket(name='test-bucket-name')
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def never_use_single_delete(monkeypatch):
     """Detect any mistaken uses of single-key deletion.
 
@@ -85,11 +113,13 @@ def never_use_single_delete(monkeypatch):
     monkeypatch.setattr(bucket.Bucket, 'delete_key', die)
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_construction():
     """The constructor basically works."""
     s3_deleter.Deleter()
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_close_error():
     """Ensure that attempts to use a closed Deleter results in an error."""
 
@@ -100,6 +130,7 @@ def test_close_error():
         d.delete('no value should work')
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_processes_one_deletion(b, collect):
     # Mock up a key and bucket
     key_name = 'test-key-name'
@@ -112,6 +143,7 @@ def test_processes_one_deletion(b, collect):
     assert collect.deleted_keys == [key_name]
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_processes_many_deletions(b, collect):
     # Generate a target list of keys in a stable order
     target = sorted(['test-key-' + str(x) for x in range(20001)])
@@ -132,6 +164,7 @@ def test_processes_many_deletions(b, collect):
     assert sorted(collect.deleted_keys) == target
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_retry_on_normal_error(b, collect):
     """Ensure retries are processed for most errors."""
     key_name = 'test-key-name'
@@ -158,6 +191,7 @@ def test_retry_on_normal_error(b, collect):
     assert collect.deleted_keys == [key_name]
 
 
+@pytest.mark.usefixtures("never_use_single_delete")
 def test_no_retry_on_keyboadinterrupt(b, collect):
     """Ensure that KeyboardInterrupts are forwarded."""
     key_name = 'test-key-name'
@@ -191,3 +225,23 @@ def test_no_retry_on_keyboadinterrupt(b, collect):
 
     # Since there is no retrying, no keys should be deleted.
     assert not collect.deleted_keys
+
+
+def test_processes_many_deletions_gce(b, collect_gce):
+    # Generate a target list of keys in a stable order
+    target = sorted(['test-key-' + str(x) for x in range(20001)])
+
+    # Construct boto S3 Keys from the generated names and delete them
+    # all.
+    keys = [key.Key(bucket=b, name=key_name) for key_name in target]
+    d = s3_deleter.Deleter()
+
+    for k in keys:
+        d.delete(k)
+
+    d.close()
+
+    # Sort the deleted key names to obtain another stable order and
+    # then ensure that everything was passed for deletion
+    # successfully.
+    assert sorted(collect_gce.deleted_keys) == target
