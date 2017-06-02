@@ -172,6 +172,23 @@ class Backup(object):
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
 
+        if not while_offline:
+            postmaster_pid_path = os.path.join(data_directory,
+                                               'postmaster.pid')
+            with open(postmaster_pid_path, 'r') as postmaster_pid:
+                port = int(postmaster_pid.readlines()[3])
+
+            if port != 5432 and 'PGPORT' not in os.environ:
+                raise UserException(msg='Trying to backup a cluster on '
+                        'non-standard port without specifying it',
+                        detail='You did not specify a PGPORT environment '
+                        'variable while backuping a cluster not running on '
+                        'the default port')
+            if 'PGPORT' in os.environ and int(os.environ['PGPORT']) != port:
+                raise UserException(msg='Suspicious port specified',
+                        detail='You did specify a PGPORT that differs from '
+                        'the port used in this data folder')
+
         try:
             if not while_offline:
                 start_backup_info = PgBackupStatements.run_start_backup()
