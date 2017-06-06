@@ -443,6 +443,9 @@ def do_not_descend(root, name, dirnames, matches):
 
 def partition(pg_cluster_dir):
     def raise_walk_error(e):
+        # Ignore root-owned system folder
+        if getattr(e, 'filename', '').endswith(os.path.sep + 'lost+found'):
+           return
         raise e
     if not pg_cluster_dir.endswith(os.path.sep):
         pg_cluster_dir += os.path.sep
