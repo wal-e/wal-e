@@ -58,6 +58,7 @@ logger = log_help.WalELogger(__name__)
 PG_CONF = ('postgresql.conf',
            'pg_hba.conf',
            'recovery.conf',
+           'recovery.done',
            'pg_ident.conf',
            'promote')
 
