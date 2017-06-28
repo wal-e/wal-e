@@ -1,5 +1,9 @@
 language: python
 dist: trusty
+env:
+    # do not load /etc/boto.cfg with Python 3 incompatible plugin
+    # https://github.com/travis-ci/travis-ci/issues/5246#issuecomment-166460882
+    - BOTO_CONFIG=/doesnotexist
 python:
   - "3.4"
   - "3.5"
@@ -7,7 +11,6 @@ python:
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -qq libevent-dev lzop pv gnupg
-  - sudo rm /usr/share/google/boto/boto_plugins/*
 install: pip install tox-travis
 script: tox
 notifications:
