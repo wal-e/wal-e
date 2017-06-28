@@ -281,19 +281,20 @@ class TarPartition(list):
             assert not member.name.startswith('/')
             relpath = os.path.join(dest_path, member.name)
 
+            # Workaround issue with tar handling of symlink, see:
+            # https://bugs.python.org/issue12800
+            if member.issym():
+                target_path = os.path.join(dest_path, member.name)
+                os.symlink(member.linkname, target_path)
+                continue
+
             if member.isreg() and member.size >= pipebuf.PIPE_BUF_BYTES:
                 cat_extract(tar, member, relpath)
             else:
                 tar.extract(member, path=dest_path)
 
-            if member.issym():
-                # It does not appear possible to fsync a symlink, or
-                # so it seems, as there is no portable way to open()
-                # one to get a fd to run fsync on.
-                pass
-            else:
-                filename = os.path.realpath(relpath)
-                extracted_files.append(filename)
+            filename = os.path.realpath(relpath)
+            extracted_files.append(filename)
 
             # avoid accumulating an unbounded list of strings which
             # could be quite large for a large database
