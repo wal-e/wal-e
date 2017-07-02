@@ -284,7 +284,14 @@ class TarPartition(list):
             # https://bugs.python.org/issue12800
             if member.issym():
                 target_path = os.path.join(dest_path, member.name)
-                os.symlink(member.linkname, target_path)
+                try:
+                    os.symlink(member.linkname, target_path)
+                except OSError as e:
+                    if e.errno == errno.EEXIST:
+                        os.remove(target_path)
+                        os.symlink(member.linkname, target_path)
+                    else:
+                        raise
                 continue
 
             if member.isreg() and member.size >= pipebuf.PIPE_BUF_BYTES:
