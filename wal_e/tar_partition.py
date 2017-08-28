@@ -447,7 +447,10 @@ def _segmentation_guts(root, file_paths, max_partition_size):
 def do_not_descend(root, name, dirnames, matches):
     if name in dirnames:
         dirnames.remove(name)
-        matches.append(os.path.join(root, name))
+        local_name = os.path.join(root, name)
+        if os.path.islink(local_name):
+            matches.append(os.path.realpath(local_name))
+        matches.append(local_name)
 
 
 def partition(pg_cluster_dir):
