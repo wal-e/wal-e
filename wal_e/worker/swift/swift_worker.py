@@ -30,6 +30,7 @@ class TarPartitionLister(object):
         _, object_list = self.swift_conn.get_container(
             self.layout.store_name(), prefix='/' + prefix
         )
+        last_parts = []
         for obj in object_list:
             url = 'swift://{container}/{name}'.format(
                 container=self.layout.store_name(), name=obj['name'])
@@ -42,7 +43,9 @@ class TarPartitionLister(object):
                             .format(url)),
                     hint=generic_weird_key_hint_message)
             else:
-                yield name_last_part
+                last_parts.append(name_last_part)
+        for name_last_part in sorted(last_parts):
+            yield name_last_part
 
 
 class BackupFetcher(object):

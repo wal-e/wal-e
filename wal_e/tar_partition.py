@@ -444,18 +444,24 @@ def _segmentation_guts(root, file_paths, max_partition_size):
         yield partition
 
 
-def do_not_descend(root, name, dirnames, matches):
-    if name in dirnames:
-        dirnames.remove(name)
-        local_name = os.path.join(root, name)
-        if os.path.islink(local_name):
-            matches.append(os.path.realpath(local_name))
-        matches.append(local_name)
-
-
 def partition(pg_cluster_dir):
     def raise_walk_error(e):
         raise e
+
+    def do_not_descend(root, name, dirnames, matches):
+        if name in dirnames:
+            dirnames.remove(name)
+            local_name = os.path.join(root, name)
+            if os.path.islink(local_name):
+                sym_dirname = os.path.realpath(local_name)
+                matches.append(sym_dirname)
+                walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
+                for sym_root, sym_dirnames, filenames in walker:
+                    for filename in filenames:
+                        matches.append(os.path.join(sym_root, filename))
+
+            matches.append(local_name)
+
     if not pg_cluster_dir.endswith(os.path.sep):
         pg_cluster_dir += os.path.sep
 
