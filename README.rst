@@ -139,7 +139,7 @@ will attempt to resolve them:
 * gevent>=1.1.1
 * boto>=2.40.0
 * azure>=1.0.3
-* google-cloud-storage>=0.22.0
+* google-cloud-storage>=1.4.0
 * python-swiftclient>=3.0.0
 * python-keystoneclient>=3.0.0
 
