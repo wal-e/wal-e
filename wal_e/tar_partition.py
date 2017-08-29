@@ -456,10 +456,6 @@ def partition(pg_cluster_dir):
             if os.path.islink(os.path.abspath(local_name)):
                 symlink_realpath = os.path.realpath(local_name)
                 matches.append(symlink_realpath)
-                walker = os.walk(symlink_realpath, onerror=raise_walk_error)
-                for sym_root, sym_dirnames, filenames in walker:
-                    for filename in filenames:
-                        matches.append(os.path.join(sym_root, filename))
 
 
     if not pg_cluster_dir.endswith(os.path.sep):
