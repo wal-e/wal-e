@@ -36,7 +36,7 @@ setup(
     extras_require={
         'aws': ['boto>=2.40.0'],
         'azure': ['azure>=1.0.3'],
-        'google': ['google-cloud-storage>=0.22.0'],
+        'google': ['google-cloud-storage>=1.4.0'],
         'swift': ['python-swiftclient>=3.0.0',
                   'python-keystoneclient>=3.0.0']
     },
