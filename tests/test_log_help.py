@@ -15,7 +15,7 @@ def test_nonexisting_socket(tmpdir, monkeypatch):
     # Must not raise an exception, silently failing is preferred for
     # now.
     monkeypatch.setattr(log_help, 'HANDLERS', [])
-    log_help.configure(syslog_address=tmpdir.join('bogus'))
+    log_help.configure(syslog_address=str(tmpdir.join('bogus')))
 
 
 def test_format_structured_info(monkeypatch):
