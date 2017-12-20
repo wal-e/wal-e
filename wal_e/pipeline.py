@@ -111,7 +111,7 @@ class Pipeline(object):
                 for command in self.commands:
                     command.wait()
                     if command.stdout is not None:
-                        self.stdout.close()
+                        command.stdout.close()
 
             else:
                 for command in self.commands:

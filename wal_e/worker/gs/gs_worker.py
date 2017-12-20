@@ -5,7 +5,6 @@ These are functions that are amenable to be called from other modules,
 with the intention that they are used in gevent greenlets.
 
 """
-import datetime
 import gevent
 import re
 
@@ -74,10 +73,8 @@ class BackupFetcher(object):
             hint='The absolute GCS object is {0}.'.format(part_abs_name))
 
         blob = self.bucket.get_blob('/' + part_abs_name)
-        signed = blob.generate_signed_url(datetime.datetime.utcnow() +
-                                          datetime.timedelta(minutes=10))
         with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
-            g = gevent.spawn(gs.write_and_return_error, signed, pl.stdin)
+            g = gevent.spawn(gs.write_and_return_error, blob, pl.stdin)
             TarPartition.tarfile_extract(pl.stdout, self.local_root)
 
             # Raise any exceptions guarded by write_and_return_error.
