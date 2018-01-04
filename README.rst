@@ -608,8 +608,10 @@ One can instruct WAL-E to pool WAL segments together and send them in
 groups by passing the ``--pool-size`` parameter to ``wal-push``.  This
 can increase throughput significantly.
 
-As of version 0.7.x, ``--pool-size`` defaults to 8.
+As of version 1.x, ``--pool-size`` defaults to 32.
 
+Note: You can also use this parameter when calling ``backup-fetch``
+and ``backup-push`` (it defaults to 4).
 
 Using AWS IAM Instance Profiles
 '''''''''''''''''''''''''''''''
