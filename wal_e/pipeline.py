@@ -116,7 +116,7 @@ class Pipeline(object):
             else:
                 for command in self.commands:
                     command.finish()
-        except:
+        except Exception:
             if exc_type:
                 # Re-raise inner exception rather than complaints during
                 # pipeline shutdown.

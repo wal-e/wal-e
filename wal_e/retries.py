@@ -87,7 +87,7 @@ def retry(exception_processor=generic_exception_processor, max_retries=100):
                     return f(*args, **kwargs)
                 except KeyboardInterrupt:
                     raise
-                except:
+                except Exception:
                     exception_info_tuple = None
                     retries += 1
 
