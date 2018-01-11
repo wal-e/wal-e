@@ -86,7 +86,7 @@ class _Deleter(object):
                 page.append(self._q.get_nowait())
         except queue.Empty:
             pass
-        except:
+        except Exception:
             # In event everything goes sideways while dequeuing,
             # carefully un-lock the queue.
             for i in range(len(page)):

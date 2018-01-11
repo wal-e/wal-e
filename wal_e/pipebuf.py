@@ -40,7 +40,7 @@ def _configure_buffer_sizes():
             # or small restrain it to sensible values.
             OS_PIPE_SZ = min(int(f.read()), 1024 * 1024)
             PIPE_BUF_BYTES = max(OS_PIPE_SZ, PIPE_BUF_BYTES)
-    except:
+    except Exception:
         pass
 
 
