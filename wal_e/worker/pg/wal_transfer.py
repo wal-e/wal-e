@@ -58,7 +58,7 @@ class WalSegment(object):
             done_metadata = path.join(status_dir, self.name + '.done')
 
             os.rename(ready_metadata, done_metadata)
-        except:
+        except Exception:
             raise UserCritical(
                 msg='problem moving .ready archive status to .done',
                 detail='Traceback is: {0}'.format(traceback.format_exc()),
