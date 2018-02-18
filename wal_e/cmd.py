@@ -614,7 +614,9 @@ def main():
         backup_cxt = configure_backup_cxt(args)
 
         if subcommand == 'backup-fetch':
-            monkeypatch_tarfile_copyfileobj()
+            if (sys.version_info.major < 3 or
+               (sys.version_info.major == 3 and sys.version_info.minor < 6)):
+                monkeypatch_tarfile_copyfileobj()
 
             external_program_check([LZOP_BIN])
             backup_cxt.database_fetch(
@@ -626,7 +628,9 @@ def main():
         elif subcommand == 'backup-list':
             backup_cxt.backup_list(query=args.QUERY, detail=args.detail)
         elif subcommand == 'backup-push':
-            monkeypatch_tarfile_copyfileobj()
+            if (sys.version_info.major < 3 or
+               (sys.version_info.major == 3 and sys.version_info.minor < 6)):
+                monkeypatch_tarfile_copyfileobj()
 
             if args.while_offline:
                 # we need to query pg_config first for the
