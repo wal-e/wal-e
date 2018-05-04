@@ -221,8 +221,12 @@ class CallingInfo(object):
 
 
 def must_resolve(region):
-    if region in _S3_REGIONS:
+    impl = os.getenv('WALE_S3_ENDPOINT')
+    if region in _S3_REGIONS and impl is None:
         endpoint = _S3_REGIONS[region]
+        return endpoint
+    if impl:
+        endpoint = impl
         return endpoint
     else:
         raise UserException(msg='Could not resolve host for AWS_REGION',
