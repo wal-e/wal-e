@@ -266,3 +266,17 @@ def write_and_return_error(url, conn, stream):
         return e
     finally:
         stream.close()
+
+
+def list_blob(wabs_conn, name, prefix):
+    full_list = []
+    marker = None
+    while True:
+      results = wabs_conn.list_blobs(name, marker=marker, prefix=prefix)
+      for b in results:
+          full_list.append(b)
+      if results.next_marker:
+        marker = results.next_marker
+      else:
+        break
+    return full_list
