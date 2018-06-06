@@ -1,11 +1,7 @@
-import base64
 import collections
-import errno
 import gevent
 import io
-import os
 import socket
-import sys
 import traceback
 
 try:
@@ -20,8 +16,8 @@ except ImportError:
         as AzureMissingResourceHttpError
 
 from . import calling_format
-from .shim import BlobService
-from hashlib import md5
+from azure.storage.blob.blockblobservice import BlockBlobService
+from azure.storage.blob.models import ContentSettings
 from urllib.parse import urlparse
 from wal_e import log_help
 from wal_e import files
@@ -73,52 +69,20 @@ def uri_put_file(creds, uri, fp, content_type=None):
         # Help Python GC by resolving possible cycles
         del tb
 
-    # Because we're uploading in chunks, catch rate limiting and
-    # connection errors which occur for each individual chunk instead of
-    # failing the whole file and restarting.
-    @retry(retry_with_count(log_upload_failures_on_error))
-    def upload_chunk(chunk, block_id):
-        if isinstance(chunk, str):
-            chunk = chunk.encode('utf-8')
-        check_sum = base64.b64encode(md5(chunk).digest()).decode('utf-8')
-        conn.put_block(url_tup.netloc, url_tup.path.lstrip('/'), chunk,
-                       block_id, content_md5=check_sum)
-
     url_tup = urlparse(uri)
-    kwargs = dict(x_ms_blob_type='BlockBlob')
-    if content_type is not None:
-        kwargs['x_ms_blob_content_type'] = content_type
+    kwargs = dict(
+        content_settings=ContentSettings(content_type),
+        validate_content=True)
 
-    conn = BlobService(
-        creds.account_name, creds.account_key,
-        sas_token=creds.access_token, protocol='https')
-    conn.put_blob(url_tup.netloc, url_tup.path.lstrip('/'), b'', **kwargs)
-
-    # WABS requires large files to be uploaded in 4MB chunks
-    block_ids = []
-    length, index = 0, 0
-    pool_size = os.getenv('WABS_UPLOAD_POOL_SIZE', 5)
-    p = gevent.pool.Pool(size=pool_size)
-    while True:
-        data = fp.read(WABS_CHUNK_SIZE)
-        if data:
-            length += len(data)
-            block_id = base64.b64encode(
-                str(index).encode('utf-8')).decode('utf-8')
-            p.wait_available()
-            p.spawn(upload_chunk, data, block_id)
-            block_ids.append(block_id)
-            index += 1
-        else:
-            p.join()
-            break
-
-    conn.put_block_list(url_tup.netloc, url_tup.path.lstrip('/'), block_ids)
+    conn = BlockBlobService(creds.account_name, creds.account_key,
+                sas_token=creds.access_token, protocol='https')
+    conn.create_blob_from_bytes(url_tup.netloc, url_tup.path.lstrip('/'),
+                fp.read(), **kwargs)
 
     # To maintain consistency with the S3 version of this function we must
     # return an object with a certain set of attributes.  Currently, that set
     # of attributes consists of only 'size'
-    return _Key(size=len(data))
+    return _Key(size=fp.tell())
 
 
 def uri_get_file(creds, uri, conn=None):
@@ -126,47 +90,12 @@ def uri_get_file(creds, uri, conn=None):
     url_tup = urlparse(uri)
 
     if conn is None:
-        conn = BlobService(creds.account_name, creds.account_key,
+        conn = BlockBlobService(creds.account_name, creds.account_key,
                            sas_token=creds.access_token, protocol='https')
 
-    # Determin the size of the target blob
-    props = conn.get_blob_properties(url_tup.netloc, url_tup.path.lstrip('/'))
-    blob_size = int(props['content-length'])
-
-    ret_size = 0
     data = io.BytesIO()
-    # WABS requires large files to be downloaded in 4MB chunks
-    while ret_size < blob_size:
-        ms_range = 'bytes={0}-{1}'.format(ret_size,
-                                          ret_size + WABS_CHUNK_SIZE - 1)
-        while True:
-            # Because we're downloading in chunks, catch rate limiting and
-            # connection errors here instead of letting them bubble up to the
-            # @retry decorator so that we don't have to start downloading the
-            # whole file over again.
-            try:
-                part = conn.get_blob(url_tup.netloc,
-                                     url_tup.path.lstrip('/'),
-                                     x_ms_range=ms_range)
-            except EnvironmentError as e:
-                if e.errno in (errno.EBUSY, errno.ECONNRESET):
-                    logger.warning(
-                        msg="retrying after encountering exception",
-                        detail=("Exception traceback:\n{0}".format(
-                            traceback.format_exception(*sys.exc_info()))),
-                        hint="")
-                    gevent.sleep(30)
-                else:
-                    raise
-            else:
-                break
-        length = len(part)
-        ret_size += length
-        data.write(part)
-        if length > 0 and length < WABS_CHUNK_SIZE:
-            break
-        elif length == 0:
-            break
+
+    conn.get_blob_to_stream(url_tup.netloc, url_tup.path.lstrip('/'), data)
 
     return data.getvalue()
 
@@ -182,7 +111,7 @@ def do_lzop_get(creds, url, path, decrypt, do_retry=True):
     assert url.endswith('.lzo'), 'Expect an lzop-compressed file'
     assert url.startswith('wabs://')
 
-    conn = BlobService(
+    conn = BlockBlobService(
         creds.account_name, creds.account_key,
         sas_token=creds.access_token, protocol='https')
 

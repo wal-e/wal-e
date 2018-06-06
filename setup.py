@@ -35,7 +35,7 @@ setup(
     install_requires=['gevent>=1.1.1'],
     extras_require={
         'aws': ['boto>=2.40.0'],
-        'azure': ['azure>=1.0.3'],
+        'azure': ['azure==3.0.0'],
         'google': ['google-cloud-storage>=1.4.0'],
         'swift': ['python-swiftclient>=3.0.0',
                   'python-keystoneclient>=3.0.0']
