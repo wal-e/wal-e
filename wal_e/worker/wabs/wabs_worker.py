@@ -34,7 +34,7 @@ class TarPartitionLister(object):
 
         blob_list = wabs.list_blob(self.wabs_conn, self.layout.store_name(),
                                    prefix=prefix)
-        for blob in blob_list.blobs:
+        for blob in blob_list:
             url = 'wabs://{container}/{name}'.format(
                 container=self.layout.store_name(), name=blob.name)
             name_last_part = blob.name.rsplit('/', 1)[-1]
