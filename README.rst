@@ -261,6 +261,10 @@ By default ``backup-push`` will include all user defined tablespaces in
 the database backup. please see the ``backup-fetch`` section below for
 WAL-E's tablespace restoration behavior.
 
+Use ``'--pg-basebackup-args=user,host,directory``` if you have to run
+WAL-E backups from standby server. This will call ``pg_basebackup`` from master,
+instead of running backup as a stored procedure on standby, which is not allowed.
+
 backup-fetch
 ''''''''''''
 
