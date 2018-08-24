@@ -216,7 +216,7 @@ class Backup(object):
                             'but we have to wait anyway.  '
                             'See README: TODO about pg_cancel_backup'))
 
-            if not while_offline :
+            if not while_offline and not pg_basebackup_access:
                 stop_backup_info = PgBackupStatements.run_stop_backup()
             else:
                 stop_backup_info = start_backup_info
