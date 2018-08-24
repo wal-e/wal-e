@@ -282,10 +282,8 @@ def build_parser():
     backup_push_parser.add_argument(
         '--pg-basebackup-args',
         help=('Experimental: '
-              'Overrides default base backup behaviour with a call to pg_basebackup.'
-              'Specified as <user>,<host>'  
-              'This can be used when performing base backups from standby replica, '
-              'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to'
+              'Overrides default base backup behaviour with a call to pg_basebackup. This can be used when performing base backups from standby replica, '
+              'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to '
               'some other location, where base backup will be made, and not the standby server\'s data.'),
         dest='pg_basebackup_args',
         type=str,
@@ -655,7 +653,9 @@ def main():
                 args.PG_CLUSTER_DIRECTORY,
                 rate_limit=rate_limit,
                 while_offline=while_offline,
-                pool_size=args.pool_size)
+                pool_size=args.pool_size,
+                pg_basebackup_args=args.pg_basebackup_args)
+
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])
             res = backup_cxt.wal_restore(args.WAL_SEGMENT,

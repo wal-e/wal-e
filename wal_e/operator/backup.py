@@ -170,6 +170,8 @@ class Backup(object):
         while_offline = False
         start_backup_info = None
 
+        print("backup:" + kwargs)
+
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
 
