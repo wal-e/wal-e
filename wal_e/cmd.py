@@ -279,6 +279,15 @@ def build_parser():
         dest='while_offline',
         action='store_true',
         default=False)
+    backup_push_parser.add_argument(
+        '--pg-basebackup-args',
+        help=('Override default base backup behaviour with a call to pg_basebackup.'
+              'Specified as <user>,<host>,<directory>'  
+              'This can be used when performing base backups from standby replica, '
+              'to fetch these backups from master.'),
+        dest='pg_basebackup_args',
+        action='store_true',
+        default=None)
 
     # wal-push operator section
     wal_push_parser = subparsers.add_parser(

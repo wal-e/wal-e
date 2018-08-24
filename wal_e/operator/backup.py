@@ -169,11 +169,23 @@ class Backup(object):
         backup_stop_good = False
         while_offline = False
         start_backup_info = None
+
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
 
+        if 'pg_basebackup_args' in kwargs:
+            pg_basebackup_args = kwargs.pop('pg_basebackup_args')
+
         try:
-            if not while_offline:
+            if pg_basebackup_args:
+                host, user, archive_directory = pg_basebackup_args.split()
+                PgBackupStatements.run_pg_basebackup(host, user, archive_directory)
+                ctrl_data = PgControlDataParser(directory)
+                start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
+                version = ctrl_data.pg_version()
+                directory = archive_directory
+
+            elif not while_offline:
                 start_backup_info = PgBackupStatements.run_start_backup()
                 version = PgBackupStatements.pg_version()['version']
             else:
@@ -191,6 +203,7 @@ class Backup(object):
                 ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
+                directory = data_directory
 
             ret_tuple = self._upload_pg_cluster_dir(
                 start_backup_info, data_directory, version=version, *args,
@@ -205,7 +218,7 @@ class Backup(object):
                             'but we have to wait anyway.  '
                             'See README: TODO about pg_cancel_backup'))
 
-            if not while_offline:
+            if not while_offline :
                 stop_backup_info = PgBackupStatements.run_stop_backup()
             else:
                 stop_backup_info = start_backup_info

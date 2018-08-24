@@ -8,7 +8,7 @@ from wal_e.piper import popen_nonblock
 from wal_e.exception import UserException
 
 PSQL_BIN = 'psql'
-
+PG_BASEBACKUP_BIN = 'pg_basebackup'
 
 class UTC(datetime.tzinfo):
     """
@@ -104,6 +104,38 @@ class PgBackupStatements(object):
             else:
                 cls._WAL_NAME = 'xlog'
         return cls._WAL_NAME
+
+    def run_pg_basebackup(cls, host, user, archive_directory):
+
+        def handler(popen):
+            assert popen.returncode != 0
+            raise UserException('Could not start pg_basebackup')
+
+
+        psql_proc = popen_nonblock([PG_BASEBACKUP_BIN,
+                                    '--write-recovery-conf',
+                                    '--format=plain',
+                                    '-D', archive_directory,
+                                    '--host', host,
+                                    '--username', user,
+                                    '--xlog-method=stream'],
+                               stdout=PIPE,
+                               env=new_env)
+        if psql_proc.returncode != 0:
+            if error_handler is not None:
+                error_handler(psql_proc)
+            else:
+                assert error_handler is None
+                raise UserException(
+                    'could not csv-execute a query successfully via psql',
+                    'Query was "{query}".'.format(sql_command),
+                    'You may have to set some libpq environment '
+                    'variables if you are sure the server is running.')
+
+        # Previous code must raise any desired exceptions for non-zero
+        # exit codes
+        assert psql_proc.returncode == 0
+        return
 
     @classmethod
     def run_start_backup(cls):
