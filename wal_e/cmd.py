@@ -288,8 +288,8 @@ def build_parser():
               'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to'
               'some other location, where base backup will be made, and not the standby server\'s data.'),
         dest='pg_basebackup_args',
+        type=str,
         metavar='USER,HOST',
-        action='store_true',
         default=None)
 
     # wal-push operator section
