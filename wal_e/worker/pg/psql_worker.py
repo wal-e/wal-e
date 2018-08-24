@@ -105,12 +105,8 @@ class PgBackupStatements(object):
                 cls._WAL_NAME = 'xlog'
         return cls._WAL_NAME
 
+    @classmethod
     def run_pg_basebackup(cls, host, user, archive_directory):
-
-        def handler(popen):
-            assert popen.returncode != 0
-            raise UserException('Could not start pg_basebackup')
-
 
         psql_proc = popen_nonblock([PG_BASEBACKUP_BIN,
                                     '--write-recovery-conf',
@@ -119,21 +115,11 @@ class PgBackupStatements(object):
                                     '--host', host,
                                     '--username', user,
                                     '--xlog-method=stream'],
-                               stdout=PIPE,
-                               env=new_env)
+                               stdout=PIPE)
+        stdout = psql_proc.communicate()[0].decode('utf-8')
         if psql_proc.returncode != 0:
-            if error_handler is not None:
-                error_handler(psql_proc)
-            else:
-                assert error_handler is None
-                raise UserException(
-                    'could not csv-execute a query successfully via psql',
-                    'Query was "{query}".'.format(sql_command),
-                    'You may have to set some libpq environment '
-                    'variables if you are sure the server is running.')
+            raise UserException("Could not run pg_base_backup: {stdout}".format(stdout) )
 
-        # Previous code must raise any desired exceptions for non-zero
-        # exit codes
         assert psql_proc.returncode == 0
         return
 
