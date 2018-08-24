@@ -180,7 +180,7 @@ class Backup(object):
             if pg_basebackup_args:
                 host, user, archive_directory = pg_basebackup_args.split()
                 PgBackupStatements.run_pg_basebackup(host, user, archive_directory)
-                ctrl_data = PgControlDataParser(directory)
+                ctrl_data = PgControlDataParser(archive_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
                 directory = archive_directory
