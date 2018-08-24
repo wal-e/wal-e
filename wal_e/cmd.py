@@ -280,14 +280,14 @@ def build_parser():
         action='store_true',
         default=False)
     backup_push_parser.add_argument(
-        '--pg-basebackup-args',
+        '--pg-basebackup-access',
         help=('Experimental: '
               'Overrides default base backup behaviour with a call to pg_basebackup. This can be used when performing base backups from standby replica, '
               'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to '
               'some other location, where base backup will be made, and not the standby server\'s data.'),
-        dest='pg_basebackup_args',
+        dest='pg_basebackup_access',
         type=str,
-        metavar='USER,HOST',
+        metavar='USER@HOST',
         default=None)
 
     # wal-push operator section
@@ -654,7 +654,7 @@ def main():
                 rate_limit=rate_limit,
                 while_offline=while_offline,
                 pool_size=args.pool_size,
-                pg_basebackup_args=args.pg_basebackup_args)
+                pg_basebackup_access=args.pg_basebackup_access)
 
         elif subcommand == 'wal-fetch':
             external_program_check([LZOP_BIN])

@@ -106,7 +106,7 @@ class PgBackupStatements(object):
         return cls._WAL_NAME
 
     @classmethod
-    def run_pg_basebackup(cls, host, user, archive_directory):
+    def run_pg_basebackup(cls, user, host, archive_directory):
 
         psql_proc = popen_nonblock([PG_BASEBACKUP_BIN,
                                     '--write-recovery-conf',
@@ -118,7 +118,7 @@ class PgBackupStatements(object):
                                stdout=PIPE)
         stdout = psql_proc.communicate()[0].decode('utf-8')
         if psql_proc.returncode != 0:
-            raise UserException("Could not run pg_base_backup: {stdout}".format(stdout) )
+            raise UserException("Could not run pg_basebackup: {stdout}".format(stdout) )
 
         assert psql_proc.returncode == 0
         return

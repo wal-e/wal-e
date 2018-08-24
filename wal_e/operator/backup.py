@@ -173,13 +173,13 @@ class Backup(object):
         if 'while_offline' in kwargs:
             while_offline = kwargs.pop('while_offline')
 
-        if 'pg_basebackup_args' in kwargs:
-            pg_basebackup_args = kwargs.pop('pg_basebackup_args')
+        if 'pg_basebackup_access' in kwargs:
+            pg_basebackup_access = kwargs.pop('pg_basebackup_access')
 
         try:
-            if pg_basebackup_args:
-                host, user = pg_basebackup_args.split(",")
-                PgBackupStatements.run_pg_basebackup(host, user, data_directory)
+            if pg_basebackup_access:
+                user, host = pg_basebackup_access.split("@")
+                PgBackupStatements.run_pg_basebackup(user, host, data_directory)
                 ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
