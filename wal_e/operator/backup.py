@@ -178,12 +178,11 @@ class Backup(object):
 
         try:
             if pg_basebackup_args:
-                host, user, archive_directory = pg_basebackup_args.split()
-                PgBackupStatements.run_pg_basebackup(host, user, archive_directory)
-                ctrl_data = PgControlDataParser(archive_directory)
+                host, user = pg_basebackup_args.split(",")
+                PgBackupStatements.run_pg_basebackup(host, user, data_directory)
+                ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
-                directory = archive_directory
 
             elif not while_offline:
                 start_backup_info = PgBackupStatements.run_start_backup()
@@ -203,7 +202,6 @@ class Backup(object):
                 ctrl_data = PgControlDataParser(data_directory)
                 start_backup_info = ctrl_data.last_xlog_file_name_and_offset()
                 version = ctrl_data.pg_version()
-                directory = data_directory
 
             ret_tuple = self._upload_pg_cluster_dir(
                 start_backup_info, data_directory, version=version, *args,

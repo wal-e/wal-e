@@ -281,11 +281,13 @@ def build_parser():
         default=False)
     backup_push_parser.add_argument(
         '--pg-basebackup-args',
-        help=('Override default base backup behaviour with a call to pg_basebackup.'
-              'Specified as <user>,<host>,<directory>'  
+        help=('Experimental: '
+              'Overrides default base backup behaviour with a call to pg_basebackup.'
+              'Specified as <user>,<host>'  
               'This can be used when performing base backups from standby replica, '
-              'to fetch these backups from master.'),
-        dest='pg_basebackup_args',
+              'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to'
+              'some other location, where base backup will be made, and not the standby server's data.'),
+        dest='p g_basebackup_args',
         action='store_true',
         default=None)
 
