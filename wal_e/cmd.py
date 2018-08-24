@@ -287,7 +287,8 @@ def build_parser():
               'This can be used when performing base backups from standby replica, '
               'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY argument in this case must point to'
               'some other location, where base backup will be made, and not the standby server\'s data.'),
-        dest='p g_basebackup_args',
+        dest='pg_basebackup_args',
+        metavar='USER,HOST',
         action='store_true',
         default=None)
 
