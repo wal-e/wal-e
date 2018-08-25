@@ -118,7 +118,7 @@ class PgBackupStatements(object):
                                stdout=PIPE)
         stdout = psql_proc.communicate()[0].decode('utf-8')
         if psql_proc.returncode != 0:
-            raise UserException("Could not run pg_basebackup: {stdout}".format(stdout) )
+            raise UserException("Could not run pg_basebackup: {stdout}".format(stdout=stdout))
 
         assert psql_proc.returncode == 0
         return
