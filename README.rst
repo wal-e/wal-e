@@ -261,9 +261,25 @@ By default ``backup-push`` will include all user defined tablespaces in
 the database backup. please see the ``backup-fetch`` section below for
 WAL-E's tablespace restoration behavior.
 
-Use ``'--pg-basebackup-args=user,host,directory``` if you have to run
-WAL-E backups from standby server. This will call ``pg_basebackup`` from master,
-instead of running backup as a stored procedure on standby, which is not allowed.
+.. Experimental hybrid backup::
+
+  To operate WAL-E backups completely from a standby node (slave in recovery), there is
+  an experimental support of 'hybrid' backup mode.
+  Instead of using ``pg_start_backup()`` calls (not allowed on slave in recovery mode),
+  WAL-E will use ``pg_basebackup`` utility, as replication user.
+  When ``backup-push`` is called, WAL-E will connect to master server, store backup locally
+  and then push it to BLOB storage.
+  It will also store all WALs created during base backup into the base backup image as
+  well, using  ``--xlog-method=stream``.
+  To use this mode, specify ``--pg-basebackup-access=user@host`` argument ``backup-push``
+  command.
+  Instead of PG_CLUSTER_DIRECTORY, specify local directory where base backup will be stored.
+
+  Full example::
+
+    $ envdir /etc/wal-e.d/env wal-e backup-push \
+    --pg-basebackup-access=replication@master-db-host \
+    /data/backup/pg_basebackup/pg_basebackup.`date '+%Y%m%d'`"
 
 backup-fetch
 ''''''''''''
