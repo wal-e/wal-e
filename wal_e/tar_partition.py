@@ -55,13 +55,34 @@ from wal_e.exception import UserException
 
 logger = log_help.WalELogger(__name__)
 
-PG_CONF = ('postgresql.conf',
-           'pg_hba.conf',
-           'recovery.conf',
-           'recovery.done',
-           'pg_ident.conf',
-           'promote')
+IGNORE_FILES_DIRECT_BACKUP = ('postgresql.conf',
+                              'pg_hba.conf',
+                              'recovery.conf',
+                              'recovery.done',
+                              'pg_ident.conf',
+                              'promote')
 
+IGNORE_DIRECTORIES_DIRECT_BACKUP = ['pg_xlog',
+                                    'pg_log',
+                                    'pg_replslot',
+                                    'pg_wal']
+
+IGNORE_FILES_HYBRID_BACKUP = ('postgresql.conf',
+                              'pg_hba.conf',
+                              'recovery.done',
+                              'pg_ident.conf',
+                              'promote')
+
+IGNORE_DIRECTORIES_HYBRID_BACKUP = ['pg_log',
+                                    'pg_replslot',
+                                    'pg_wal']
+
+
+def _determine_ignored(hybrid_backup):
+    if hybrid_backup:
+        return IGNORE_FILES_HYBRID_BACKUP, IGNORE_DIRECTORIES_HYBRID_BACKUP
+    else:
+        return IGNORE_FILES_DIRECT_BACKUP, IGNORE_DIRECTORIES_DIRECT_BACKUP
 
 class StreamPadFileObj(object):
     """
@@ -244,7 +265,7 @@ class TarPartition(list):
 
         except EnvironmentError as e:
             if (e.errno == errno.ENOENT and
-                e.filename == et_info.submitted_path):
+                    e.filename == et_info.submitted_path):
                 # log a NOTICE/INFO that the file was unlinked.
                 # Ostensibly harmless (such unlinks should be replayed
                 # in the WAL) but good to know.
@@ -393,7 +414,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
 
             except EnvironmentError as e:
                 if (e.errno == errno.ENOENT and
-                    e.filename == file_path):
+                        e.filename == file_path):
                     # log a NOTICE/INFO that the file was unlinked.
                     # Ostensibly harmless (such unlinks should be replayed
                     # in the WAL) but good to know.
@@ -412,7 +433,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     et_info.tarinfo.size)
 
             if (partition_bytes + et_info.tarinfo.size >= max_partition_size
-                or partition_members >= PARTITION_MAX_MEMBERS):
+                    or partition_members >= PARTITION_MAX_MEMBERS):
                 # Partition is full and cannot accept another member,
                 # so yield the complete one to the caller.
                 yield partition
@@ -450,9 +471,10 @@ def do_not_descend(root, name, dirnames, matches):
         matches.append(os.path.join(root, name))
 
 
-def partition(pg_cluster_dir):
+def partition(pg_cluster_dir, hybrid_backup):
     def raise_walk_error(e):
         raise e
+
     if not pg_cluster_dir.endswith(os.path.sep):
         pg_cluster_dir += os.path.sep
 
@@ -462,6 +484,8 @@ def partition(pg_cluster_dir):
     # Maintain a manifest of archived files. Tra
     spec = {'base_prefix': pg_cluster_dir,
             'tablespaces': []}
+
+    (IGNORE_FILES, IGNORE_DIRECTORIES) = _determine_ignored(hybrid_backup)
 
     walker = os.walk(pg_cluster_dir, onerror=raise_walk_error)
     for root, dirnames, filenames in walker:
@@ -474,7 +498,7 @@ def partition(pg_cluster_dir):
         matches.append(root)
 
         if is_cluster_toplevel:
-            for name in ['pg_xlog', 'pg_log', 'pg_replslot', 'pg_wal']:
+            for name in IGNORE_DIRECTORIES:
                 do_not_descend(root, name, dirnames, matches)
 
         # Do not capture any TEMP Space files, although we do want to capture
@@ -500,7 +524,7 @@ def partition(pg_cluster_dir):
                 # Do not include the postmaster pid file or the
                 # configuration file in the backup.
                 pass
-            elif is_cluster_toplevel and filename in PG_CONF:
+            elif is_cluster_toplevel and filename in IGNORE_FILES:
                 # Do not include config files in the backup
                 pass
             else:
