@@ -10,6 +10,7 @@ from wal_e.exception import UserException
 PSQL_BIN = 'psql'
 PG_BASEBACKUP_BIN = 'pg_basebackup'
 
+
 class UTC(datetime.tzinfo):
     """
     UTC timezone
@@ -118,7 +119,8 @@ class PgBackupStatements(object):
                                stdout=PIPE)
         stdout = psql_proc.communicate()[0].decode('utf-8')
         if psql_proc.returncode != 0:
-            raise UserException("Could not run pg_basebackup: {stdout}".format(stdout=stdout))
+            raise UserException("Could not run pg_basebackup: {stdout}"
+                                .format(stdout=stdout))
 
         assert psql_proc.returncode == 0
         return
