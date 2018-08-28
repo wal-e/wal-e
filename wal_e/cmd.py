@@ -282,10 +282,11 @@ def build_parser():
     backup_push_parser.add_argument(
         '--pg-basebackup-access',
         help=('Experimental: '
-              'Overrides default base backup behaviour with a call to pg_basebackup. '
-              'This can be used when performing base backups from standby replica, '
-              'to fetch these backups from master. Note that PG_CLUSTER_DIRECTORY '
-              'argument in this case must point to some other location, where base backup '
+              'Overrides default base backup behaviour with a call to '
+              'pg_basebackup. This can be used when performing base '
+              'backups from standby replica, to fetch these backups from '
+              'master. Note that PG_CLUSTER_DIRECTORY argument in this case '
+              'must point to some other location, where base backup '
               'will be made, and not the standby server\'s data.'),
         dest='pg_basebackup_access',
         type=str,
