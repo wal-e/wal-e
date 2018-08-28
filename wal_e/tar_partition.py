@@ -55,6 +55,15 @@ from wal_e.exception import UserException
 
 logger = log_help.WalELogger(__name__)
 
+#
+# DIRECT backup is performed from the actual PG_CLUSTER_DIRECTORY
+#
+# HYBRID backup is initiated from a standby/slave server, but takes data from master
+# into a fresh directory using pg_basebackup call with --host parameter
+# there can be pg_xlog entries created during that process, so they have to be taken
+# into base backup tar file
+#
+
 IGNORE_FILES_DIRECT_BACKUP = ('postgresql.conf',
                               'pg_hba.conf',
                               'recovery.conf',
@@ -471,7 +480,7 @@ def do_not_descend(root, name, dirnames, matches):
         matches.append(os.path.join(root, name))
 
 
-def partition(pg_cluster_dir, hybrid_backup):
+def partition(pg_cluster_dir, hybrid_backup=False):
     def raise_walk_error(e):
         raise e
 
