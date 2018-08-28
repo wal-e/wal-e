@@ -58,10 +58,10 @@ logger = log_help.WalELogger(__name__)
 #
 # DIRECT backup is performed from the actual PG_CLUSTER_DIRECTORY
 #
-# HYBRID backup is initiated from a standby/slave server, but takes data from master
-# into a fresh directory using pg_basebackup call with --host parameter
-# there can be pg_xlog entries created during that process, so they have to be taken
-# into base backup tar file
+# HYBRID backup is initiated from a standby/slave server, but takes data
+# from master into a fresh directory using pg_basebackup call with --host
+# parameter there can be pg_xlog entries created during that process, so
+# they have to be taken into base backup tar file
 #
 
 IGNORE_FILES_DIRECT_BACKUP = ('postgresql.conf',
@@ -92,6 +92,7 @@ def _determine_ignored(hybrid_backup):
         return IGNORE_FILES_HYBRID_BACKUP, IGNORE_DIRECTORIES_HYBRID_BACKUP
     else:
         return IGNORE_FILES_DIRECT_BACKUP, IGNORE_DIRECTORIES_DIRECT_BACKUP
+
 
 class StreamPadFileObj(object):
     """
