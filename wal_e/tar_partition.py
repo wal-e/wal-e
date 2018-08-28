@@ -265,7 +265,7 @@ class TarPartition(list):
 
         except EnvironmentError as e:
             if (e.errno == errno.ENOENT and
-                    e.filename == et_info.submitted_path):
+                e.filename == et_info.submitted_path):
                 # log a NOTICE/INFO that the file was unlinked.
                 # Ostensibly harmless (such unlinks should be replayed
                 # in the WAL) but good to know.
@@ -414,7 +414,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
 
             except EnvironmentError as e:
                 if (e.errno == errno.ENOENT and
-                        e.filename == file_path):
+                    e.filename == file_path):
                     # log a NOTICE/INFO that the file was unlinked.
                     # Ostensibly harmless (such unlinks should be replayed
                     # in the WAL) but good to know.
@@ -433,7 +433,7 @@ def _segmentation_guts(root, file_paths, max_partition_size):
                     et_info.tarinfo.size)
 
             if (partition_bytes + et_info.tarinfo.size >= max_partition_size
-                    or partition_members >= PARTITION_MAX_MEMBERS):
+                or partition_members >= PARTITION_MAX_MEMBERS):
                 # Partition is full and cannot accept another member,
                 # so yield the complete one to the caller.
                 yield partition
