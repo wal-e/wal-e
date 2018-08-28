@@ -184,18 +184,21 @@ class Backup(object):
             else:
                 if pg_basebackup_access and not while_offline:
                     user, host = pg_basebackup_access.split("@")
-                    PgBackupStatements.run_pg_basebackup(user, host, data_directory)
+                    PgBackupStatements.run_pg_basebackup(user, host,
+                                                         data_directory)
                     hybrid_backup = True
                 else:
                     if os.path.exists(os.path.join(data_directory,
                                                    'postmaster.pid')):
                         hint = ('Shut down postgres.  '
                                 'If there is a stale lockfile, '
-                                'then remove it after being very sure postgres '
-                                'is not running.')
+                                'then remove it after being '
+                                'very sure postgres is not running.')
                         raise UserException(
-                            msg='while_offline set, but pg looks to be running',
-                            detail='Found a postmaster.pid lockfile, and aborting',
+                            msg='while_offline set, but pg '
+                                'looks to be running',
+                            detail='Found a postmaster.pid '
+                                   'lockfile, and aborting',
                             hint=hint)
 
                 ctrl_data = PgControlDataParser(data_directory)
@@ -439,7 +442,8 @@ class Backup(object):
         return bl
 
     def _upload_pg_cluster_dir(self, start_backup_info, pg_cluster_dir,
-                               version, pool_size, rate_limit=None, hybrid_backup = False):
+                               version, pool_size, rate_limit=None,
+                               hybrid_backup=False):
         """
         Upload to url_prefix from pg_cluster_dir
 
