@@ -37,7 +37,7 @@ class TarPartitionLister(object):
             self.backup_info)
 
         bucket = get_bucket(self.gs_conn, self.layout.store_name())
-        for key in bucket.list_blobs(prefix='/' + prefix):
+        for key in bucket.list_blobs(prefix=prefix):
             url = 'gs://{bucket}/{name}'.format(bucket=key.bucket.name,
                                                 name=key.name)
             key_last_part = key.name.rsplit('/', 1)[-1]
@@ -72,7 +72,7 @@ class BackupFetcher(object):
             .format(partition_name),
             hint='The absolute GCS object is {0}.'.format(part_abs_name))
 
-        blob = self.bucket.get_blob('/' + part_abs_name)
+        blob = self.bucket.get_blob(part_abs_name)
         with get_download_pipeline(PIPE, PIPE, self.decrypt) as pl:
             g = gevent.spawn(gs.write_and_return_error, blob, pl.stdin)
             TarPartition.tarfile_extract(pl.stdout, self.local_root)
@@ -90,7 +90,7 @@ class BackupList(_BackupList):
 
     def _backup_list(self, prefix):
         bucket = get_bucket(self.conn, self.layout.store_name())
-        return bucket.list_blobs(prefix='/' + prefix)
+        return bucket.list_blobs(prefix=prefix)
 
 
 class DeleteFromContext(_DeleteFromContext):
@@ -108,4 +108,4 @@ class DeleteFromContext(_DeleteFromContext):
 
     def _backup_list(self, prefix):
         bucket = get_bucket(self.conn, self.layout.store_name())
-        return bucket.list_blobs(prefix='/' + prefix)
+        return bucket.list_blobs(prefix=prefix)
