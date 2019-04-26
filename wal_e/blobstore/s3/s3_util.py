@@ -54,7 +54,8 @@ def uri_put_file(creds, uri, fp, content_type=None, conn=None):
     if content_type is not None:
         k.content_type = content_type
 
-    k.set_contents_from_file(fp, encrypt_key=True)
+    storage_class = os.getenv('WALE_S3_STORAGE_CLASS', 'STANDARD')
+    k.set_contents_from_file(fp, encrypt_key=True,  headers=storage_class)
     return k
 
 

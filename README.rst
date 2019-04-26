@@ -71,6 +71,8 @@ AWS S3 and Work-alikes
 Optional:
 
 * WALE_S3_ENDPOINT: See `Manually specifying the S3 Endpoint`_
+* WALE_S3_STORAGE_CLASS: One of: STANDARD (default), REDUCED_REDUNDANCY,
+  GLACIER, STANDARD_IA, ONEZONE_IA, INTELLIGENT_TIERING, DEEP_ARCHIVE
 * AWS_SECURITY_TOKEN: When using AWS STS
 * Pass ``--aws-instance-profile`` to gather credentials from the
   Instance Profile.  See `Using AWS IAM Instance Profiles`.
