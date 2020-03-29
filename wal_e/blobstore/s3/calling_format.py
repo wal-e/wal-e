@@ -20,6 +20,7 @@ _S3_REGIONS = {
     'ca-central-1': 's3.ca-central-1.amazonaws.com',
     'cn-north-1': 's3.cn-north-1.amazonaws.com.cn',
     'cn-northwest-1': 's3.cn-northwest-1.amazonaws.com.cn',
+    'eu-north-1': 's3.eu-north-1.amazonaws.com',
     'eu-central-1': 's3.eu-central-1.amazonaws.com',
     'eu-west-1': 's3.eu-west-1.amazonaws.com',
     'eu-west-2': 's3.eu-west-2.amazonaws.com',
