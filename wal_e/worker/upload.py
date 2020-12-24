@@ -28,7 +28,7 @@ class WalUploader(object):
         self.blobstore = get_blobstore(layout)
 
     def __call__(self, segment):
-        # TODO :: Move arbitray path construction to StorageLayout Object
+        # TODO :: Move arbitrary path construction to StorageLayout Object
         url = '{0}/wal_{1}/{2}.lzo'.format(self.layout.prefix.rstrip('/'),
                                            storage.CURRENT_VERSION,
                                            segment.name)
@@ -98,7 +98,7 @@ class PartitionUploader(object):
 
             tf.flush()
 
-            # TODO :: Move arbitray path construction to StorageLayout Object
+            # TODO :: Move arbitrary path construction to StorageLayout Object
             url = '{0}/tar_partitions/part_{number:08d}.tar.lzo'.format(
                 self.backup_prefix.rstrip('/'), number=tpart.name)
 
