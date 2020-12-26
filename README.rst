@@ -657,6 +657,10 @@ Example::
 
   # As seen when using Deis, which uses radosgw.
   WALE_S3_ENDPOINT=http+path://deis-store-gateway:8888
+  
+Some S3-compatible providers doesn't fully support `Server-Side Encryption`_. In this case you can disable encryption by setting ``WALE_S3_SSE`` environment variable to ``False|false|0``.
+
+.. _Server-Side Encryption: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingServerSideEncryption.html
 
 Development
 -----------

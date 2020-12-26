@@ -3,6 +3,7 @@ import gevent
 import os
 import socket
 import traceback
+from distutils.util import strtobool
 
 import boto
 
@@ -54,7 +55,8 @@ def uri_put_file(creds, uri, fp, content_type=None, conn=None):
     if content_type is not None:
         k.content_type = content_type
 
-    k.set_contents_from_file(fp, encrypt_key=True)
+    sse = os.getenv('WALE_S3_SSE', default='True')
+    k.set_contents_from_file(fp, encrypt_key=strtobool(sse))
     return k
 
 
