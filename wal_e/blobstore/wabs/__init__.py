@@ -7,7 +7,6 @@ except ImportError:
         msg='wabs support requires module "azure"',
         hint='Try running "pip install azure".')
 
-from wal_e.blobstore.wabs.shim import BlobService
 from wal_e.blobstore.wabs.wabs_credentials import Credentials
 from wal_e.blobstore.wabs.wabs_util import do_lzop_get
 from wal_e.blobstore.wabs.wabs_util import uri_get_file
@@ -16,7 +15,6 @@ from wal_e.blobstore.wabs.wabs_util import write_and_return_error
 from wal_e.blobstore.wabs.wabs_util import list_blob
 
 __all__ = [
-    'BlobService',
     'Credentials',
     'do_lzop_get',
     'uri_get_file',

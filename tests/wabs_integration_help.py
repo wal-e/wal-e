@@ -1,6 +1,6 @@
 import os
 
-from wal_e.blobstore.wabs import BlobService
+from azure.storage.blob.blockblobservice import BlockBlobService
 from wal_e.cmd import parse_boolean_envvar
 
 
@@ -21,7 +21,7 @@ def no_real_wabs_credentials():
 
 
 def apathetic_container_delete(container_name, *args, **kwargs):
-    conn = BlobService(*args, **kwargs)
+    conn = BlockBlobService(*args, **kwargs)
     conn.delete_container(container_name)
 
     return conn

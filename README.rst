@@ -138,7 +138,7 @@ will attempt to resolve them:
 
 * gevent>=1.1.1
 * boto>=2.40.0
-* azure>=1.0.3
+* azure==3.0.0
 * google-cloud-storage>=1.4.0
 * python-swiftclient>=3.0.0
 * python-keystoneclient>=3.0.0
@@ -608,8 +608,10 @@ One can instruct WAL-E to pool WAL segments together and send them in
 groups by passing the ``--pool-size`` parameter to ``wal-push``.  This
 can increase throughput significantly.
 
-As of version 0.7.x, ``--pool-size`` defaults to 8.
+As of version 1.x, ``--pool-size`` defaults to 32.
 
+Note: You can also use this parameter when calling ``backup-fetch``
+and ``backup-push`` (it defaults to 4).
 
 Using AWS IAM Instance Profiles
 '''''''''''''''''''''''''''''''
