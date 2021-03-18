@@ -55,7 +55,8 @@ def uri_put_file(creds, uri, fp, content_type=None, conn=None):
         k.content_type = content_type
 
     storage_class = os.getenv('WALE_S3_STORAGE_CLASS', 'STANDARD')
-    k.set_contents_from_file(fp, encrypt_key=True,  headers=storage_class)
+    k.set_contents_from_file(fp, encrypt_key=True,
+                             headers={"x-amz-storage-class": storage_class})
     return k
 
 
