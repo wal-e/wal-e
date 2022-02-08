@@ -7,12 +7,34 @@ Continuous archiving for Postgres
 WAL-E is a program designed to perform continuous archiving of
 PostgreSQL WAL files and base backups.
 
+Obsolescence Notice
+-------------------
+
+WAL-E is obsolete. Though it has been used recently, nobody routinely
+reviews patches or fixes regressions that are occasionally introduced
+by changing libraries and Python versions.  It is also not fast as
+more modern archivers.
+
+Some alternatives for you to consider:
+
+`WAL-G <https://github.com/wal-g/wal-g>`_ is one alternative that uses
+a similar model as WAL-E, but is also a much more expansive piece of
+software, supporting many databases and compression formats.  WAL-G
+has the capability to read, but not write, WAL-E archives.  Like
+WAL-E, it is piece of software that tends to be developed from the
+cloud service provider set of priorities.
+
+`pgBackRest <https://pgbackrest.org>`_ has a more traditional model
+(by standards of Postgres archives predating cloud blob storage) and a
+narrower focus on Postgres.  In general, it makes more concessions to
+and implements more polished features for what independent system
+operators might encounter.
+
 To correspond on using WAL-E or to collaborate on its development, do
 not hesitate to send mail to the mailing list at
 wal-e@googlegroups.com (`archives and subscription settings`_).
 Github issues are also currently being used to track known problems,
 so please feel free to submit those.
-
 
 .. contents:: Table of Contents
 
