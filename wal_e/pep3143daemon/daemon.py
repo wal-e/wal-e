@@ -373,11 +373,11 @@ def parent_is_inet():
     :return: bool
     """
     result = False
-    sock = socket.fromfd(
-        sys.__stdin__.fileno(),
-        socket.AF_INET,
-        socket.SOCK_RAW)
     try:
+        sock = socket.fromfd(
+            sys.__stdin__.fileno(),
+            socket.AF_INET,
+            socket.SOCK_RAW)
         sock.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE)
         result = True
     except (OSError, socket.error) as err:
