@@ -74,7 +74,7 @@ class Bucket(object):
         file_paths = [os.path.join(root, f)
                       for root, dirs, files in os.walk(path) for f in files]
         # convert to an array of Keys
-        return [FileKey(bucket=self, name=f) for f in file_paths]
+        return [FileKey(bucket=self, name=f) for f in sorted(file_paths)]
 
 
 class Connection(object):
